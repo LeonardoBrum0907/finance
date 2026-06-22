@@ -158,13 +158,24 @@ export interface DashboardSummary {
     balance: number;
   }[];
   accounts: (AccountDTO & { personName: string })[];
-  recentTransactions: TransactionDTO[];
   period: DashboardPeriodSummary;
   previousPeriod: DashboardPeriodSummary;
   monthlySeries: DashboardMonthlyPoint[];
   categories: DashboardCategoryPoint[];
   previousCategories: DashboardCategoryPoint[];
   insights: string[];
+}
+
+export type TransactionTypeFilter = "all" | "inflow" | "outflow";
+
+export interface TransactionsListResponse {
+  items: TransactionDTO[];
+  total: number;
+  page: number;
+  pageSize: number;
+  period: { months: DashboardMonths; from: string; to: string };
+  summary: { income: number; expenses: number; net: number };
+  categories: string[];
 }
 
 export interface ChatThreadDTO {

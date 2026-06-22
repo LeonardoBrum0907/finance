@@ -97,16 +97,12 @@ export function DashboardPage() {
             />
           </div>
 
-          <div className="grid gap-8 xl:grid-cols-3">
-            <div className="flex flex-col gap-8">
-              <InsightsPanel insights={data.insights} />
-              {hasCreditCards && <CreditCardList accounts={data.accounts} />}
-            </div>
-            <RecentTransactions
-              className="xl:col-span-2"
-              transactions={data.recentTransactions}
-            />
+          <div className="grid gap-8 lg:grid-cols-2">
+            <InsightsPanel insights={data.insights} />
+            {hasCreditCards && <CreditCardList accounts={data.accounts} />}
           </div>
+
+          <RecentTransactions personId={personId} dashboardMonths={months} />
         </>
       )}
     </div>

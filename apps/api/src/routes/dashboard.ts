@@ -84,20 +84,6 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
 
     const perPerson: { personId: string; personName: string; balance: number }[] = [];
 
-    const allTransactions: {
-      id: string;
-      date: string;
-      description: string;
-      amount: number;
-      currencyCode: string;
-      category: string | null;
-      accountId: string;
-      accountName: string;
-      accountType: string | null;
-      personId: string;
-      personName: string;
-    }[] = [];
-
     const financialTransactions: FinancialTransaction[] = [];
 
     let totalBalance = 0;
@@ -155,7 +141,6 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
               personId: person.id,
               personName: person.name,
             };
-            allTransactions.push(dto);
             financialTransactions.push({
               ...dto,
               date: tx.date,
@@ -170,8 +155,6 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
         balance: personBalance,
       });
     }
-
-    allTransactions.sort((a, b) => b.date.localeCompare(a.date));
 
     const currencyCode = "BRL";
     const currentMonthKeys = getRecentMonthKeys(months, 0);
@@ -212,7 +195,6 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       currencyCode,
       perPerson,
       accounts,
-      recentTransactions: allTransactions.slice(0, 20),
       period,
       previousPeriod,
       monthlySeries,
