@@ -10,6 +10,7 @@ import {
   SYSTEM_PROMPT,
 } from "../services/ai.js";
 import { InvalidPersonError } from "../services/finance/queries.js";
+import { createFinanceTools } from "../services/finance/tools.js";
 
 export async function chatRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
@@ -84,10 +85,13 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
 
     let assistantText = "";
     let streamError: string | null = null;
+    const tools = createFinanceTools(userId, personId);
     try {
       const result = streamText({
         model: getModel(),
         messages,
+        tools,
+        maxSteps: 5,
         onError({ error }) {
           streamError = error instanceof Error ? error.message : String(error);
         },
@@ -103,7 +107,12 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
           reply.raw.write(assistantText);
         } else {
           try {
-            const { text } = await generateText({ model: getModel(), messages });
+            const { text } = await generateText({
+              model: getModel(),
+              messages,
+              tools,
+              maxSteps: 5,
+            });
             assistantText = text;
             reply.raw.write(text);
           } catch (fallbackErr) {
