@@ -27,6 +27,7 @@ export type CreateConnectionInput = z.infer<typeof createConnectionSchema>;
 
 export const chatMessageSchema = z.object({
   message: z.string().min(1, "Digite uma mensagem"),
+  personId: z.string().cuid().optional(),
 });
 export type ChatMessageInput = z.infer<typeof chatMessageSchema>;
 
