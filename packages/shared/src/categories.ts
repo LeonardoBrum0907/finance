@@ -218,19 +218,81 @@ function applyPrefixRules(value: string): string {
   return value;
 }
 
+function isOutrosCategory(
+  raw: string | null | undefined,
+  translated: string | null,
+): boolean {
+  if (raw == null || !raw.trim()) return true;
+  const value = translated ?? raw.trim();
+  return value === "Outros" || raw.trim().toLowerCase() === "other";
+}
+
+function isRendaCategory(
+  raw: string | null | undefined,
+  translated: string | null,
+): boolean {
+  if (raw?.trim().toLowerCase() === "income") return true;
+  const value = translated ?? raw?.trim() ?? "";
+  return value === "Renda";
+}
+
+/** Regras por descrição: quando a categoria é genérica, inferir a partir do texto. */
+function applyDescriptionCategoryRules(
+  category: string | null | undefined,
+  translated: string | null,
+  description: string | null | undefined,
+): string | null {
+  if (!description?.trim()) return translated;
+
+  const text = description.toLowerCase();
+
+  if (text.includes("realize")) return "Compras parceladas";
+  if (text.includes("encargos refinanciamento")) return "Tarifas do cartão";
+  if (text.includes("cursor")) return "Serviços digitais";
+  if (text.includes("vaidebus")) return "Transporte";
+  if (text.includes("mensalidade") && text.includes("plano do cartão")) {
+    return "Tarifas bancárias";
+  }
+  if (text.includes("disney plus") || text.includes("youtube premium")) {
+    return "Serviços digitais";
+  }
+  if (
+    (text.includes("primeira igreja") || text.includes("lagoinha")) &&
+    (isRendaCategory(category, translated) || isOutrosCategory(category, translated))
+  ) {
+    return "Doações";
+  }
+
+  if (text.includes("pix") && isOutrosCategory(category, translated)) {
+    return "Transferências";
+  }
+
+  return translated;
+}
+
 /** Traduz categoria da Pluggy para português. Retorna null se a entrada for null/undefined. */
-export function translateCategory(category: string | null | undefined): string | null {
-  if (category == null) return null;
+export function translateCategory(
+  category: string | null | undefined,
+  description?: string | null,
+): string | null {
+  let translated: string | null = null;
 
-  const trimmed = category.trim();
-  if (!trimmed) return null;
-  if (PT_VALUES.has(trimmed)) return trimmed;
+  if (category != null) {
+    const trimmed = category.trim();
+    if (trimmed) {
+      if (PT_VALUES.has(trimmed)) {
+        translated = trimmed;
+      } else {
+        const exact = lookupTranslation(trimmed);
+        if (exact) {
+          translated = exact;
+        } else {
+          const withPrefixes = applyPrefixRules(trimmed);
+          translated = withPrefixes !== trimmed ? withPrefixes : trimmed;
+        }
+      }
+    }
+  }
 
-  const exact = lookupTranslation(trimmed);
-  if (exact) return exact;
-
-  const withPrefixes = applyPrefixRules(trimmed);
-  if (withPrefixes !== trimmed) return withPrefixes;
-
-  return trimmed;
+  return applyDescriptionCategoryRules(category, translated, description);
 }

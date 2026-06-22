@@ -150,13 +150,13 @@ export async function syncConnection(connectionId: string): Promise<void> {
           description: tx.description ?? "Transação",
           amount: tx.amount ?? 0,
           currencyCode: tx.currencyCode ?? account.currencyCode,
-          category: translateCategory(tx.category),
+          category: translateCategory(tx.category, tx.description ?? "Transação"),
           accountId: account.id,
         },
         update: {
           description: tx.description ?? "Transação",
           amount: tx.amount ?? 0,
-          category: translateCategory(tx.category),
+          category: translateCategory(tx.category, tx.description ?? "Transação"),
         },
       });
     }

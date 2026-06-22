@@ -2,6 +2,11 @@ import { z } from "zod";
 
 export { translateCategory } from "./categories";
 export {
+  groupCategoryForDashboard,
+  DASHBOARD_CATEGORY_GROUPS,
+  type DashboardCategoryGroup,
+} from "./categoryGroups";
+export {
   isCreditAccount,
   isTransactionOutflow,
   toSignedDisplayAmount,

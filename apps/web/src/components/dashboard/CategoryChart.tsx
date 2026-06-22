@@ -3,15 +3,20 @@ import type { TooltipItem } from "chart.js";
 import { motion } from "framer-motion";
 import { Bar, Doughnut } from "react-chartjs-2";
 import {
+  ArrowLeftRight,
   Car,
+  Heart,
   Home,
   Layers,
   type LucideIcon,
+  Receipt,
+  ShoppingBag,
+  Sparkles,
   Utensils,
-  Zap,
+  Wifi,
+  Wrench,
 } from "lucide-react";
 import type { DashboardCategoryPoint } from "@finance/shared";
-import { translateCategory } from "@finance/shared";
 import { formatCurrency, formatPercent } from "../../lib/format";
 import { ensureChartJsRegistered } from "../../lib/chart";
 import {
@@ -29,17 +34,17 @@ ensureChartJsRegistered();
 type CategoryView = "doughnut" | "bars";
 
 const CATEGORY_ICONS: Record<string, LucideIcon> = {
-  Moradia: Home,
-  Housing: Home,
   Alimentação: Utensils,
-  Food: Utensils,
   Transporte: Car,
-  Transport: Car,
-  Transportation: Car,
-  Utilidades: Zap,
-  Utilities: Zap,
+  Compras: ShoppingBag,
+  Assinaturas: Wifi,
+  Doações: Heart,
+  "Saúde e bem-estar": Sparkles,
+  "Contas fixas": Home,
+  Serviços: Wrench,
+  Transferências: ArrowLeftRight,
+  "Tarifas e impostos": Receipt,
   Outros: Layers,
-  Other: Layers,
 };
 
 function categoryIcon(label: string): LucideIcon {
@@ -61,10 +66,7 @@ interface Props {
 }
 
 function buildChartRows(data: DashboardCategoryPoint[]): CategoryRow[] {
-  const top = data.slice(0, 5).map((c) => ({
-    ...c,
-    category: translateCategory(c.category) ?? c.category,
-  }));
+  const top = data.slice(0, 5);
   const othersTotal = data.slice(5).reduce((sum, c) => sum + c.total, 0);
   const rows =
     othersTotal > 0
@@ -91,13 +93,7 @@ export function CategoryChart({
   const total = withPercent.reduce((sum, c) => sum + c.total, 0);
 
   const prevMap = useMemo(
-    () =>
-      new Map(
-        previousCategories.map((c) => [
-          translateCategory(c.category) ?? c.category,
-          c.total,
-        ]),
-      ),
+    () => new Map(previousCategories.map((c) => [c.category, c.total])),
     [previousCategories],
   );
 

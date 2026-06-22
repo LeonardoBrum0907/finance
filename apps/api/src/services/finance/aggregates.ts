@@ -1,5 +1,10 @@
 import type { FinancialConnection, FinancialTransaction } from "./types.js";
-import { countsTowardCashFlow, isTransactionOutflow } from "@finance/shared";
+import {
+  countsTowardCashFlow,
+  groupCategoryForDashboard,
+  isTransactionOutflow,
+  translateCategory,
+} from "@finance/shared";
 
 /** Datas no fuso America/Sao_Paulo para alinhar "mês atual" ao usuário brasileiro. */
 const TZ = "America/Sao_Paulo";
@@ -24,6 +29,13 @@ export function parseDateKey(key: string): Date {
 export interface DateRange {
   from?: string;
   to?: string;
+}
+
+function resolveDashboardCategory(
+  tx: Pick<FinancialTransaction, "category" | "description">,
+): string {
+  const resolved = translateCategory(tx.category, tx.description);
+  return groupCategoryForDashboard(resolved, tx.description);
 }
 
 export function filterByDateRange(
@@ -89,7 +101,7 @@ export function getSpendingByCategory(
       continue;
     }
     if (!isTransactionOutflow(tx.amount, tx.accountType)) continue;
-    const category = tx.category ?? "Sem categoria";
+    const category = resolveDashboardCategory(tx);
     const entry = map.get(category) ?? { total: 0, count: 0 };
     entry.total += Math.abs(tx.amount);
     entry.count += 1;

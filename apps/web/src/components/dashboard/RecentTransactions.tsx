@@ -36,8 +36,8 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   Utilities: Zap,
 };
 
-function categoryIcon(category: string | null): LucideIcon {
-  const label = translateCategory(category) ?? category ?? "Outros";
+function categoryIcon(category: string | null, description: string): LucideIcon {
+  const label = translateCategory(category, description) ?? category ?? "Outros";
   return CATEGORY_ICONS[label] ?? Layers;
 }
 
@@ -60,7 +60,7 @@ export function RecentTransactions({ transactions, className }: Props) {
   const categories = useMemo(() => {
     const set = new Set<string>();
     for (const tx of transactions) {
-      const label = translateCategory(tx.category) ?? tx.category ?? "Outros";
+      const label = translateCategory(tx.category, tx.description) ?? tx.category ?? "Outros";
       set.add(label);
     }
     return Array.from(set).sort();
@@ -68,7 +68,8 @@ export function RecentTransactions({ transactions, className }: Props) {
 
   const filtered = useMemo(() => {
     return transactions.filter((tx, index) => {
-      const categoryLabel = translateCategory(tx.category) ?? tx.category ?? "Outros";
+      const categoryLabel =
+        translateCategory(tx.category, tx.description) ?? tx.category ?? "Outros";
       const status = visualStatus(index);
       const matchesSearch =
         !search ||
@@ -162,8 +163,8 @@ export function RecentTransactions({ transactions, className }: Props) {
                 const originalIndex = transactions.indexOf(tx);
                 const status = visualStatus(originalIndex);
                 const categoryLabel =
-                  translateCategory(tx.category) ?? tx.category ?? "Outros";
-                const Icon = categoryIcon(tx.category);
+                  translateCategory(tx.category, tx.description) ?? tx.category ?? "Outros";
+                const Icon = categoryIcon(tx.category, tx.description);
                 const isOutflow = isTransactionOutflow(tx.amount, tx.accountType);
 
                 return (

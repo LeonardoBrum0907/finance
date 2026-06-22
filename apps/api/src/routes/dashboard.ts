@@ -148,7 +148,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
               description: tx.description,
               amount: tx.amount,
               currencyCode: tx.currencyCode,
-              category: translateCategory(tx.category),
+              category: translateCategory(tx.category, tx.description),
               accountId: acc.id,
               accountName: acc.name,
               accountType: acc.type,
