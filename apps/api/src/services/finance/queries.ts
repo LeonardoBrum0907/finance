@@ -1,4 +1,5 @@
 import { prisma } from "../../prisma.js";
+import { translateCategory } from "@finance/shared";
 import type { FinancialPerson, UserFinancialData } from "./types.js";
 
 export class InvalidPersonError extends Error {
@@ -79,9 +80,10 @@ export async function loadUserFinancialData(
               description: tx.description,
               amount: tx.amount,
               currencyCode: tx.currencyCode,
-              category: tx.category,
+              category: translateCategory(tx.category),
               accountId: acc.id,
               accountName: acc.name,
+              accountType: acc.type,
               personId: person.id,
               personName: person.name,
             })),

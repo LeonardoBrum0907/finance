@@ -1,4 +1,5 @@
 import { PluggyClient } from "pluggy-sdk";
+import { translateCategory } from "@finance/shared";
 import { env, isPluggyConfigured } from "../env.js";
 import { prisma } from "../prisma.js";
 
@@ -62,7 +63,7 @@ async function fetchAllTransactions(
 }
 
 /**
- * Sincroniza um Item da Pluggy: contas, saldos e extrato dos ultimos 90 dias.
+ * Sincroniza um Item da Pluggy: contas, saldos e extrato dos ultimos 365 dias.
  */
 export async function syncConnection(connectionId: string): Promise<void> {
   const connection = await prisma.bankConnection.findUnique({
@@ -86,10 +87,35 @@ export async function syncConnection(connectionId: string): Promise<void> {
   const accounts = accountsResponse.results ?? [];
 
   const dateFrom = new Date();
-  dateFrom.setDate(dateFrom.getDate() - 90);
+  dateFrom.setDate(dateFrom.getDate() - 365);
   const dateFromStr = dateFrom.toISOString().slice(0, 10);
 
   for (const acc of accounts) {
+    const creditFields =
+      acc.type === "CREDIT" && acc.creditData
+        ? {
+            creditBrand: acc.creditData.brand ?? null,
+            creditLevel: acc.creditData.level ?? null,
+            creditLimit: acc.creditData.creditLimit ?? null,
+            availableCreditLimit: acc.creditData.availableCreditLimit ?? null,
+            minimumPayment: acc.creditData.minimumPayment ?? null,
+            balanceCloseDate: acc.creditData.balanceCloseDate
+              ? new Date(acc.creditData.balanceCloseDate)
+              : null,
+            balanceDueDate: acc.creditData.balanceDueDate
+              ? new Date(acc.creditData.balanceDueDate)
+              : null,
+          }
+        : {
+            creditBrand: null,
+            creditLevel: null,
+            creditLimit: null,
+            availableCreditLimit: null,
+            minimumPayment: null,
+            balanceCloseDate: null,
+            balanceDueDate: null,
+          };
+
     const account = await prisma.account.upsert({
       where: { pluggyAccountId: acc.id },
       create: {
@@ -101,6 +127,7 @@ export async function syncConnection(connectionId: string): Promise<void> {
         balance: acc.balance ?? 0,
         currencyCode: acc.currencyCode ?? "BRL",
         connectionId,
+        ...creditFields,
       },
       update: {
         name: acc.name ?? acc.marketingName ?? "Conta",
@@ -109,6 +136,7 @@ export async function syncConnection(connectionId: string): Promise<void> {
         number: acc.number ?? null,
         balance: acc.balance ?? 0,
         currencyCode: acc.currencyCode ?? "BRL",
+        ...creditFields,
       },
     });
 
@@ -122,13 +150,13 @@ export async function syncConnection(connectionId: string): Promise<void> {
           description: tx.description ?? "Transação",
           amount: tx.amount ?? 0,
           currencyCode: tx.currencyCode ?? account.currencyCode,
-          category: tx.category ?? null,
+          category: translateCategory(tx.category),
           accountId: account.id,
         },
         update: {
           description: tx.description ?? "Transação",
           amount: tx.amount ?? 0,
-          category: tx.category ?? null,
+          category: translateCategory(tx.category),
         },
       });
     }

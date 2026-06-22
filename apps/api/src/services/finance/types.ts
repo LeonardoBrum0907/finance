@@ -7,6 +7,7 @@ export interface FinancialTransaction {
   category: string | null;
   accountId: string;
   accountName: string;
+  accountType: string | null;
   personId: string;
   personName: string;
 }

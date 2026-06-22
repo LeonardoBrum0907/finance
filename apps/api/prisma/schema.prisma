@@ -60,6 +60,13 @@ model Account {
   number          String?
   balance         Float    @default(0)
   currencyCode    String   @default("BRL")
+  creditBrand            String?
+  creditLevel            String?
+  creditLimit            Float?
+  availableCreditLimit   Float?
+  minimumPayment         Float?
+  balanceCloseDate       DateTime?
+  balanceDueDate         DateTime?
   connectionId    String
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

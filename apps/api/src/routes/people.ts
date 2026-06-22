@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { personSchema } from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
+import { serializeAccount } from "../services/serializeAccount.js";
 
 function serializePerson(person: {
   id: string;
@@ -23,6 +24,13 @@ function serializePerson(person: {
       number: string | null;
       balance: number;
       currencyCode: string;
+      creditBrand: string | null;
+      creditLevel: string | null;
+      creditLimit: number | null;
+      availableCreditLimit: number | null;
+      minimumPayment: number | null;
+      balanceCloseDate: Date | null;
+      balanceDueDate: Date | null;
     }[];
   }[];
 }) {
@@ -38,7 +46,7 @@ function serializePerson(person: {
       connectorImageUrl: c.connectorImageUrl,
       status: c.status,
       lastSyncedAt: c.lastSyncedAt ? c.lastSyncedAt.toISOString() : null,
-      accounts: c.accounts,
+      accounts: c.accounts.map(serializeAccount),
     })),
   };
 }

@@ -75,7 +75,7 @@ Veja `apps/api/.env.example`. Principais:
 3. O widget da Pluggy abre; selecione o banco e dê o consentimento.
    - O widget está com `includeSandbox`, então em ambiente de testes você pode usar
      os conectores de sandbox da Pluggy (ex.: "Pluggy Bank") para simular dados.
-4. Ao finalizar, a conta é sincronizada (saldos e extrato dos últimos 90 dias).
+4. Ao finalizar, a conta é sincronizada (saldos e extrato dos últimos 365 dias).
 
 ## Sincronização
 

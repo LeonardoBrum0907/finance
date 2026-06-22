@@ -1,0 +1,37 @@
+export function serializeAccount(acc: {
+  id: string;
+  name: string;
+  type: string | null;
+  subtype: string | null;
+  number: string | null;
+  balance: number;
+  currencyCode: string;
+  creditBrand?: string | null;
+  creditLevel?: string | null;
+  creditLimit?: number | null;
+  availableCreditLimit?: number | null;
+  minimumPayment?: number | null;
+  balanceCloseDate?: Date | null;
+  balanceDueDate?: Date | null;
+  nextBillAmount?: number | null;
+  nextBillDueDate?: Date | null;
+}) {
+  return {
+    id: acc.id,
+    name: acc.name,
+    type: acc.type,
+    subtype: acc.subtype,
+    number: acc.number,
+    balance: acc.balance,
+    currencyCode: acc.currencyCode,
+    creditBrand: acc.creditBrand ?? null,
+    creditLevel: acc.creditLevel ?? null,
+    creditLimit: acc.creditLimit ?? null,
+    availableCreditLimit: acc.availableCreditLimit ?? null,
+    minimumPayment: acc.minimumPayment ?? null,
+    balanceCloseDate: acc.balanceCloseDate?.toISOString() ?? null,
+    balanceDueDate: acc.balanceDueDate?.toISOString() ?? null,
+    nextBillAmount: acc.nextBillAmount ?? null,
+    nextBillDueDate: acc.nextBillDueDate?.toISOString() ?? null,
+  };
+}
