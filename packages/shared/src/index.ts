@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+export { translateCategory } from "./categories";
+export { isCreditAccount, isTransactionOutflow, toSignedDisplayAmount, accountNetWorthContribution } from "./transactions";
+
 export const registerSchema = z.object({
   name: z.string().min(2, "Informe seu nome"),
   email: z.string().email("E-mail inválido"),
@@ -80,6 +83,15 @@ export interface AccountDTO {
   number: string | null;
   balance: number;
   currencyCode: string;
+  creditBrand?: string | null;
+  creditLevel?: string | null;
+  creditLimit?: number | null;
+  availableCreditLimit?: number | null;
+  minimumPayment?: number | null;
+  balanceCloseDate?: string | null;
+  balanceDueDate?: string | null;
+  nextBillAmount?: number | null;
+  nextBillDueDate?: string | null;
 }
 
 export interface TransactionDTO {
@@ -91,12 +103,43 @@ export interface TransactionDTO {
   category: string | null;
   accountId: string;
   accountName: string;
+  accountType: string | null;
   personId: string;
   personName: string;
 }
 
+export interface DashboardPeriodSummary {
+  months: number;
+  income: number;
+  expenses: number;
+  net: number;
+}
+
+export type DashboardMonths = 1 | 3 | 6 | 12;
+
+export interface DashboardMonthlyPoint {
+  month: string;
+  income: number;
+  expenses: number;
+  net: number;
+}
+
+export interface DashboardCategoryPoint {
+  category: string;
+  total: number;
+  count: number;
+  percent: number;
+}
+
+export interface DashboardNetWorth {
+  total: number;
+  bankBalance: number;
+  creditDebt: number;
+}
+
 export interface DashboardSummary {
   totalBalance: number;
+  netWorth: DashboardNetWorth;
   currencyCode: string;
   perPerson: {
     personId: string;
@@ -105,6 +148,11 @@ export interface DashboardSummary {
   }[];
   accounts: (AccountDTO & { personName: string })[];
   recentTransactions: TransactionDTO[];
+  period: DashboardPeriodSummary;
+  previousPeriod: DashboardPeriodSummary;
+  monthlySeries: DashboardMonthlyPoint[];
+  categories: DashboardCategoryPoint[];
+  insights: string[];
 }
 
 export interface ChatThreadDTO {
