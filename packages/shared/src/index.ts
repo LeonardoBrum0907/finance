@@ -1,7 +1,13 @@
 import { z } from "zod";
 
 export { translateCategory } from "./categories";
-export { isCreditAccount, isTransactionOutflow, toSignedDisplayAmount, accountNetWorthContribution } from "./transactions";
+export {
+  isCreditAccount,
+  isTransactionOutflow,
+  toSignedDisplayAmount,
+  accountNetWorthContribution,
+  countsTowardCashFlow,
+} from "./transactions";
 
 export const registerSchema = z.object({
   name: z.string().min(2, "Informe seu nome"),
@@ -128,7 +134,7 @@ export interface DashboardCategoryPoint {
   category: string;
   total: number;
   count: number;
-  percent: number;
+  percent?: number;
 }
 
 export interface DashboardNetWorth {
@@ -152,6 +158,7 @@ export interface DashboardSummary {
   previousPeriod: DashboardPeriodSummary;
   monthlySeries: DashboardMonthlyPoint[];
   categories: DashboardCategoryPoint[];
+  previousCategories: DashboardCategoryPoint[];
   insights: string[];
 }
 

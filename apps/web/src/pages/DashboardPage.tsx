@@ -87,10 +87,12 @@ export function DashboardPage() {
             <GrowthChart
               className="lg:col-span-2"
               data={data.monthlySeries}
+              months={months}
               currencyCode={data.currencyCode}
             />
             <CategoryChart
               data={data.categories}
+              previousCategories={data.previousCategories}
               currencyCode={data.currencyCode}
             />
           </div>

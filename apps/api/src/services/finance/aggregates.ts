@@ -1,5 +1,5 @@
 import type { FinancialConnection, FinancialTransaction } from "./types.js";
-import { isTransactionOutflow } from "@finance/shared";
+import { countsTowardCashFlow, isTransactionOutflow } from "@finance/shared";
 
 /** Datas no fuso America/Sao_Paulo para alinhar "mês atual" ao usuário brasileiro. */
 const TZ = "America/Sao_Paulo";
@@ -55,6 +55,9 @@ export function getMonthlySummary(
   let income = 0;
   let expenses = 0;
   for (const tx of filtered) {
+    if (!countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description)) {
+      continue;
+    }
     const abs = Math.abs(tx.amount);
     if (isTransactionOutflow(tx.amount, tx.accountType)) expenses += abs;
     else income += abs;
@@ -82,6 +85,9 @@ export function getSpendingByCategory(
   const map = new Map<string, { total: number; count: number }>();
 
   for (const tx of filtered) {
+    if (!countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description)) {
+      continue;
+    }
     if (!isTransactionOutflow(tx.amount, tx.accountType)) continue;
     const category = tx.category ?? "Sem categoria";
     const entry = map.get(category) ?? { total: 0, count: 0 };
@@ -101,7 +107,11 @@ export function getTopExpenses(
   limit = 5,
 ): FinancialTransaction[] {
   return filterByDateRange(txs, range)
-    .filter((tx) => isTransactionOutflow(tx.amount, tx.accountType))
+    .filter(
+      (tx) =>
+        countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description) &&
+        isTransactionOutflow(tx.amount, tx.accountType),
+    )
     .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
     .slice(0, limit);
 }
@@ -169,6 +179,9 @@ export function summarizeTransactions(
   let income = 0;
   let expenses = 0;
   for (const tx of filtered) {
+    if (!countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description)) {
+      continue;
+    }
     const abs = Math.abs(tx.amount);
     if (isTransactionOutflow(tx.amount, tx.accountType)) expenses += abs;
     else income += abs;

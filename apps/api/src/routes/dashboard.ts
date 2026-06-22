@@ -186,7 +186,11 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     const previousPeriod = { months, ...previousTotals };
     const monthlySeries = getMonthlySeries(financialTransactions, currentMonthKeys);
     const categories = getCategoriesWithPercent(financialTransactions, currentRange);
-    const previousCategories = getSpendingByCategory(financialTransactions, previousRange);
+    const previousCategoriesRaw = getSpendingByCategory(financialTransactions, previousRange);
+    const previousCategories = previousCategoriesRaw.map((c) => ({
+      ...c,
+      percent: 0,
+    }));
     const topExpenses = getTopExpenses(financialTransactions, currentRange, 1);
 
     const insights = buildDashboardInsights({
@@ -213,6 +217,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       previousPeriod,
       monthlySeries,
       categories,
+      previousCategories,
       insights,
     });
   });
