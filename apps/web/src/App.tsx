@@ -5,6 +5,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { PeoplePage } from "./pages/PeoplePage";
+import { BudgetsPage } from "./pages/BudgetsPage";
 import { ChatPage } from "./pages/ChatPage";
 
 export default function App() {
@@ -33,6 +34,7 @@ export default function App() {
       <Route element={<Layout />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/pessoas" element={<PeoplePage />} />
+        <Route path="/orcamentos" element={<BudgetsPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

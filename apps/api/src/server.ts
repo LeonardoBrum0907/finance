@@ -8,6 +8,7 @@ import { connectionRoutes } from "./routes/connections.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { transactionRoutes } from "./routes/transactions.js";
 import { chatRoutes } from "./routes/chat.js";
+import { budgetRoutes } from "./routes/budgets.js";
 
 async function main() {
   const app = Fastify({
@@ -33,6 +34,7 @@ async function main() {
   await app.register(dashboardRoutes);
   await app.register(transactionRoutes);
   await app.register(chatRoutes);
+  await app.register(budgetRoutes);
 
   await app.listen({ port: env.port, host: "0.0.0.0" });
 }

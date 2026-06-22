@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { DashboardCategoryGroup } from "./categoryGroups";
 
 export { translateCategory } from "./categories";
 export {
@@ -63,6 +64,11 @@ export const regenerateChatSchema = z.object({
   personId: z.string().cuid().optional(),
 });
 export type RegenerateChatInput = z.infer<typeof regenerateChatSchema>;
+
+export const updateBudgetLimitSchema = z.object({
+  limit: z.number().positive("Informe um limite maior que zero"),
+});
+export type UpdateBudgetLimitInput = z.infer<typeof updateBudgetLimitSchema>;
 
 export interface AuthUser {
   id: string;
@@ -192,4 +198,25 @@ export interface ChatMessageDTO {
   role: "user" | "assistant";
   content: string;
   createdAt: string;
+}
+
+export type BudgetStatus = "safe" | "warning" | "critical";
+
+export interface BudgetCategoryItem {
+  group: DashboardCategoryGroup;
+  spent: number;
+  limit: number;
+  ratio: number;
+  status: BudgetStatus;
+}
+
+export interface BudgetsSummary {
+  month: string;
+  currencyCode: string;
+  totalSpent: number;
+  totalLimit: number;
+  overallRatio: number;
+  potentialSavings: number;
+  categories: BudgetCategoryItem[];
+  hasAccounts: boolean;
 }

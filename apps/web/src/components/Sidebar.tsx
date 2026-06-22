@@ -20,7 +20,7 @@ type NavItem =
 const navItems: NavItem[] = [
   { label: "Painel", icon: LayoutDashboard, to: "/", end: true },
   { label: "Contas", icon: Landmark, comingSoon: true },
-  { label: "Orçamentos", icon: PieChart, comingSoon: true },
+  { label: "Orçamentos", icon: PieChart, to: "/orcamentos" },
   { label: "Relatórios", icon: TrendingUp, comingSoon: true },
   { label: "Configurações", icon: Settings, comingSoon: true },
   { label: "Pessoas", icon: Users, to: "/pessoas" },
