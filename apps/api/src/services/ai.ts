@@ -3,7 +3,8 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import type { LanguageModelV1 } from "ai";
 import { getAiEnv } from "../env.js";
-import { loadUserFinancialData } from "./finance/queries.js";
+
+export { buildFinancialContext } from "./finance/context.js";
 
 const DEFAULT_MODELS: Record<string, string> = {
   openai: "gpt-4o-mini",
@@ -40,59 +41,11 @@ export function getModel(): LanguageModelV1 {
   }
 }
 
-const currency = (value: number, code = "BRL") =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: code }).format(value);
-
-/**
- * Monta um resumo financeiro do usuario (pessoas, contas, saldos e
- * transacoes recentes) para servir de contexto a IA.
- */
-export async function buildFinancialContext(userId: string): Promise<string> {
-  const { people } = await loadUserFinancialData(userId);
-
-  if (people.length === 0) {
-    return "O usuário ainda não cadastrou pessoas nem conectou contas bancárias.";
-  }
-
-  const lines: string[] = [];
-  let total = 0;
-
-  for (const person of people) {
-    const accounts = person.connections.flatMap((c) => c.accounts);
-    const personBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
-    total += personBalance;
-    lines.push(
-      `\n## Pessoa: ${person.name}${person.relationship ? ` (${person.relationship})` : ""}`,
-    );
-    lines.push(`Saldo total da pessoa: ${currency(personBalance)}`);
-
-    if (accounts.length === 0) {
-      lines.push("Sem contas conectadas.");
-      continue;
-    }
-
-    for (const acc of accounts) {
-      lines.push(
-        `- Conta "${acc.name}" (${acc.type ?? "?"}): saldo ${currency(acc.balance, acc.currencyCode)}`,
-      );
-      const recent = acc.transactions.slice(0, 8);
-      for (const tx of recent) {
-        lines.push(
-          `    ${tx.date.toISOString().slice(0, 10)} | ${currency(tx.amount, tx.currencyCode)} | ${tx.description}${tx.category ? ` [${tx.category}]` : ""}`,
-        );
-      }
-    }
-  }
-
-  return [
-    `Saldo consolidado de todas as pessoas: ${currency(total)}`,
-    ...lines,
-  ].join("\n");
-}
-
 export const SYSTEM_PROMPT = `Você é um assistente financeiro pessoal em português do Brasil.
 Você ajuda o usuário e sua família a entender suas finanças, organizar gastos e fazer planejamentos.
-Use SEMPRE os dados de contexto fornecidos (saldos, contas e transações) para basear suas respostas.
+Use SEMPRE os dados de contexto fornecidos (saldos, resumo mensal, categorias, contas e transações) para basear suas respostas.
+O contexto inclui receitas, despesas e top categorias do mês atual — use esses números para perguntas sobre gastos recentes.
+Se o usuário pedir extrato de período específico, comparação entre meses ou detalhes além do resumo, use as ferramentas disponíveis.
 Seja claro, prático e objetivo. Quando fizer cálculos, mostre os números.
 Se não houver dados suficientes no contexto, diga isso e oriente o usuário a conectar contas.
-Nunca invente valores que não estejam no contexto.`;
+Nunca invente valores que não estejam no contexto ou retornados pelas ferramentas.`;
