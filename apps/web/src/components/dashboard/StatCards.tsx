@@ -1,25 +1,19 @@
 import { motion } from "framer-motion";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  type LucideIcon,
+} from "lucide-react";
 import type { DashboardNetWorth, DashboardPeriodSummary } from "@finance/shared";
 import { formatCurrency, formatPercent } from "../../lib/format";
 import { AnimatedValue } from "./AnimatedValue";
-import { cardClass, fadeUp } from "./motion";
+import { cardClass, cardHighlightClass, fadeUp } from "./motion";
 
 interface Props {
   netWorth: DashboardNetWorth;
   currencyCode: string;
   period: DashboardPeriodSummary;
   previousPeriod: DashboardPeriodSummary;
-}
-
-function netWorthHint(netWorth: DashboardNetWorth, currencyCode: string): string {
-  const parts: string[] = [];
-  if (netWorth.bankBalance > 0) {
-    parts.push(`${formatCurrency(netWorth.bankBalance, currencyCode)} em contas`);
-  }
-  if (netWorth.creditDebt > 0) {
-    parts.push(`${formatCurrency(netWorth.creditDebt, currencyCode)} em cartões`);
-  }
-  return parts.length > 0 ? parts.join(" · ") : "Sem contas conectadas";
 }
 
 function calcChange(current: number, previous: number): number | null {
@@ -29,23 +23,24 @@ function calcChange(current: number, previous: number): number | null {
 
 function ChangeBadge({
   change,
-  invertColors = false,
+  tone = "emerald",
 }: {
   change: number | null;
-  invertColors?: boolean;
+  tone?: "emerald" | "teal" | "rose";
 }) {
   if (change === null || Math.abs(change) < 0.5) return null;
 
-  const isPositive = change > 0;
-  const isGood = invertColors ? !isPositive : isPositive;
+  const colors = {
+    emerald: "bg-emerald-500/10 text-emerald-600",
+    teal: "bg-teal-500/10 text-teal-600",
+    rose: "bg-rose-500/10 text-rose-600",
+  };
 
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-        isGood ? "bg-brand-50 text-brand-700" : "bg-red-50 text-red-600"
-      }`}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${colors[tone]}`}
     >
-      {formatPercent(change)} vs período anterior
+      {formatPercent(change)} vs último mês
     </span>
   );
 }
@@ -55,13 +50,31 @@ interface CardProps {
   value: number;
   currencyCode: string;
   change?: number | null;
-  invertColors?: boolean;
   index: number;
-  hint?: string;
+  variant?: "highlight" | "default";
+  valueClassName?: string;
+  prefix?: string;
+  icon: LucideIcon;
+  iconClassName: string;
+  iconBoxClassName: string;
+  badgeTone?: "emerald" | "teal" | "rose";
 }
 
-function StatCard({ label, value, currencyCode, change, invertColors, index, hint }: CardProps) {
-  const format = (n: number) => formatCurrency(n, currencyCode);
+function StatCard({
+  label,
+  value,
+  currencyCode,
+  change,
+  index,
+  variant = "default",
+  valueClassName = "text-slate-900",
+  prefix = "",
+  icon: Icon,
+  iconClassName,
+  iconBoxClassName,
+  badgeTone = "emerald",
+}: CardProps) {
+  const format = (n: number) => `${prefix}${formatCurrency(n, currencyCode)}`;
 
   return (
     <motion.div
@@ -69,20 +82,24 @@ function StatCard({ label, value, currencyCode, change, invertColors, index, hin
       variants={fadeUp}
       initial="hidden"
       animate="visible"
-      className={cardClass}
+      className={variant === "highlight" ? cardHighlightClass : cardClass}
     >
-      <p className="text-sm text-slate-500">{label}</p>
-      {hint && <p className="mt-0.5 text-xs text-slate-400">{hint}</p>}
-      <p
-        className={`mt-2 text-2xl font-semibold tracking-tight ${
-          label === "Patrimônio líquido" && value < 0 ? "text-red-600" : "text-slate-800"
-        }`}
-      >
+      <div className="mb-2.5 flex items-center justify-between">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          {label}
+        </span>
+        <div
+          className={`flex h-8 w-8 items-center justify-center rounded-lg ${iconBoxClassName}`}
+        >
+          <Icon className={`h-4 w-4 ${iconClassName}`} />
+        </div>
+      </div>
+      <p className={`font-display text-2xl font-bold tracking-tight md:text-3xl ${valueClassName}`}>
         <AnimatedValue value={value} format={format} />
       </p>
       {change !== undefined && (
         <div className="mt-2">
-          <ChangeBadge change={change} invertColors={invertColors} />
+          <ChangeBadge change={change} tone={badgeTone} />
         </div>
       )}
     </motion.div>
@@ -90,36 +107,62 @@ function StatCard({ label, value, currencyCode, change, invertColors, index, hin
 }
 
 export function StatCards({ netWorth, currencyCode, period, previousPeriod }: Props) {
+  const netPositive = period.net >= 0;
+
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
       <StatCard
-        label="Patrimônio líquido"
+        label="Patrimônio Líquido"
         value={netWorth.total}
         currencyCode={currencyCode}
-        hint={netWorthHint(netWorth, currencyCode)}
         index={0}
+        variant="highlight"
+        icon={ArrowUpRight}
+        iconClassName="text-emerald-600"
+        iconBoxClassName="border border-emerald-500/10 bg-emerald-500/10"
       />
       <StatCard
-        label="Entradas"
+        label="Entradas (Inflow)"
         value={period.income}
         currencyCode={currencyCode}
         change={calcChange(period.income, previousPeriod.income)}
         index={1}
+        prefix="+"
+        valueClassName="text-teal-600"
+        icon={ArrowUpRight}
+        iconClassName="text-teal-600"
+        iconBoxClassName="border border-teal-500/10 bg-teal-500/10"
+        badgeTone="teal"
       />
       <StatCard
-        label="Saídas"
+        label="Saídas (Outflow)"
         value={period.expenses}
         currencyCode={currencyCode}
         change={calcChange(period.expenses, previousPeriod.expenses)}
-        invertColors
         index={2}
+        prefix="-"
+        valueClassName="text-rose-600"
+        icon={ArrowDownRight}
+        iconClassName="text-rose-600"
+        iconBoxClassName="border border-rose-500/10 bg-rose-500/10"
+        badgeTone="rose"
       />
       <StatCard
-        label="Resultado"
+        label="Saldo Sobrando"
         value={period.net}
         currencyCode={currencyCode}
         change={calcChange(period.net, previousPeriod.net)}
         index={3}
+        prefix={period.net > 0 ? "+" : ""}
+        valueClassName={netPositive ? "text-emerald-600" : "text-rose-600"}
+        icon={netPositive ? ArrowUpRight : ArrowDownRight}
+        iconClassName={netPositive ? "text-emerald-600" : "text-rose-600"}
+        iconBoxClassName={
+          netPositive
+            ? "border border-emerald-500/10 bg-emerald-500/10"
+            : "border border-rose-500/10 bg-rose-500/10"
+        }
+        badgeTone={netPositive ? "emerald" : "rose"}
       />
     </div>
   );

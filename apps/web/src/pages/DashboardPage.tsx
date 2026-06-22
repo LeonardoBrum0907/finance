@@ -3,11 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import type { DashboardMonths, DashboardSummary, PersonDTO } from "@finance/shared";
 import { isCreditAccount } from "@finance/shared";
 import { api } from "../lib/api";
-import { AccountsList } from "../components/dashboard/AccountsList";
-import { CashflowChart } from "../components/dashboard/CashflowChart";
 import { CategoryChart } from "../components/dashboard/CategoryChart";
 import { CreditCardList } from "../components/dashboard/CreditCardList";
 import { DashboardSkeleton } from "../components/dashboard/DashboardSkeleton";
+import { GrowthChart } from "../components/dashboard/GrowthChart";
 import { InsightsPanel } from "../components/dashboard/InsightsPanel";
 import { PeriodSelector } from "../components/dashboard/PeriodSelector";
 import { PersonSelector, type PersonFilter } from "../components/dashboard/PersonSelector";
@@ -35,15 +34,13 @@ export function DashboardPage() {
 
   const data = dashboard.data;
   const hasCreditCards = data?.accounts.some((acc) => isCreditAccount(acc.type)) ?? false;
-  const hasBankAccounts =
-    data?.accounts.some((acc) => !isCreditAccount(acc.type)) ?? false;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-800">
-            Painel
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-slate-900">
+            Painel Geral
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             Visão consolidada das suas finanças com comparativos por período.
@@ -86,8 +83,9 @@ export function DashboardPage() {
             previousPeriod={data.previousPeriod}
           />
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <CashflowChart
+          <div className="grid gap-8 lg:grid-cols-3">
+            <GrowthChart
+              className="lg:col-span-2"
               data={data.monthlySeries}
               currencyCode={data.currencyCode}
             />
@@ -97,19 +95,18 @@ export function DashboardPage() {
             />
           </div>
 
-          <InsightsPanel insights={data.insights} />
-
-          {hasCreditCards && <CreditCardList accounts={data.accounts} />}
-
-          {(hasBankAccounts || data.recentTransactions.length > 0) && (
-            <div className="space-y-6">
-              {hasBankAccounts && <AccountsList accounts={data.accounts} />}
-              <RecentTransactions transactions={data.recentTransactions} />
+          <div className="grid gap-8 xl:grid-cols-3">
+            <div className="flex flex-col gap-8">
+              <InsightsPanel insights={data.insights} />
+              {hasCreditCards && <CreditCardList accounts={data.accounts} />}
             </div>
-          )}
+            <RecentTransactions
+              className="xl:col-span-2"
+              transactions={data.recentTransactions}
+            />
+          </div>
         </>
       )}
     </div>
   );
 }
-
