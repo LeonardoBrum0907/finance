@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { ChatMessageDTO } from "@finance/shared";
+import type { ChatMessageDTO, PersonDTO } from "@finance/shared";
 import { api } from "../lib/api";
 import { MarkdownMessage } from "../components/MarkdownMessage";
 
@@ -12,6 +12,7 @@ interface Message {
 export function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [selectedPersonId, setSelectedPersonId] = useState("");
   const [streaming, setStreaming] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -20,10 +21,19 @@ export function ChatPage() {
     queryFn: () => api.get<{ configured: boolean }>("/api/chat/status"),
   });
 
+  const aiConfigured = status.data?.configured !== false;
+
+  const people = useQuery({
+    queryKey: ["people"],
+    queryFn: () => api.get<PersonDTO[]>("/api/people"),
+  });
+
   const history = useQuery({
     queryKey: ["chat-messages"],
     queryFn: () => api.get<ChatMessageDTO[]>("/api/chat/messages"),
   });
+
+  const selectedPerson = people.data?.find((p) => p.id === selectedPersonId);
 
   useEffect(() => {
     if (history.data) {
@@ -40,7 +50,7 @@ export function ChatPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const text = input.trim();
-    if (!text || streaming) return;
+    if (!text || streaming || !aiConfigured) return;
 
     setInput("");
     setMessages((prev) => [
@@ -55,7 +65,10 @@ export function ChatPage() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({
+          message: text,
+          ...(selectedPersonId ? { personId: selectedPersonId } : {}),
+        }),
       });
 
       if (!res.ok || !res.body) {
@@ -97,13 +110,36 @@ export function ChatPage() {
     }
   }
 
+  const inputDisabled = streaming || !aiConfigured;
+
   return (
     <div className="flex h-[calc(100vh-9rem)] flex-col">
       <div className="mb-4">
         <h1 className="text-2xl font-semibold text-slate-800">Assistente</h1>
         <p className="text-sm text-slate-500">
-          Converse sobre suas finanças. A IA usa os dados das contas conectadas.
+          Converse sobre suas finanças. A IA usa os dados das contas conectadas
+          {selectedPerson ? ` de ${selectedPerson.name}` : ""}.
         </p>
+        <div className="mt-3">
+          <label htmlFor="chat-person" className="sr-only">
+            Filtrar por pessoa
+          </label>
+          <select
+            id="chat-person"
+            value={selectedPersonId}
+            onChange={(e) => setSelectedPersonId(e.target.value)}
+            disabled={streaming}
+            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          >
+            <option value="">Todas as pessoas</option>
+            {people.data?.map((person) => (
+              <option key={person.id} value={person.id}>
+                {person.name}
+                {person.relationship ? ` (${person.relationship})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {status.data && !status.data.configured && (
@@ -151,12 +187,12 @@ export function ChatPage() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Digite sua mensagem..."
-          disabled={streaming}
-          className="flex-1 rounded-md border border-slate-300 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          disabled={inputDisabled}
+          className="flex-1 rounded-md border border-slate-300 px-4 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 disabled:opacity-60"
         />
         <button
           type="submit"
-          disabled={streaming || !input.trim()}
+          disabled={inputDisabled || !input.trim()}
           className="rounded-md bg-brand-600 px-5 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
         >
           Enviar
