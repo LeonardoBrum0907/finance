@@ -1,0 +1,22 @@
+{
+  "project": {
+    "title": "finance",
+    "id": "26671011250174446"
+  },
+  "screen": {
+    "title": "Modern Finance Dashboard Minimalist",
+    "id": "8aefa736a86c4ce6a4da6e9429f00458",
+    "name": "projects/26671011250174446/screens/8aefa736a86c4ce6a4da6e9429f00458",
+    "width": "1376",
+    "height": "768",
+    "deviceType": "DESKTOP"
+  },
+  "screenshot": {
+    "file": "screenshot.png",
+    "downloadUrl": "https://lh3.googleusercontent.com/aida/AP1WRLtvAemPcyaL42L-zYBAqwe590nQEIoErKzWgbOLS9TGShsuVBrl0LVtLLL4m_g6yDZ_HvAhZwpRHpDg2Q0QoZNlBHkzLTx5qSHi9l2ZMSD7gaUNG_qt1zv-y6prs_9GRl0wHmUxqiTZM6-hMnO1H6vinCzVHHgS9KCDzHT7bsbaMin37QYZTm0wLZJ8w6EBfbN6cVzoEpRXZNzY0GS-sFY574y7KYcdLyXQ2fUVavYiPCAspU7eU2x7",
+    "mimeType": "image/png"
+  },
+  "htmlCode": null,
+  "exportedAt": "2026-06-22T17:40:00.000Z",
+  "notes": "Stitch MCP get_screen retornou htmlCode vazio para esta tela. Apenas o screenshot foi baixado. Gere/exporte o HTML no Stitch e repita get_screen quando htmlCode.downloadUrl estiver disponível."
+}
