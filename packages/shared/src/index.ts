@@ -70,6 +70,40 @@ export const updateBudgetLimitSchema = z.object({
 });
 export type UpdateBudgetLimitInput = z.infer<typeof updateBudgetLimitSchema>;
 
+const dashboardCategoryGroupSchema = z.enum([
+  "Alimentação",
+  "Transporte",
+  "Compras",
+  "Assinaturas",
+  "Doações",
+  "Igreja",
+  "Saúde e bem-estar",
+  "Contas fixas",
+  "Serviços",
+  "Transferências",
+  "Tarifas e impostos",
+  "Outros",
+]);
+
+export const createBudgetSchema = z.object({
+  name: z.string().min(1, "Informe o nome do orçamento").max(80, "Nome muito longo"),
+  limit: z.number().positive("Informe um limite maior que zero"),
+  categories: z
+    .array(dashboardCategoryGroupSchema)
+    .min(1, "Selecione ao menos uma categoria"),
+});
+export type CreateBudgetInput = z.infer<typeof createBudgetSchema>;
+
+export const updateBudgetSchema = z.object({
+  name: z.string().min(1, "Informe o nome do orçamento").max(80, "Nome muito longo").optional(),
+  limit: z.number().positive("Informe um limite maior que zero").optional(),
+  categories: z
+    .array(dashboardCategoryGroupSchema)
+    .min(1, "Selecione ao menos uma categoria")
+    .optional(),
+});
+export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>;
+
 export interface AuthUser {
   id: string;
   name: string;
@@ -202,13 +236,18 @@ export interface ChatMessageDTO {
 
 export type BudgetStatus = "safe" | "warning" | "critical";
 
-export interface BudgetCategoryItem {
-  group: DashboardCategoryGroup;
+export interface BudgetItem {
+  id: string;
+  name: string;
+  categories: DashboardCategoryGroup[];
   spent: number;
   limit: number;
   ratio: number;
   status: BudgetStatus;
 }
+
+/** @deprecated Use BudgetItem */
+export type BudgetCategoryItem = BudgetItem & { group?: DashboardCategoryGroup };
 
 export interface BudgetsSummary {
   month: string;
@@ -217,6 +256,7 @@ export interface BudgetsSummary {
   totalLimit: number;
   overallRatio: number;
   potentialSavings: number;
-  categories: BudgetCategoryItem[];
+  budgets: BudgetItem[];
+  availableCategories: DashboardCategoryGroup[];
   hasAccounts: boolean;
 }

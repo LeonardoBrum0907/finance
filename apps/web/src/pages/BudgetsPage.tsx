@@ -1,16 +1,36 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { BudgetCategoryItem, BudgetsSummary, PersonDTO } from "@finance/shared";
+import { Plus } from "lucide-react";
+import type {
+  BudgetItem,
+  BudgetsSummary,
+  CreateBudgetInput,
+  PersonDTO,
+  UpdateBudgetInput,
+} from "@finance/shared";
 import { api } from "../lib/api";
 import { BudgetCategoryCard } from "../components/budgets/BudgetCategoryCard";
 import { BudgetOverviewCard } from "../components/budgets/BudgetOverviewCard";
 import { BudgetsSkeleton } from "../components/budgets/BudgetsSkeleton";
-import { EditBudgetLimitModal } from "../components/budgets/EditBudgetLimitModal";
+import {
+  BudgetToolbar,
+  matchesBudgetSearch,
+  type BudgetSortMode,
+} from "../components/budgets/BudgetToolbar";
+import { CreateBudgetModal } from "../components/budgets/CreateBudgetModal";
+import { EditBudgetModal } from "../components/budgets/EditBudgetModal";
 import { PersonSelector, type PersonFilter } from "../components/dashboard/PersonSelector";
+
+function personQuerySuffix(personId: PersonFilter): string {
+  return personId === "all" ? "" : `?personId=${personId}`;
+}
 
 export function BudgetsPage() {
   const [personId, setPersonId] = useState<PersonFilter>("all");
-  const [editingCategory, setEditingCategory] = useState<BudgetCategoryItem | null>(null);
+  const [editingBudget, setEditingBudget] = useState<BudgetItem | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<BudgetSortMode>("alphabetical");
   const queryClient = useQueryClient();
 
   const people = useQuery({
@@ -26,28 +46,58 @@ export function BudgetsPage() {
     queryFn: () => api.get<BudgetsSummary>(budgetsUrl),
   });
 
-  const updateLimit = useMutation({
-    mutationFn: ({ group, limit }: { group: string; limit: number }) => {
-      const url =
-        personId === "all"
-          ? `/api/budgets/${encodeURIComponent(group)}`
-          : `/api/budgets/${encodeURIComponent(group)}?personId=${personId}`;
-      return api.put<BudgetsSummary>(url, { limit });
-    },
-    onSuccess: (data) => {
+  const invalidateBudgets = useCallback(
+    (data: BudgetsSummary) => {
       queryClient.setQueryData(["budgets", personId], data);
-      setEditingCategory(null);
+    },
+    [personId, queryClient],
+  );
+
+  const createBudget = useMutation({
+    mutationFn: (body: CreateBudgetInput) =>
+      api.post<BudgetsSummary>("/api/budgets", body),
+    onSuccess: (data) => {
+      invalidateBudgets(data);
+      setCreateOpen(false);
     },
   });
 
-  const handleSaveLimit = useCallback(
-    (group: string, limit: number) => {
-      updateLimit.mutate({ group, limit });
+  const updateBudget = useMutation({
+    mutationFn: ({ id, ...body }: UpdateBudgetInput & { id: string }) =>
+      api.put<BudgetsSummary>(`/api/budgets/${id}${personQuerySuffix(personId)}`, body),
+    onSuccess: (data) => {
+      invalidateBudgets(data);
+      setEditingBudget(null);
     },
-    [updateLimit],
-  );
+  });
+
+  const deleteBudget = useMutation({
+    mutationFn: (id: string) =>
+      api.delete<BudgetsSummary>(`/api/budgets/${id}${personQuerySuffix(personId)}`),
+    onSuccess: (data) => {
+      invalidateBudgets(data);
+      setEditingBudget(null);
+    },
+  });
 
   const data = budgets.data;
+
+  const filteredBudgets = useMemo(() => {
+    if (!data?.budgets) return [];
+    const filtered = data.budgets.filter((item) =>
+      matchesBudgetSearch(item.name, item.categories, search),
+    );
+    const sorted = [...filtered];
+    if (sort === "alphabetical") {
+      sorted.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+    } else {
+      sorted.sort((a, b) => b.spent - a.spent);
+    }
+    return sorted;
+  }, [data?.budgets, search, sort]);
+
+  const hasBudgets = (data?.budgets.length ?? 0) > 0;
+  const searchActive = search.trim().length > 0;
 
   return (
     <div className="space-y-8">
@@ -61,13 +111,25 @@ export function BudgetsPage() {
             metas financeiras.
           </p>
         </div>
-        {data?.hasAccounts && (
-          <PersonSelector
-            value={personId}
-            people={people.data ?? []}
-            onChange={setPersonId}
-          />
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {data?.hasAccounts && (
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+            >
+              <Plus className="h-4 w-4" />
+              Novo orçamento
+            </button>
+          )}
+          {data?.hasAccounts && (
+            <PersonSelector
+              value={personId}
+              people={people.data ?? []}
+              onChange={setPersonId}
+            />
+          )}
+        </div>
       </div>
 
       {budgets.isLoading ? (
@@ -88,25 +150,82 @@ export function BudgetsPage() {
         <>
           <BudgetOverviewCard data={data} />
 
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {data.categories.map((item) => (
-              <BudgetCategoryCard
-                key={item.group}
-                item={item}
-                currencyCode={data.currencyCode}
-                onEdit={setEditingCategory}
+          {data.availableCategories.length > 0 && (
+            <div className="rounded-xl border border-amber-200/60 bg-amber-50/50 px-4 py-3 text-sm text-amber-800">
+              {data.availableCategories.length === 1
+                ? "1 categoria ainda sem orçamento"
+                : `${data.availableCategories.length} categorias ainda sem orçamento`}
+              {": "}
+              <span className="text-amber-700">{data.availableCategories.join(", ")}</span>
+            </div>
+          )}
+
+          {!hasBudgets ? (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
+              <p className="text-sm font-medium text-slate-700">Nenhum orçamento criado</p>
+              <p className="mt-1 text-sm text-slate-500">
+                Monte seu primeiro orçamento agrupando categorias automáticas com um limite mensal.
+              </p>
+              <button
+                type="button"
+                onClick={() => setCreateOpen(true)}
+                className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+              >
+                <Plus className="h-4 w-4" />
+                Criar primeiro orçamento
+              </button>
+            </div>
+          ) : (
+            <>
+              <BudgetToolbar
+                search={search}
+                sort={sort}
+                onSearchChange={setSearch}
+                onSortChange={setSort}
               />
-            ))}
-          </div>
+
+              {filteredBudgets.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center">
+                  <p className="text-sm font-medium text-slate-700">Nenhum orçamento encontrado</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {searchActive
+                      ? "Tente outro termo de busca."
+                      : "Ajuste os filtros para ver seus orçamentos."}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                  {filteredBudgets.map((item) => (
+                    <BudgetCategoryCard
+                      key={item.id}
+                      item={item}
+                      currencyCode={data.currencyCode}
+                      onEdit={setEditingBudget}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </>
       )}
 
-      <EditBudgetLimitModal
-        category={editingCategory}
-        currencyCode={data?.currencyCode ?? "BRL"}
-        saving={updateLimit.isPending}
-        onClose={() => setEditingCategory(null)}
-        onSave={handleSaveLimit}
+      <CreateBudgetModal
+        open={createOpen}
+        availableCategories={data?.availableCategories ?? []}
+        saving={createBudget.isPending}
+        onClose={() => setCreateOpen(false)}
+        onSave={(payload) => createBudget.mutate(payload)}
+      />
+
+      <EditBudgetModal
+        budget={editingBudget}
+        availableCategories={data?.availableCategories ?? []}
+        saving={updateBudget.isPending}
+        deleting={deleteBudget.isPending}
+        onClose={() => setEditingBudget(null)}
+        onSave={(payload) => updateBudget.mutate(payload)}
+        onDelete={(id) => deleteBudget.mutate(id)}
       />
     </div>
   );

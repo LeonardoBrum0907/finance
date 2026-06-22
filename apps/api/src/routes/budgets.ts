@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import {
+  createBudgetSchema,
   DASHBOARD_CATEGORY_GROUPS,
   translateCategory,
-  updateBudgetLimitSchema,
-  type BudgetCategoryItem,
+  updateBudgetSchema,
+  type BudgetItem,
   type BudgetStatus,
   type DashboardCategoryGroup,
 } from "@finance/shared";
@@ -90,40 +91,53 @@ async function loadMonthTransactions(
   return transactions;
 }
 
+type BudgetGroupWithMembers = {
+  id: string;
+  name: string;
+  limit: number;
+  members: { categoryGroup: string }[];
+};
+
 function buildBudgetsSummary(
   transactions: FinancialTransaction[],
-  limitsByGroup: Map<string, number>,
+  groups: BudgetGroupWithMembers[],
   hasAccounts: boolean,
-): {
-  month: string;
-  currencyCode: string;
-  totalSpent: number;
-  totalLimit: number;
-  overallRatio: number;
-  potentialSavings: number;
-  categories: BudgetCategoryItem[];
-  hasAccounts: boolean;
-} {
+) {
   const currentMonth = toLocalMonthKey(new Date());
   const range = monthKeysToDateRange([currentMonth]);
   const spending = getSpendingByCategory(transactions, range);
   const spentByGroup = new Map(spending.map((item) => [item.category, item.total]));
 
-  const categories: BudgetCategoryItem[] = DASHBOARD_CATEGORY_GROUPS.map((group) => {
-    const spent = spentByGroup.get(group) ?? 0;
-    const limit = limitsByGroup.get(group) ?? 0;
-    const ratio = computeRatio(spent, limit);
+  const assignedCategories = new Set<string>();
+  for (const group of groups) {
+    for (const member of group.members) {
+      assignedCategories.add(member.categoryGroup);
+    }
+  }
+
+  const budgets: BudgetItem[] = groups.map((group) => {
+    const spent = group.members.reduce(
+      (sum, member) => sum + (spentByGroup.get(member.categoryGroup) ?? 0),
+      0,
+    );
+    const ratio = computeRatio(spent, group.limit);
     return {
-      group,
+      id: group.id,
+      name: group.name,
+      categories: group.members.map((m) => m.categoryGroup as DashboardCategoryGroup),
       spent,
-      limit,
+      limit: group.limit,
       ratio,
       status: getBudgetStatus(ratio),
     };
   });
 
-  const totalSpent = categories.reduce((sum, item) => sum + item.spent, 0);
-  const totalLimit = categories.reduce((sum, item) => sum + item.limit, 0);
+  const availableCategories = DASHBOARD_CATEGORY_GROUPS.filter(
+    (cat) => !assignedCategories.has(cat),
+  );
+
+  const totalSpent = budgets.reduce((sum, item) => sum + item.spent, 0);
+  const totalLimit = budgets.reduce((sum, item) => sum + item.limit, 0);
   const overallRatio = computeRatio(totalSpent, totalLimit);
   const potentialSavings = Math.max(0, totalLimit - totalSpent);
 
@@ -134,9 +148,45 @@ function buildBudgetsSummary(
     totalLimit,
     overallRatio,
     potentialSavings,
-    categories,
+    budgets,
+    availableCategories,
     hasAccounts,
   };
+}
+
+async function loadUserBudgetGroups(userId: string) {
+  return prisma.budgetGroup.findMany({
+    where: { userId },
+    include: { members: true },
+    orderBy: { name: "asc" },
+  });
+}
+
+async function countUserAccounts(userId: string, personId?: string) {
+  return prisma.account.count({
+    where: {
+      connection: {
+        person: {
+          userId,
+          ...(personId ? { id: personId } : {}),
+        },
+      },
+    },
+  });
+}
+
+async function fetchBudgetsSummary(userId: string, personId?: string) {
+  const [transactions, groups, accountCount] = await Promise.all([
+    loadMonthTransactions(userId, personId),
+    loadUserBudgetGroups(userId),
+    countUserAccounts(userId, personId),
+  ]);
+
+  return buildBudgetsSummary(transactions, groups, accountCount > 0);
+}
+
+function validateCategories(categories: string[]): categories is DashboardCategoryGroup[] {
+  return categories.length > 0 && categories.every(isDashboardCategoryGroup);
 }
 
 export async function budgetRoutes(app: FastifyInstance): Promise<void> {
@@ -156,76 +206,148 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
-    const [transactions, storedLimits, accountCount] = await Promise.all([
-      loadMonthTransactions(userId, personId),
-      prisma.categoryBudget.findMany({ where: { userId } }),
-      prisma.account.count({
-        where: {
-          connection: {
-            person: {
-              userId,
-              ...(personId ? { id: personId } : {}),
-            },
-          },
-        },
-      }),
-    ]);
-
-    const limitsByGroup = new Map(storedLimits.map((item) => [item.group, item.limit]));
-    const summary = buildBudgetsSummary(transactions, limitsByGroup, accountCount > 0);
-
+    const summary = await fetchBudgetsSummary(userId, personId);
     return reply.send(summary);
   });
 
-  app.put("/api/budgets/:group", async (request, reply) => {
-    const { group: rawGroup } = request.params as { group: string };
-    const query = request.query as { personId?: string };
-    const personId = query.personId?.trim() || undefined;
-    const group = decodeURIComponent(rawGroup);
-
-    if (!isDashboardCategoryGroup(group)) {
-      return reply.code(400).send({ error: "Categoria de orçamento inválida" });
-    }
-
-    const parsed = updateBudgetLimitSchema.safeParse(request.body);
+  app.post("/api/budgets", async (request, reply) => {
+    const parsed = createBudgetSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.issues[0]?.message });
     }
 
     const userId = request.user!.sub;
+    const { name, limit, categories } = parsed.data;
 
-    await prisma.categoryBudget.upsert({
+    const existing = await prisma.budgetGroup.findUnique({
+      where: { userId_name: { userId, name } },
+    });
+    if (existing) {
+      return reply.code(409).send({ error: "Já existe um orçamento com este nome" });
+    }
+
+    const conflict = await prisma.budgetGroupMember.findFirst({
       where: {
-        userId_group: { userId, group },
-      },
-      create: {
         userId,
-        group,
-        limit: parsed.data.limit,
+        categoryGroup: { in: categories },
       },
-      update: {
-        limit: parsed.data.limit,
+    });
+    if (conflict) {
+      return reply.code(409).send({
+        error: "Uma ou mais categorias já pertencem a outro orçamento",
+      });
+    }
+
+    await prisma.budgetGroup.create({
+      data: {
+        userId,
+        name,
+        limit,
+        members: {
+          create: categories.map((categoryGroup) => ({
+            userId,
+            categoryGroup,
+          })),
+        },
       },
     });
 
-    const [transactions, storedLimits, accountCount] = await Promise.all([
-      loadMonthTransactions(userId, personId),
-      prisma.categoryBudget.findMany({ where: { userId } }),
-      prisma.account.count({
+    const summary = await fetchBudgetsSummary(userId);
+    return reply.code(201).send(summary);
+  });
+
+  app.put("/api/budgets/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const query = request.query as { personId?: string };
+    const personId = query.personId?.trim() || undefined;
+    const parsed = updateBudgetSchema.safeParse(request.body);
+
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message });
+    }
+
+    const userId = request.user!.sub;
+    const existing = await prisma.budgetGroup.findFirst({
+      where: { id, userId },
+      include: { members: true },
+    });
+
+    if (!existing) {
+      return reply.code(404).send({ error: "Orçamento não encontrado" });
+    }
+
+    const { name, limit, categories } = parsed.data;
+
+    if (name && name !== existing.name) {
+      const nameConflict = await prisma.budgetGroup.findUnique({
+        where: { userId_name: { userId, name } },
+      });
+      if (nameConflict) {
+        return reply.code(409).send({ error: "Já existe um orçamento com este nome" });
+      }
+    }
+
+    if (categories) {
+      if (!validateCategories(categories)) {
+        return reply.code(400).send({ error: "Categoria de orçamento inválida" });
+      }
+
+      const conflict = await prisma.budgetGroupMember.findFirst({
         where: {
-          connection: {
-            person: {
-              userId,
-              ...(personId ? { id: personId } : {}),
-            },
-          },
+          userId,
+          categoryGroup: { in: categories },
+          budgetGroupId: { not: id },
         },
-      }),
-    ]);
+      });
+      if (conflict) {
+        return reply.code(409).send({
+          error: "Uma ou mais categorias já pertencem a outro orçamento",
+        });
+      }
+    }
 
-    const limitsByGroup = new Map(storedLimits.map((item) => [item.group, item.limit]));
-    const summary = buildBudgetsSummary(transactions, limitsByGroup, accountCount > 0);
+    await prisma.$transaction(async (tx) => {
+      await tx.budgetGroup.update({
+        where: { id },
+        data: {
+          ...(name !== undefined ? { name } : {}),
+          ...(limit !== undefined ? { limit } : {}),
+        },
+      });
 
+      if (categories) {
+        await tx.budgetGroupMember.deleteMany({ where: { budgetGroupId: id } });
+        await tx.budgetGroupMember.createMany({
+          data: categories.map((categoryGroup) => ({
+            budgetGroupId: id,
+            userId,
+            categoryGroup,
+          })),
+        });
+      }
+    });
+
+    const summary = await fetchBudgetsSummary(userId, personId);
+    return reply.send(summary);
+  });
+
+  app.delete("/api/budgets/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const query = request.query as { personId?: string };
+    const personId = query.personId?.trim() || undefined;
+    const userId = request.user!.sub;
+
+    const existing = await prisma.budgetGroup.findFirst({
+      where: { id, userId },
+    });
+
+    if (!existing) {
+      return reply.code(404).send({ error: "Orçamento não encontrado" });
+    }
+
+    await prisma.budgetGroup.delete({ where: { id } });
+
+    const summary = await fetchBudgetsSummary(userId, personId);
     return reply.send(summary);
   });
 }

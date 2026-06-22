@@ -1,20 +1,20 @@
 import { AlertCircle, AlertTriangle, CheckCircle, Settings2 } from "lucide-react";
-import type { BudgetCategoryItem } from "@finance/shared";
+import type { BudgetItem } from "@finance/shared";
 import { formatCurrency } from "../../lib/format";
 
 interface Props {
-  item: BudgetCategoryItem;
+  item: BudgetItem;
   currencyCode: string;
-  onEdit: (item: BudgetCategoryItem) => void;
+  onEdit: (item: BudgetItem) => void;
 }
 
-function progressColor(status: BudgetCategoryItem["status"]): string {
+function progressColor(status: BudgetItem["status"]): string {
   if (status === "critical") return "bg-rose-500";
   if (status === "warning") return "bg-amber-500";
   return "bg-emerald-500";
 }
 
-function StatusBadge({ status }: { status: BudgetCategoryItem["status"] }) {
+function StatusBadge({ status }: { status: BudgetItem["status"] }) {
   if (status === "critical") {
     return (
       <>
@@ -49,38 +49,40 @@ function StatusBadge({ status }: { status: BudgetCategoryItem["status"] }) {
 
 export function BudgetCategoryCard({ item, currencyCode, onEdit }: Props) {
   const barWidth = item.limit > 0 ? `${Math.min(100, item.ratio)}%` : "0%";
-  const unconfigured = item.limit <= 0;
+  const categorySubtitle = item.categories.join(" · ");
 
   return (
     <div className="flex flex-col justify-between rounded-2xl border border-slate-200/60 bg-white p-6 transition-all duration-200 hover:shadow-md">
       <div>
-        <div className="mb-4 flex items-start justify-between">
+        <div className="mb-1 flex items-start justify-between gap-2">
           <span className="block font-sans text-xs font-bold uppercase tracking-wide text-slate-800">
-            {item.group}
+            {item.name}
           </span>
           <button
             type="button"
             onClick={() => onEdit(item)}
-            className="cursor-pointer rounded-lg border border-slate-200/30 bg-slate-50 p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-900"
-            aria-label={`Ajustar limite de ${item.group}`}
+            className="shrink-0 cursor-pointer rounded-lg border border-slate-200/30 bg-slate-50 p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-900"
+            aria-label={`Editar orçamento ${item.name}`}
           >
             <Settings2 className="h-3.5 w-3.5" />
           </button>
         </div>
 
+        {categorySubtitle && (
+          <p className="mb-4 line-clamp-2 text-[11px] text-slate-400">{categorySubtitle}</p>
+        )}
+
         <div className="mb-1 flex items-baseline justify-between">
-          <span className="text-[11px] font-medium text-slate-400">Saturação da categoria</span>
+          <span className="text-[11px] font-medium text-slate-400">Saturação do orçamento</span>
           <span className="font-mono text-xs font-bold text-slate-800">
-            {unconfigured ? "—" : `${item.ratio.toFixed(1)}%`}
+            {item.limit <= 0 ? "—" : `${item.ratio.toFixed(1)}%`}
           </span>
         </div>
 
         <div className="mb-5 h-2 w-full overflow-hidden rounded-full bg-slate-100">
           <div
-            className={`h-full rounded-full transition-all duration-500 ${
-              unconfigured ? "bg-slate-200" : progressColor(item.status)
-            }`}
-            style={{ width: unconfigured ? "0%" : barWidth }}
+            className={`h-full rounded-full transition-all duration-500 ${progressColor(item.status)}`}
+            style={{ width: item.limit <= 0 ? "0%" : barWidth }}
           />
         </div>
       </div>
@@ -98,21 +100,13 @@ export function BudgetCategoryCard({ item, currencyCode, onEdit }: Props) {
         <span className="text-right text-[10px] text-slate-400">
           Limite:{" "}
           <strong className="mt-1 block text-xs font-bold text-emerald-600">
-            {unconfigured
-              ? "Não configurado"
-              : formatCurrency(item.limit, currencyCode)}
+            {formatCurrency(item.limit, currencyCode)}
           </strong>
         </span>
       </div>
 
       <div className="mt-4 flex items-center gap-1.5 border-t border-slate-100/50 pt-3.5">
-        {unconfigured ? (
-          <span className="text-[10px] font-bold uppercase text-slate-400">
-            Configure um limite mensal
-          </span>
-        ) : (
-          <StatusBadge status={item.status} />
-        )}
+        <StatusBadge status={item.status} />
       </div>
     </div>
   );

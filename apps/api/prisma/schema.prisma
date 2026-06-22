@@ -18,7 +18,7 @@ model User {
   people       Person[]
   chatMessages ChatMessage[]
   chatThreads  ChatThread[]
-  budgets      CategoryBudget[]
+  budgets      BudgetGroup[]
 }
 
 model Person {
@@ -123,16 +123,30 @@ model ChatMessage {
   @@index([threadId])
 }
 
-model CategoryBudget {
+model BudgetGroup {
   id        String   @id @default(cuid())
   userId    String
-  group     String
+  name      String
   limit     Float
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  members BudgetGroupMember[]
 
-  @@unique([userId, group])
+  @@unique([userId, name])
   @@index([userId])
+}
+
+model BudgetGroupMember {
+  id            String @id @default(cuid())
+  budgetGroupId String
+  userId        String
+  categoryGroup String
+
+  budgetGroup BudgetGroup @relation(fields: [budgetGroupId], references: [id], onDelete: Cascade)
+
+  @@unique([budgetGroupId, categoryGroup])
+  @@unique([userId, categoryGroup])
+  @@index([budgetGroupId])
 }
