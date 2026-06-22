@@ -90,19 +90,6 @@ export function CreditCardList({ accounts }: Props) {
                   </div>
                 )}
               </div>
-
-              {usedAmount > 0 && (
-                <div className="mt-3 flex justify-end">
-                  <button
-                    type="button"
-                    disabled
-                    title="Em breve"
-                    className="rounded-lg border border-white/15 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white opacity-80"
-                  >
-                    Pagar Fatura
-                  </button>
-                </div>
-              )}
             </div>
           );
         })}
