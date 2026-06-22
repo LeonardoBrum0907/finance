@@ -23,7 +23,7 @@ export function createFinanceTools(userId: string, personId?: string) {
     getTransactions: tool({
       description:
         "Lista transações do usuário com filtros opcionais de período, categoria e limite. Valores negativos são despesas; positivos são receitas.",
-      parameters: z.object({
+      inputSchema: z.object({
         from: z
           .string()
           .optional()
@@ -76,7 +76,7 @@ export function createFinanceTools(userId: string, personId?: string) {
     getSpendingByCategory: tool({
       description:
         "Retorna gastos agregados por categoria em um período. Considera apenas despesas (valores negativos).",
-      parameters: z.object({
+      inputSchema: z.object({
         from: z
           .string()
           .optional()
@@ -105,7 +105,7 @@ export function createFinanceTools(userId: string, personId?: string) {
     getBalanceSummary: tool({
       description:
         "Retorna saldo consolidado e saldo por conta no escopo atual (todas as pessoas ou pessoa selecionada).",
-      parameters: z.object({}),
+      inputSchema: z.object({}),
       execute: async () => {
         const data = await loadScopedData();
         let total = 0;

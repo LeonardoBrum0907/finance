@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { streamText, generateText, type CoreMessage } from "ai";
+import { streamText, generateText, stepCountIs, type CoreMessage } from "ai";
 import { chatMessageSchema } from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
@@ -91,7 +91,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
         model: getModel(),
         messages,
         tools,
-        maxSteps: 5,
+        stopWhen: stepCountIs(5),
         onError({ error }) {
           streamError = error instanceof Error ? error.message : String(error);
         },
@@ -111,7 +111,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
               model: getModel(),
               messages,
               tools,
-              maxSteps: 5,
+              stopWhen: stepCountIs(5),
             });
             assistantText = text;
             reply.raw.write(text);

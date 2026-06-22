@@ -1,7 +1,7 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import type { LanguageModelV1 } from "ai";
+import type { LanguageModel } from "ai";
 import { getAiEnv } from "../env.js";
 
 export { buildFinancialContext } from "./finance/context.js";
@@ -26,7 +26,7 @@ export function isAiConfigured(): boolean {
   }
 }
 
-export function getModel(): LanguageModelV1 {
+export function getModel(): LanguageModel {
   const ai = getAiEnv();
   const modelId = ai.model || DEFAULT_MODELS[ai.provider];
   switch (ai.provider) {
