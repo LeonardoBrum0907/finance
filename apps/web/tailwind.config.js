@@ -11,6 +11,15 @@ export default {
           600: "#059669",
           700: "#047857",
         },
+        sidebar: {
+          DEFAULT: "#121C27",
+          border: "#1E293B",
+        },
+      },
+      fontFamily: {
+        sans: ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        display: ["Space Grotesk", "sans-serif"],
+        mono: ["JetBrains Mono", "ui-monospace", "monospace"],
       },
     },
   },

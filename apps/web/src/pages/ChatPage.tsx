@@ -96,15 +96,15 @@ export function ChatPage() {
     !streaming && lastMessage?.role === "assistant" && lastMessage.content.length > 0;
 
   return (
-    <div className="flex h-[calc(100vh-9rem)] flex-col md:flex-row md:gap-4">
+    <div className="flex h-[calc(100vh-3rem)] flex-col overflow-hidden md:flex-row md:gap-4 lg:h-[calc(100vh-4rem)]">
       <ChatSidebar
         activeThreadId={activeThreadId}
         onSelectThread={setActiveThreadId}
         disabled={streaming}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="mb-4">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="mb-4 shrink-0">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
               <h1 className="text-2xl font-semibold text-slate-800">Assistente</h1>
@@ -155,14 +155,14 @@ export function ChatPage() {
         </div>
 
         {status.data && !status.data.configured && (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <div className="mb-4 shrink-0 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
             A IA não está configurada no servidor. Defina o provider e a respectiva
             chave de API no arquivo <code>.env</code>.
           </div>
         )}
 
         {showSuggestions && (
-          <div className="mb-3">
+          <div className="mb-3 shrink-0">
             <ChatSuggestionChips
               suggestions={suggestions}
               onSelect={(text) => sendMessage(text)}
@@ -171,7 +171,7 @@ export function ChatPage() {
           </div>
         )}
 
-        <div className="flex-1 space-y-4 overflow-y-auto rounded-lg border border-slate-200 bg-white p-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto rounded-lg border border-slate-200 bg-white p-4">
           {messages.length === 0 && !streaming && (
             <p className="text-sm text-slate-400">
               Faça uma pergunta ou escolha uma sugestão acima.
@@ -215,7 +215,7 @@ export function ChatPage() {
           <div ref={bottomRef} />
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
+        <form onSubmit={handleSubmit} className="mt-4 flex shrink-0 gap-2">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}

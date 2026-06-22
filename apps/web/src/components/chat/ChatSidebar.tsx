@@ -183,14 +183,14 @@ export function ChatSidebar({ activeThreadId, onSelectThread, disabled }: Props)
       <aside
         className={`${
           mobileOpen ? "block" : "hidden"
-        } shrink-0 border-slate-200 md:flex md:flex-col ${
+        } shrink-0 border-slate-200 md:flex md:h-full md:min-h-0 md:flex-col ${
           collapsed ? "md:w-12 md:border-r md:px-1 md:py-1" : "md:w-56 md:border-r md:pr-3"
         } w-full`}
       >
-        <div className="hidden h-full flex-col md:flex">
+        <div className="hidden h-full min-h-0 flex-col overflow-hidden md:flex">
           {collapsed ? collapsedContent : expandedContent}
         </div>
-        <div className="flex h-full flex-col md:hidden">{expandedContent}</div>
+        <div className="flex h-full min-h-0 flex-col overflow-hidden md:hidden">{expandedContent}</div>
       </aside>
     </>
   );
