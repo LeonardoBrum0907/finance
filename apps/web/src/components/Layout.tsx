@@ -13,7 +13,7 @@ export function Layout() {
   return (
     <div className="flex min-h-full flex-col">
       <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-6">
             <span className="text-lg font-semibold text-brand-600">Finanças</span>
             <nav className="flex gap-1">
@@ -46,7 +46,7 @@ export function Layout() {
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">
         <Outlet />
       </main>
     </div>
