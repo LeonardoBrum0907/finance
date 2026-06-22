@@ -17,38 +17,58 @@ import {
 
 const RECENT_TXS_PER_ACCOUNT = 3;
 
+export interface BuildFinancialContextOptions {
+  personId?: string;
+}
+
 /**
  * Monta um resumo financeiro enriquecido do usuário para servir de contexto à IA.
  */
-export async function buildFinancialContext(userId: string): Promise<string> {
-  const data = await loadUserFinancialData(userId);
+export async function buildFinancialContext(
+  userId: string,
+  options: BuildFinancialContextOptions = {},
+): Promise<string> {
+  const { personId } = options;
+  const data = await loadUserFinancialData(userId, { personId });
   const { people } = data;
 
   if (people.length === 0) {
+    if (personId) {
+      return "A pessoa selecionada não foi encontrada ou não possui dados.";
+    }
     return "O usuário ainda não cadastrou pessoas nem conectou contas bancárias.";
   }
 
+  const focusPerson = personId ? people[0] : null;
   const allTransactions = flattenTransactions(data);
   const connections = flattenConnections(data);
   const currentMonth = toLocalMonthKey(new Date());
+  const monthRange = { from: `${currentMonth}-01`, to: `${currentMonth}-31` };
   const monthly = getMonthlySummary(allTransactions);
-  const categories = getSpendingByCategory(allTransactions, {
-    from: `${currentMonth}-01`,
-    to: `${currentMonth}-31`,
-  });
-  const topExpenses = getTopExpenses(allTransactions, {
-    from: `${currentMonth}-01`,
-    to: `${currentMonth}-31`,
-  });
+  const categories = getSpendingByCategory(allTransactions, monthRange);
+  const topExpenses = getTopExpenses(allTransactions, monthRange);
   const syncInfo = getLastSyncInfo(connections);
 
   let total = 0;
-  const lines: string[] = [];
+  for (const person of people) {
+    const accounts = person.connections.flatMap((c) => c.accounts);
+    total += accounts.reduce((sum, a) => sum + a.balance, 0);
+  }
 
-  lines.push(`Saldo consolidado de todas as pessoas: ${formatCurrency(total)}`);
+  const balanceLabel = focusPerson
+    ? `Saldo consolidado (${focusPerson.name})`
+    : "Saldo consolidado de todas as pessoas";
+
+  const lines: string[] = [`${balanceLabel}: ${formatCurrency(total)}`];
+
+  if (focusPerson) {
+    lines.push(
+      `Foco: ${focusPerson.name}${focusPerson.relationship ? ` (${focusPerson.relationship})` : ""}`,
+    );
+  }
 
   if (syncInfo.length > 0) {
-    lines.push("\n## Última sincronização");
+    lines.push("## Última sincronização");
     for (const sync of syncInfo) {
       const when = sync.lastSyncedAt
         ? formatLocalDate(new Date(sync.lastSyncedAt))
@@ -85,7 +105,6 @@ export async function buildFinancialContext(userId: string): Promise<string> {
   for (const person of people) {
     const accounts = person.connections.flatMap((c) => c.accounts);
     const personBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
-    total += personBalance;
     lines.push(
       `\n### Pessoa: ${person.name}${person.relationship ? ` (${person.relationship})` : ""}`,
     );
@@ -108,9 +127,6 @@ export async function buildFinancialContext(userId: string): Promise<string> {
       }
     }
   }
-
-  // Corrige saldo consolidado no topo
-  lines[0] = `Saldo consolidado de todas as pessoas: ${formatCurrency(total)}`;
 
   return lines.join("\n");
 }

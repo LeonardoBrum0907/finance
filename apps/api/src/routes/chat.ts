@@ -9,6 +9,7 @@ import {
   isAiConfigured,
   SYSTEM_PROMPT,
 } from "../services/ai.js";
+import { InvalidPersonError } from "../services/finance/queries.js";
 
 export async function chatRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
@@ -44,6 +45,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
 
     const userId = request.user!.sub;
     const userText = parsed.data.message;
+    const personId = parsed.data.personId;
 
     await prisma.chatMessage.create({
       data: { userId, role: "user", content: userText },
@@ -55,7 +57,15 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       take: 40,
     });
 
-    const context = await buildFinancialContext(userId);
+    let context: string;
+    try {
+      context = await buildFinancialContext(userId, { personId });
+    } catch (err) {
+      if (err instanceof InvalidPersonError) {
+        return reply.code(400).send({ error: "Pessoa não encontrada" });
+      }
+      throw err;
+    }
 
     const messages: CoreMessage[] = [
       {
