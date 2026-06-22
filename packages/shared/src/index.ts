@@ -27,9 +27,26 @@ export type CreateConnectionInput = z.infer<typeof createConnectionSchema>;
 
 export const chatMessageSchema = z.object({
   message: z.string().min(1, "Digite uma mensagem"),
+  threadId: z.string().min(1, "Informe a conversa"),
   personId: z.string().cuid().optional(),
 });
 export type ChatMessageInput = z.infer<typeof chatMessageSchema>;
+
+export const createChatThreadSchema = z.object({
+  title: z.string().min(1).max(80).optional(),
+});
+export type CreateChatThreadInput = z.infer<typeof createChatThreadSchema>;
+
+export const updateChatThreadSchema = z.object({
+  title: z.string().min(1, "Informe o título").max(80, "Título muito longo"),
+});
+export type UpdateChatThreadInput = z.infer<typeof updateChatThreadSchema>;
+
+export const regenerateChatSchema = z.object({
+  threadId: z.string().min(1, "Informe a conversa"),
+  personId: z.string().cuid().optional(),
+});
+export type RegenerateChatInput = z.infer<typeof regenerateChatSchema>;
 
 export interface AuthUser {
   id: string;
@@ -88,6 +105,13 @@ export interface DashboardSummary {
   }[];
   accounts: (AccountDTO & { personName: string })[];
   recentTransactions: TransactionDTO[];
+}
+
+export interface ChatThreadDTO {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ChatMessageDTO {
