@@ -1,25 +1,50 @@
+import { useMemo } from "react";
+import type { TooltipItem } from "chart.js";
 import { motion } from "framer-motion";
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { Doughnut } from "react-chartjs-2";
+import {
+  Car,
+  Home,
+  Layers,
+  type LucideIcon,
+  Utensils,
+  Zap,
+} from "lucide-react";
 import type { DashboardCategoryPoint } from "@finance/shared";
 import { translateCategory } from "@finance/shared";
 import { formatCurrency } from "../../lib/format";
-import { cardClass, fadeUp } from "./motion";
+import { ensureChartJsRegistered } from "../../lib/chart";
+import { cardLargeClass, fadeUp } from "./motion";
 
-const COLORS = [
-  "#059669",
-  "#0ea5e9",
-  "#8b5cf6",
-  "#f59e0b",
-  "#ec4899",
-  "#64748b",
-];
+ensureChartJsRegistered();
+
+const COLORS = ["#10B981", "#F59E0B", "#0EA5E9", "#6366F1", "#94A3B8"];
+
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  Moradia: Home,
+  Housing: Home,
+  Alimentação: Utensils,
+  Food: Utensils,
+  Transporte: Car,
+  Transport: Car,
+  Transportation: Car,
+  Utilidades: Zap,
+  Utilities: Zap,
+  Outros: Layers,
+  Other: Layers,
+};
+
+function categoryIcon(label: string): LucideIcon {
+  return CATEGORY_ICONS[label] ?? Layers;
+}
 
 interface Props {
   data: DashboardCategoryPoint[];
   currencyCode: string;
+  className?: string;
 }
 
-export function CategoryChart({ data, currencyCode }: Props) {
+export function CategoryChart({ data, currencyCode, className }: Props) {
   const top = data.slice(0, 5).map((c) => ({
     ...c,
     category: translateCategory(c.category) ?? c.category,
@@ -36,17 +61,57 @@ export function CategoryChart({ data, currencyCode }: Props) {
     percent: total > 0 ? (c.total / total) * 100 : 0,
   }));
 
+  const doughnutData = useMemo(
+    () => ({
+      labels: withPercent.map((c) => c.category),
+      datasets: [
+        {
+          data: withPercent.map((c) => c.total),
+          backgroundColor: withPercent.map((_, i) => COLORS[i % COLORS.length]),
+          borderWidth: 0,
+          hoverOffset: 4,
+        },
+      ],
+    }),
+    [withPercent],
+  );
+
+  const options = useMemo(
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "72%",
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx: TooltipItem<"doughnut">) => {
+              const value = ctx.parsed;
+              if (value == null) return "";
+              return `${ctx.label}: ${formatCurrency(value, currencyCode)}`;
+            },
+          },
+        },
+      },
+    }),
+    [currencyCode],
+  );
+
   return (
     <motion.section
       custom={3}
       variants={fadeUp}
       initial="hidden"
       animate="visible"
-      className={cardClass}
+      className={`${cardLargeClass} flex flex-col ${className ?? ""}`}
     >
-      <div className="mb-4">
-        <h2 className="text-base font-semibold text-slate-800">Gastos por categoria</h2>
-        <p className="text-sm text-slate-500">Distribuição das saídas no período</p>
+      <div className="mb-6">
+        <h2 className="font-display text-base font-semibold text-slate-900">
+          Despesas por Categoria
+        </h2>
+        <p className="text-[11px] text-slate-400">
+          Consumo mensal distribuído por segmento
+        </p>
       </div>
 
       {withPercent.length === 0 ? (
@@ -54,64 +119,51 @@ export function CategoryChart({ data, currencyCode }: Props) {
           Nenhuma despesa categorizada no período.
         </p>
       ) : (
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
-          <div className="mx-auto h-56 w-full max-w-xs">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={withPercent}
-                  dataKey="total"
-                  nameKey="category"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={52}
-                  outerRadius={80}
-                  paddingAngle={2}
-                  animationDuration={600}
-                >
-                  {withPercent.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value, _name, item) => [
-                    formatCurrency(Number(value ?? 0), currencyCode),
-                    (item?.payload as { category?: string })?.category ?? "",
-                  ]}
-                  contentStyle={{
-                    borderRadius: 8,
-                    border: "1px solid #e2e8f0",
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+        <>
+          <div className="relative mx-auto mb-6 h-44 w-full max-w-[180px]">
+            <Doughnut data={doughnutData} options={options} />
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                Total Gasto
+              </span>
+              <span className="font-display text-sm font-bold text-slate-900">
+                {formatCurrency(total, currencyCode)}
+              </span>
+            </div>
           </div>
 
-          <ul className="flex-1 space-y-2">
-            {withPercent.map((cat, i) => (
-              <li
-                key={cat.category}
-                className="flex items-center justify-between gap-3 text-sm"
-              >
-                <div className="flex min-w-0 items-center gap-2">
-                  <span
-                    className="h-2.5 w-2.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: COLORS[i % COLORS.length] }}
-                  />
-                  <span className="truncate text-slate-700">{cat.category}</span>
-                </div>
-                <div className="shrink-0 text-right">
-                  <span className="font-medium text-slate-800">
-                    {formatCurrency(cat.total, currencyCode)}
-                  </span>
-                  <span className="ml-2 text-slate-400">
-                    {cat.percent.toFixed(0)}%
-                  </span>
-                </div>
-              </li>
-            ))}
+          <ul className="flex flex-col gap-2.5">
+            {withPercent.map((cat, i) => {
+              const Icon = categoryIcon(cat.category);
+              return (
+                <li
+                  key={cat.category}
+                  className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 px-3 py-1.5"
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-200/50 bg-white">
+                      <Icon
+                        className="h-3.5 w-3.5"
+                        style={{ color: COLORS[i % COLORS.length] }}
+                      />
+                    </div>
+                    <span className="truncate text-xs font-semibold text-slate-800">
+                      {cat.category}
+                    </span>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <span className="block text-xs font-bold text-slate-800">
+                      {formatCurrency(cat.total, currencyCode)}
+                    </span>
+                    <span className="font-mono text-[10px] text-slate-400">
+                      {cat.percent.toFixed(1)}%
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
-        </div>
+        </>
       )}
     </motion.section>
   );
