@@ -1,0 +1,21 @@
+{
+  "name": "finance",
+  "private": true,
+  "version": "0.1.0",
+  "description": "App pessoal de controle financeiro com Open Finance (Pluggy) e chat de IA",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:api": "pnpm --filter @finance/api dev",
+    "dev:web": "pnpm --filter @finance/web dev",
+    "build": "pnpm -r build",
+    "db:migrate": "pnpm --filter @finance/api db:migrate",
+    "db:generate": "pnpm --filter @finance/api db:generate",
+    "db:studio": "pnpm --filter @finance/api db:studio",
+    "db:up": "docker compose up -d db",
+    "db:down": "docker compose down"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.8.0"
+}
