@@ -5,6 +5,7 @@ import { Bar, Doughnut } from "react-chartjs-2";
 import {
   ArrowLeftRight,
   Car,
+  Church,
   Heart,
   Home,
   Layers,
@@ -39,6 +40,7 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   Compras: ShoppingBag,
   Assinaturas: Wifi,
   Doações: Heart,
+  Igreja: Church,
   "Saúde e bem-estar": Sparkles,
   "Contas fixas": Home,
   Serviços: Wrench,

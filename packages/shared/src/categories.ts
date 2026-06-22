@@ -227,15 +227,6 @@ function isOutrosCategory(
   return value === "Outros" || raw.trim().toLowerCase() === "other";
 }
 
-function isRendaCategory(
-  raw: string | null | undefined,
-  translated: string | null,
-): boolean {
-  if (raw?.trim().toLowerCase() === "income") return true;
-  const value = translated ?? raw?.trim() ?? "";
-  return value === "Renda";
-}
-
 /** Regras por descrição: quando a categoria é genérica, inferir a partir do texto. */
 function applyDescriptionCategoryRules(
   category: string | null | undefined,
@@ -256,11 +247,8 @@ function applyDescriptionCategoryRules(
   if (text.includes("disney plus") || text.includes("youtube premium")) {
     return "Serviços digitais";
   }
-  if (
-    (text.includes("primeira igreja") || text.includes("lagoinha")) &&
-    (isRendaCategory(category, translated) || isOutrosCategory(category, translated))
-  ) {
-    return "Doações";
+  if (text.includes("igreja") || text.includes("lagoinha")) {
+    return "Igreja";
   }
 
   if (text.includes("pix") && isOutrosCategory(category, translated)) {

@@ -5,6 +5,7 @@ export const DASHBOARD_CATEGORY_GROUPS = [
   "Compras",
   "Assinaturas",
   "Doações",
+  "Igreja",
   "Saúde e bem-estar",
   "Contas fixas",
   "Serviços",
@@ -55,6 +56,7 @@ const GROUP_BY_CATEGORY: Record<string, DashboardCategoryGroup> = {
 
   // Doações
   Doações: "Doações",
+  Igreja: "Igreja",
 
   // Saúde e bem-estar
   Farmácia: "Saúde e bem-estar",
