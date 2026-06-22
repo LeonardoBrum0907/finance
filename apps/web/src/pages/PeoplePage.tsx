@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PersonDTO } from "@finance/shared";
 import { api } from "../lib/api";
 import { formatCurrency } from "../lib/format";
+import { ConnectAccount } from "../components/ConnectAccount";
 
 export function PeoplePage() {
   const queryClient = useQueryClient();
@@ -66,6 +67,8 @@ export function PeoplePage() {
           Cadastre as pessoas cujas contas você quer acompanhar (você, cônjuge, etc.).
         </p>
       </div>
+
+      <ConnectAccount people={people.data ?? []} />
 
       <form
         onSubmit={handleSubmit}
