@@ -3,7 +3,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import type { LanguageModelV1 } from "ai";
 import { getAiEnv } from "../env.js";
-import { prisma } from "../prisma.js";
+import { loadUserFinancialData } from "./finance/queries.js";
 
 const DEFAULT_MODELS: Record<string, string> = {
   openai: "gpt-4o-mini",
@@ -48,20 +48,7 @@ const currency = (value: number, code = "BRL") =>
  * transacoes recentes) para servir de contexto a IA.
  */
 export async function buildFinancialContext(userId: string): Promise<string> {
-  const people = await prisma.person.findMany({
-    where: { userId },
-    include: {
-      connections: {
-        include: {
-          accounts: {
-            include: {
-              transactions: { orderBy: { date: "desc" }, take: 15 },
-            },
-          },
-        },
-      },
-    },
-  });
+  const { people } = await loadUserFinancialData(userId);
 
   if (people.length === 0) {
     return "O usuário ainda não cadastrou pessoas nem conectou contas bancárias.";
