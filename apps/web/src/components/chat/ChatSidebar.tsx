@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ChatThreadDTO } from "@finance/shared";
 import { api } from "../../lib/api";
+import { useSidebarCollapsed } from "../../hooks/useSidebarCollapsed";
 import { useState } from "react";
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 
 export function ChatSidebar({ activeThreadId, onSelectThread, disabled }: Props) {
   const queryClient = useQueryClient();
+  const { collapsed, toggleCollapsed } = useSidebarCollapsed();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -60,16 +62,27 @@ export function ChatSidebar({ activeThreadId, onSelectThread, disabled }: Props)
     updateThread.mutate({ id, title });
   }
 
-  const sidebarContent = (
-    <div className="flex h-full flex-col">
-      <button
-        type="button"
-        onClick={() => createThread.mutate()}
-        disabled={disabled || createThread.isPending}
-        className="mb-3 w-full rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
-      >
-        Nova conversa
-      </button>
+  const expandedContent = (
+    <>
+      <div className="mb-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => createThread.mutate()}
+          disabled={disabled || createThread.isPending}
+          className="min-w-0 flex-1 rounded-md bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+        >
+          Nova conversa
+        </button>
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          className="hidden shrink-0 rounded-md border border-slate-300 p-2 text-slate-600 hover:bg-slate-50 md:inline-flex"
+          title="Recolher conversas"
+          aria-label="Recolher conversas"
+        >
+          ‹
+        </button>
+      </div>
       <div className="flex-1 space-y-1 overflow-y-auto">
         {threads.isLoading && (
           <p className="px-2 text-xs text-slate-400">Carregando...</p>
@@ -131,6 +144,30 @@ export function ChatSidebar({ activeThreadId, onSelectThread, disabled }: Props)
           </div>
         ))}
       </div>
+    </>
+  );
+
+  const collapsedContent = (
+    <div className="flex flex-col items-center gap-2">
+      <button
+        type="button"
+        onClick={toggleCollapsed}
+        className="rounded-md border border-slate-300 p-2 text-slate-600 hover:bg-slate-50"
+        title="Expandir conversas"
+        aria-label="Expandir conversas"
+      >
+        ›
+      </button>
+      <button
+        type="button"
+        onClick={() => createThread.mutate()}
+        disabled={disabled || createThread.isPending}
+        className="rounded-md bg-brand-600 p-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+        title="Nova conversa"
+        aria-label="Nova conversa"
+      >
+        +
+      </button>
     </div>
   );
 
@@ -146,9 +183,14 @@ export function ChatSidebar({ activeThreadId, onSelectThread, disabled }: Props)
       <aside
         className={`${
           mobileOpen ? "block" : "hidden"
-        } w-full shrink-0 border-slate-200 pr-0 md:block md:w-56 md:border-r md:pr-3`}
+        } shrink-0 border-slate-200 md:flex md:flex-col ${
+          collapsed ? "md:w-12 md:border-r md:px-1 md:py-1" : "md:w-56 md:border-r md:pr-3"
+        } w-full`}
       >
-        {sidebarContent}
+        <div className="hidden h-full flex-col md:flex">
+          {collapsed ? collapsedContent : expandedContent}
+        </div>
+        <div className="flex h-full flex-col md:hidden">{expandedContent}</div>
       </aside>
     </>
   );
