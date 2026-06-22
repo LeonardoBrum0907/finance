@@ -1,16 +1,20 @@
 import type { FastifyInstance } from "fastify";
-import { streamText, generateText, stepCountIs, type CoreMessage } from "ai";
-import { chatMessageSchema } from "@finance/shared";
+import {
+  chatMessageSchema,
+  createChatThreadSchema,
+  regenerateChatSchema,
+  updateChatThreadSchema,
+} from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
+import { isAiConfigured } from "../services/ai.js";
+import { runChatStream } from "../services/chatStream.js";
 import {
-  buildFinancialContext,
-  getModel,
-  isAiConfigured,
-  SYSTEM_PROMPT,
-} from "../services/ai.js";
-import { InvalidPersonError } from "../services/finance/queries.js";
-import { createFinanceTools } from "../services/finance/tools.js";
+  autoTitleFromFirstMessage,
+  findUserThread,
+  resetThreadTitle,
+  touchThread,
+} from "../services/chatThread.js";
 
 export async function chatRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
@@ -19,9 +23,90 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ configured: isAiConfigured() });
   });
 
-  app.get("/api/chat/messages", async (request, reply) => {
-    const messages = await prisma.chatMessage.findMany({
+  app.get("/api/chat/threads", async (request, reply) => {
+    const threads = await prisma.chatThread.findMany({
       where: { userId: request.user!.sub },
+      orderBy: { updatedAt: "desc" },
+    });
+    return reply.send(
+      threads.map((t) => ({
+        id: t.id,
+        title: t.title,
+        createdAt: t.createdAt.toISOString(),
+        updatedAt: t.updatedAt.toISOString(),
+      })),
+    );
+  });
+
+  app.post("/api/chat/threads", async (request, reply) => {
+    const parsed = createChatThreadSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message });
+    }
+    const thread = await prisma.chatThread.create({
+      data: {
+        userId: request.user!.sub,
+        title: parsed.data.title ?? "Nova conversa",
+      },
+    });
+    return reply.code(201).send({
+      id: thread.id,
+      title: thread.title,
+      createdAt: thread.createdAt.toISOString(),
+      updatedAt: thread.updatedAt.toISOString(),
+    });
+  });
+
+  app.patch("/api/chat/threads/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateChatThreadSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message });
+    }
+    const thread = await findUserThread(request.user!.sub, id);
+    if (!thread) return reply.code(404).send({ error: "Conversa não encontrada" });
+
+    const updated = await prisma.chatThread.update({
+      where: { id },
+      data: { title: parsed.data.title },
+    });
+    return reply.send({
+      id: updated.id,
+      title: updated.title,
+      createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+    });
+  });
+
+  app.delete("/api/chat/threads/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const thread = await findUserThread(request.user!.sub, id);
+    if (!thread) return reply.code(404).send({ error: "Conversa não encontrada" });
+
+    await prisma.chatThread.delete({ where: { id } });
+    return reply.code(204).send();
+  });
+
+  app.delete("/api/chat/threads/:threadId/messages", async (request, reply) => {
+    const { threadId } = request.params as { threadId: string };
+    const thread = await findUserThread(request.user!.sub, threadId);
+    if (!thread) return reply.code(404).send({ error: "Conversa não encontrada" });
+
+    await prisma.chatMessage.deleteMany({ where: { threadId } });
+    await resetThreadTitle(threadId);
+    return reply.code(204).send();
+  });
+
+  app.get("/api/chat/messages", async (request, reply) => {
+    const threadId = (request.query as { threadId?: string }).threadId;
+    if (!threadId) {
+      return reply.code(400).send({ error: "Informe threadId" });
+    }
+    const thread = await findUserThread(request.user!.sub, threadId);
+    if (!thread) return reply.code(404).send({ error: "Conversa não encontrada" });
+
+    const messages = await prisma.chatMessage.findMany({
+      where: { threadId },
       orderBy: { createdAt: "asc" },
       take: 100,
     });
@@ -45,100 +130,75 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const userId = request.user!.sub;
-    const userText = parsed.data.message;
-    const personId = parsed.data.personId;
+    const { message: userText, threadId, personId } = parsed.data;
+
+    const thread = await findUserThread(userId, threadId);
+    if (!thread) return reply.code(404).send({ error: "Conversa não encontrada" });
 
     await prisma.chatMessage.create({
-      data: { userId, role: "user", content: userText },
+      data: { userId, threadId, role: "user", content: userText },
     });
+    await autoTitleFromFirstMessage(threadId, userText);
+    await touchThread(threadId);
 
     const history = await prisma.chatMessage.findMany({
-      where: { userId },
+      where: { threadId },
       orderBy: { createdAt: "asc" },
       take: 40,
     });
 
-    let context: string;
-    try {
-      context = await buildFinancialContext(userId, { personId });
-    } catch (err) {
-      if (err instanceof InvalidPersonError) {
-        return reply.code(400).send({ error: "Pessoa não encontrada" });
-      }
-      throw err;
+    await runChatStream({
+      userId,
+      threadId,
+      personId,
+      historyRows: history,
+      reply,
+      abortSignal: request.signal,
+      log: request.log,
+    });
+    return reply;
+  });
+
+  app.post("/api/chat/regenerate", async (request, reply) => {
+    const parsed = regenerateChatSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message });
+    }
+    if (!isAiConfigured()) {
+      return reply.code(503).send({ error: "IA não configurada no servidor" });
     }
 
-    const messages: CoreMessage[] = [
-      {
-        role: "system",
-        content: `${SYSTEM_PROMPT}\n\n# Dados financeiros do usuário\n${context}`,
-      },
-      ...history.map((m) => ({
-        role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
-        content: m.content,
-      })),
-    ];
+    const userId = request.user!.sub;
+    const { threadId, personId } = parsed.data;
 
-    reply.raw.setHeader("Content-Type", "text/plain; charset=utf-8");
-    reply.raw.setHeader("Cache-Control", "no-cache");
-    reply.raw.setHeader("X-Accel-Buffering", "no");
+    const thread = await findUserThread(userId, threadId);
+    if (!thread) return reply.code(404).send({ error: "Conversa não encontrada" });
 
-    let assistantText = "";
-    let streamError: string | null = null;
-    const tools = createFinanceTools(userId, personId);
-    try {
-      const result = streamText({
-        model: getModel(),
-        messages,
-        tools,
-        stopWhen: stepCountIs(5),
-        onError({ error }) {
-          streamError = error instanceof Error ? error.message : String(error);
-        },
-      });
-      for await (const chunk of result.textStream) {
-        assistantText += chunk;
-        reply.raw.write(chunk);
-      }
-
-      if (!assistantText) {
-        if (streamError) {
-          assistantText = `Erro da IA: ${streamError}`;
-          reply.raw.write(assistantText);
-        } else {
-          try {
-            const { text } = await generateText({
-              model: getModel(),
-              messages,
-              tools,
-              stopWhen: stepCountIs(5),
-            });
-            assistantText = text;
-            reply.raw.write(text);
-          } catch (fallbackErr) {
-            const errMsg =
-              fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
-            assistantText = `Erro da IA: ${errMsg}`;
-            reply.raw.write(assistantText);
-          }
-        }
-      }
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      request.log.error({ err }, "Erro no streaming da IA");
-      if (!assistantText) {
-        assistantText = `Erro da IA: ${errMsg}`;
-        reply.raw.write(assistantText);
-      }
+    const last = await prisma.chatMessage.findFirst({
+      where: { threadId },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!last || last.role !== "assistant") {
+      return reply.code(400).send({ error: "Nenhuma resposta para regenerar" });
     }
 
-    if (assistantText) {
-      await prisma.chatMessage.create({
-        data: { userId, role: "assistant", content: assistantText },
-      });
-    }
+    await prisma.chatMessage.delete({ where: { id: last.id } });
 
-    reply.raw.end();
+    const history = await prisma.chatMessage.findMany({
+      where: { threadId },
+      orderBy: { createdAt: "asc" },
+      take: 40,
+    });
+
+    await runChatStream({
+      userId,
+      threadId,
+      personId,
+      historyRows: history,
+      reply,
+      abortSignal: request.signal,
+      log: request.log,
+    });
     return reply;
   });
 }
