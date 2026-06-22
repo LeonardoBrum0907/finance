@@ -17,7 +17,7 @@ import {
   Wifi,
   Wrench,
 } from "lucide-react";
-import type { DashboardCategoryPoint } from "@finance/shared";
+import type { CategoryChartSelection, DashboardCategoryGroup, DashboardCategoryPoint } from "@finance/shared";
 import { formatCurrency, formatPercent } from "../../lib/format";
 import { ensureChartJsRegistered } from "../../lib/chart";
 import {
@@ -58,6 +58,7 @@ interface CategoryRow {
   total: number;
   count: number;
   percent: number;
+  mergedGroups?: DashboardCategoryGroup[];
 }
 
 interface Props {
@@ -65,15 +66,36 @@ interface Props {
   previousCategories?: DashboardCategoryPoint[];
   currencyCode: string;
   className?: string;
+  onCategorySelect?: (selection: CategoryChartSelection) => void;
 }
 
 function buildChartRows(data: DashboardCategoryPoint[]): CategoryRow[] {
   const top = data.slice(0, 5);
-  const othersTotal = data.slice(5).reduce((sum, c) => sum + c.total, 0);
-  const rows =
+  const others = data.slice(5);
+  const othersTotal = others.reduce((sum, c) => sum + c.total, 0);
+  const rows: CategoryRow[] =
     othersTotal > 0
-      ? [...top, { category: "Outros", total: othersTotal, count: 0, percent: 0 }]
-      : top;
+      ? [
+          ...top.map((c) => ({
+            category: c.category,
+            total: c.total,
+            count: c.count,
+            percent: 0,
+          })),
+          {
+            category: "Outros",
+            total: othersTotal,
+            count: others.reduce((sum, c) => sum + c.count, 0),
+            percent: 0,
+            mergedGroups: others.map((c) => c.category as DashboardCategoryGroup),
+          },
+        ]
+      : top.map((c) => ({
+          category: c.category,
+          total: c.total,
+          count: c.count,
+          percent: 0,
+        }));
 
   const total = rows.reduce((sum, c) => sum + c.total, 0);
   return rows.map((c) => ({
@@ -87,6 +109,7 @@ export function CategoryChart({
   previousCategories = [],
   currencyCode,
   className,
+  onCategorySelect,
 }: Props) {
   const [view, setView] = useState<CategoryView>("doughnut");
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
@@ -205,12 +228,44 @@ export function CategoryChart({
     [currencyCode, withPercent],
   );
 
+  const handleCategoryClick = useCallback(
+    (index: number | undefined) => {
+      if (index == null) return;
+      const row = withPercent[index];
+      if (!row) return;
+
+      setActiveIndex(index);
+
+      if (!onCategorySelect) return;
+
+      if (row.mergedGroups && row.mergedGroups.length > 0) {
+        onCategorySelect({ kind: "merged", groups: row.mergedGroups });
+      } else {
+        onCategorySelect({ kind: "single", group: row.category as DashboardCategoryGroup });
+      }
+    },
+    [withPercent, onCategorySelect],
+  );
+
   const handleDoughnutClick = useCallback(
     (_: unknown, elements: { index: number }[]) => {
-      const index = elements[0]?.index;
-      setActiveIndex((prev) => (index === prev ? null : index ?? null));
+      handleCategoryClick(elements[0]?.index);
     },
-    [],
+    [handleCategoryClick],
+  );
+
+  const handleBarClick = useCallback(
+    (_: unknown, elements: { index: number }[]) => {
+      handleCategoryClick(elements[0]?.index);
+    },
+    [handleCategoryClick],
+  );
+
+  const handleListClick = useCallback(
+    (index: number) => {
+      handleCategoryClick(index);
+    },
+    [handleCategoryClick],
   );
 
   const handleListHover = useCallback((index: number | null) => {
@@ -252,7 +307,7 @@ export function CategoryChart({
       ) : (
         <>
           {view === "doughnut" ? (
-            <div className="relative mx-auto mb-6 h-44 w-full max-w-[180px]">
+            <div className="relative mx-auto mb-6 h-44 w-full max-w-[180px] cursor-pointer">
               <Doughnut
                 data={doughnutData}
                 options={{
@@ -270,8 +325,14 @@ export function CategoryChart({
               </div>
             </div>
           ) : (
-            <div className="mb-6 h-52 w-full">
-              <Bar data={barData} options={barOptions} />
+            <div className="mb-6 h-52 w-full cursor-pointer">
+              <Bar
+                data={barData}
+                options={{
+                  ...barOptions,
+                  onClick: handleBarClick,
+                }}
+              />
             </div>
           )}
 
@@ -289,9 +350,18 @@ export function CategoryChart({
               return (
                 <li
                   key={cat.category}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => handleListClick(i)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handleListClick(i);
+                    }
+                  }}
                   onMouseEnter={() => handleListHover(i)}
                   onMouseLeave={() => handleListHover(null)}
-                  className={`rounded-xl border px-3 py-2 transition ${
+                  className={`cursor-pointer rounded-xl border px-3 py-2 transition ${
                     isActive
                       ? "border-slate-200 bg-white shadow-sm"
                       : "border-slate-100 bg-slate-50"

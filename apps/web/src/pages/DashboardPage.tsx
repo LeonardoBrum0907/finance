@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { DashboardMonths, DashboardSummary, PersonDTO } from "@finance/shared";
+import type { CategoryChartSelection, DashboardMonths, DashboardSummary, PersonDTO } from "@finance/shared";
 import { isCreditAccount } from "@finance/shared";
 import { api } from "../lib/api";
 import { CategoryChart } from "../components/dashboard/CategoryChart";
@@ -16,6 +16,19 @@ import { StatCards } from "../components/dashboard/StatCards";
 export function DashboardPage() {
   const [months, setMonths] = useState<DashboardMonths>(1);
   const [personId, setPersonId] = useState<PersonFilter>("all");
+  const [categorySelection, setCategorySelection] = useState<CategoryChartSelection | null>(null);
+  const transactionsRef = useRef<HTMLElement>(null);
+
+  const handleCategorySelect = useCallback((selection: CategoryChartSelection) => {
+    setCategorySelection(selection);
+    requestAnimationFrame(() => {
+      transactionsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
+
+  const handleClearCategorySelection = useCallback(() => {
+    setCategorySelection(null);
+  }, []);
 
   const people = useQuery({
     queryKey: ["people"],
@@ -94,6 +107,7 @@ export function DashboardPage() {
               data={data.categories}
               previousCategories={data.previousCategories}
               currencyCode={data.currencyCode}
+              onCategorySelect={handleCategorySelect}
             />
           </div>
 
@@ -102,7 +116,13 @@ export function DashboardPage() {
             {hasCreditCards && <CreditCardList accounts={data.accounts} />}
           </div>
 
-          <RecentTransactions personId={personId} dashboardMonths={months} />
+          <RecentTransactions
+            personId={personId}
+            dashboardMonths={months}
+            categorySelection={categorySelection}
+            onClearCategorySelection={handleClearCategorySelection}
+            sectionRef={transactionsRef}
+          />
         </>
       )}
     </div>

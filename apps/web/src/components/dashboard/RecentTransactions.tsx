@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type Ref, type RefObject } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
@@ -10,10 +10,12 @@ import {
   Layers,
   Search,
   Utensils,
+  X,
   Zap,
   type LucideIcon,
 } from "lucide-react";
 import type {
+  CategoryChartSelection,
   DashboardMonths,
   TransactionTypeFilter,
   TransactionsListResponse,
@@ -28,6 +30,9 @@ import type { PersonFilter } from "./PersonSelector";
 interface Props {
   personId: PersonFilter;
   dashboardMonths: DashboardMonths;
+  categorySelection?: CategoryChartSelection | null;
+  onClearCategorySelection?: () => void;
+  sectionRef?: RefObject<HTMLElement | null>;
 }
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
@@ -69,6 +74,11 @@ function useDebouncedValue<T>(value: T, delayMs: number): T {
   return debounced;
 }
 
+function categorySelectionLabel(selection: CategoryChartSelection): string {
+  if (selection.kind === "single") return selection.group;
+  return selection.groups.join(", ");
+}
+
 function buildTransactionsUrl(
   periodMonths: DashboardMonths,
   personId: PersonFilter,
@@ -77,6 +87,7 @@ function buildTransactionsUrl(
   search: string,
   category: string,
   typeFilter: TransactionTypeFilter,
+  categorySelection: CategoryChartSelection | null | undefined,
 ): string {
   const params = new URLSearchParams({
     months: String(periodMonths),
@@ -86,11 +97,27 @@ function buildTransactionsUrl(
   });
   if (personId !== "all") params.set("personId", personId);
   if (search) params.set("search", search);
-  if (category !== "all") params.set("category", category);
+
+  if (categorySelection?.kind === "merged") {
+    params.set("categoryGroups", categorySelection.groups.join(","));
+    params.set("cashFlowOnly", "true");
+  } else if (categorySelection?.kind === "single") {
+    params.set("categoryGroup", categorySelection.group);
+    params.set("cashFlowOnly", "true");
+  } else if (category !== "all") {
+    params.set("category", category);
+  }
+
   return `/api/transactions?${params.toString()}`;
 }
 
-export function RecentTransactions({ personId, dashboardMonths }: Props) {
+export function RecentTransactions({
+  personId,
+  dashboardMonths,
+  categorySelection = null,
+  onClearCategorySelection,
+  sectionRef,
+}: Props) {
   const [periodMonths, setPeriodMonths] = useState<DashboardMonths>(dashboardMonths);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(20);
@@ -105,11 +132,25 @@ export function RecentTransactions({ personId, dashboardMonths }: Props) {
   }, [dashboardMonths]);
 
   useEffect(() => {
+    if (!categorySelection) return;
     setPage(1);
-  }, [periodMonths, personId, debouncedSearch, categoryFilter, typeFilter, pageSize]);
+    setTypeFilter("outflow");
+    setCategoryFilter("all");
+    setPeriodMonths(dashboardMonths);
+  }, [categorySelection, dashboardMonths]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [periodMonths, personId, debouncedSearch, categoryFilter, typeFilter, pageSize, categorySelection]);
 
   const showPersonColumn = personId === "all";
   const syncedWithDashboard = periodMonths === dashboardMonths;
+  const hasChartCategoryFilter = categorySelection != null;
+
+  const handleClearChartFilter = () => {
+    setTypeFilter("all");
+    onClearCategorySelection?.();
+  };
 
   const query = useQuery({
     queryKey: [
@@ -121,6 +162,7 @@ export function RecentTransactions({ personId, dashboardMonths }: Props) {
       debouncedSearch,
       categoryFilter,
       typeFilter,
+      categorySelection,
     ],
     queryFn: () =>
       api.get<TransactionsListResponse>(
@@ -132,6 +174,7 @@ export function RecentTransactions({ personId, dashboardMonths }: Props) {
           debouncedSearch,
           categoryFilter,
           typeFilter,
+          categorySelection,
         ),
       ),
   });
@@ -144,13 +187,14 @@ export function RecentTransactions({ personId, dashboardMonths }: Props) {
   const currencyCode = items[0]?.currencyCode ?? "BRL";
 
   return (
-    <motion.section
-      custom={6}
-      variants={fadeUp}
-      initial="hidden"
-      animate="visible"
-      className={`${cardLargeClass} overflow-hidden p-0`}
-    >
+    <section ref={sectionRef as Ref<HTMLElement>} className="scroll-mt-6">
+      <motion.section
+        custom={6}
+        variants={fadeUp}
+        initial="hidden"
+        animate="visible"
+        className={`${cardLargeClass} overflow-hidden p-0`}
+      >
       <div className="flex flex-col gap-4 border-b border-slate-100 p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -163,6 +207,22 @@ export function RecentTransactions({ personId, dashboardMonths }: Props) {
                 <span className="ml-1.5 text-slate-300">· Mesmo período do painel</span>
               )}
             </p>
+            {hasChartCategoryFilter && categorySelection && (
+              <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-medium text-indigo-700">
+                <span>
+                  {categorySelectionLabel(categorySelection)} · Saídas
+                  {syncedWithDashboard && " · Período do painel"}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleClearChartFilter}
+                  className="rounded-full p-0.5 text-indigo-500 transition hover:bg-indigo-100 hover:text-indigo-800"
+                  aria-label="Limpar filtro de categoria"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )}
           </div>
           <PeriodSelector value={periodMonths} onChange={setPeriodMonths} />
         </div>
@@ -183,7 +243,8 @@ export function RecentTransactions({ personId, dashboardMonths }: Props) {
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="bg-transparent text-[11px] font-medium text-slate-600 outline-none"
+              disabled={hasChartCategoryFilter}
+              className="bg-transparent text-[11px] font-medium text-slate-600 outline-none disabled:cursor-not-allowed disabled:opacity-50"
             >
               <option value="all">Todas Categorias</option>
               {categories.map((cat) => (
@@ -357,6 +418,7 @@ export function RecentTransactions({ personId, dashboardMonths }: Props) {
           </div>
         </div>
       </div>
-    </motion.section>
+      </motion.section>
+    </section>
   );
 }

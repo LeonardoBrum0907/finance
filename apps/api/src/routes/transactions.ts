@@ -3,6 +3,7 @@ import type { TransactionDTO, TransactionTypeFilter } from "@finance/shared";
 import {
   countsTowardCashFlow,
   isTransactionOutflow,
+  resolveDashboardCategoryGroup,
   translateCategory,
 } from "@finance/shared";
 import { prisma } from "../prisma.js";
@@ -28,6 +29,19 @@ function parsePageSize(value: unknown): number {
 function parseTypeFilter(value: unknown): TransactionTypeFilter {
   if (value === "inflow" || value === "outflow") return value;
   return "all";
+}
+
+function parseCashFlowOnly(value: unknown): boolean {
+  return value === "true" || value === "1";
+}
+
+function parseCategoryGroups(value: unknown): string[] | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const groups = value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return groups.length > 0 ? groups : undefined;
 }
 
 function categoryLabel(tx: Pick<TransactionDTO, "category" | "description">): string {
@@ -63,6 +77,9 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
       pageSize?: string;
       search?: string;
       category?: string;
+      categoryGroup?: string;
+      categoryGroups?: string;
+      cashFlowOnly?: string;
       type?: string;
     };
 
@@ -72,6 +89,9 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
     const pageSize = parsePageSize(query.pageSize);
     const search = query.search?.trim() || undefined;
     const category = query.category?.trim() || undefined;
+    const categoryGroup = query.categoryGroup?.trim() || undefined;
+    const categoryGroups = parseCategoryGroups(query.categoryGroups);
+    const cashFlowOnly = parseCashFlowOnly(query.cashFlowOnly);
     const typeFilter = parseTypeFilter(query.type);
 
     const monthKeys = getRecentMonthKeys(months, 0);
@@ -130,7 +150,23 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
     ).sort();
 
     const filtered = allDtos.filter((tx) => {
-      if (category && categoryLabel(tx) !== category) return false;
+      if (categoryGroups) {
+        const group = resolveDashboardCategoryGroup(tx.category, tx.description);
+        if (!categoryGroups.includes(group)) return false;
+      } else if (categoryGroup) {
+        const group = resolveDashboardCategoryGroup(tx.category, tx.description);
+        if (group !== categoryGroup) return false;
+      } else if (category && categoryLabel(tx) !== category) {
+        return false;
+      }
+
+      if (
+        cashFlowOnly &&
+        !countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description)
+      ) {
+        return false;
+      }
+
       if (typeFilter !== "all") {
         const outflow = isTransactionOutflow(tx.amount, tx.accountType);
         if (typeFilter === "outflow" && !outflow) return false;

@@ -3,8 +3,10 @@ import { z } from "zod";
 export { translateCategory } from "./categories";
 export {
   groupCategoryForDashboard,
+  resolveDashboardCategoryGroup,
   DASHBOARD_CATEGORY_GROUPS,
   type DashboardCategoryGroup,
+  type CategoryChartSelection,
 } from "./categoryGroups";
 export {
   isCreditAccount,

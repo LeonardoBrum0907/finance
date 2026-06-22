@@ -1,3 +1,5 @@
+import { translateCategory } from "./categories";
+
 /** Grupos exibidos no gráfico de categorias do dashboard. */
 export const DASHBOARD_CATEGORY_GROUPS = [
   "Alimentação",
@@ -15,6 +17,10 @@ export const DASHBOARD_CATEGORY_GROUPS = [
 ] as const;
 
 export type DashboardCategoryGroup = (typeof DASHBOARD_CATEGORY_GROUPS)[number];
+
+export type CategoryChartSelection =
+  | { kind: "single"; group: DashboardCategoryGroup }
+  | { kind: "merged"; groups: DashboardCategoryGroup[] };
 
 const GROUP_BY_CATEGORY: Record<string, DashboardCategoryGroup> = {
   // Alimentação
@@ -135,4 +141,13 @@ export function groupCategoryForDashboard(
   }
 
   return GROUP_BY_CATEGORY[trimmed] ?? "Outros";
+}
+
+/** Traduz e agrupa categoria bruta no rótulo usado no gráfico do dashboard. */
+export function resolveDashboardCategoryGroup(
+  category: string | null | undefined,
+  description?: string | null,
+): DashboardCategoryGroup {
+  const resolved = translateCategory(category, description);
+  return groupCategoryForDashboard(resolved, description);
 }
