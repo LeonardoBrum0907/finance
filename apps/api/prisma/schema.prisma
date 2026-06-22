@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  people       Person[]
+  chatMessages ChatMessage[]
+}
+
+model Person {
+  id           String   @id @default(cuid())
+  name         String
+  relationship String?
+  userId       String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connections BankConnection[]
+
+  @@index([userId])
+}
+
+model BankConnection {
+  id                String    @id @default(cuid())
+  pluggyItemId      String    @unique
+  connectorName     String?
+  connectorImageUrl String?
+  status            String    @default("UPDATING")
+  lastSyncedAt      DateTime?
+  personId          String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  person   Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  accounts Account[]
+
+  @@index([personId])
+}
+
+model Account {
+  id              String   @id @default(cuid())
+  pluggyAccountId String   @unique
+  name            String
+  type            String?
+  subtype         String?
+  number          String?
+  balance         Float    @default(0)
+  currencyCode    String   @default("BRL")
+  connectionId    String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  connection   BankConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@index([connectionId])
+}
+
+model Transaction {
+  id                  String   @id @default(cuid())
+  pluggyTransactionId String   @unique
+  date                DateTime
+  description         String
+  amount              Float
+  currencyCode        String   @default("BRL")
+  category            String?
+  accountId           String
+  createdAt           DateTime @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@index([date])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  role      String
+  content   String
+  userId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
