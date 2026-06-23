@@ -104,6 +104,91 @@ export const updateBudgetSchema = z.object({
 });
 export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>;
 
+export type GoalType =
+  | "savings"
+  | "purchase"
+  | "debt_payoff"
+  | "emergency_fund"
+  | "custom";
+
+export type GoalStatus = "active" | "completed" | "paused" | "archived";
+
+export type GoalContributionSource = "manual" | "ai" | "auto";
+
+export type PlanStatus = "active" | "paused" | "completed" | "archived";
+
+export type ChatActionProposalType =
+  | "create_goal"
+  | "update_goal"
+  | "create_plan"
+  | "add_contribution";
+
+export type ChatActionProposalStatus = "pending" | "confirmed" | "discarded";
+
+const goalTypeSchema = z.enum([
+  "savings",
+  "purchase",
+  "debt_payoff",
+  "emergency_fund",
+  "custom",
+]);
+
+const goalStatusSchema = z.enum(["active", "completed", "paused", "archived"]);
+
+const planStatusSchema = z.enum(["active", "paused", "completed", "archived"]);
+
+export const createGoalSchema = z.object({
+  name: z.string().min(1, "Informe o nome do objetivo").max(80, "Nome muito longo"),
+  description: z.string().max(500, "Descrição muito longa").optional(),
+  type: goalTypeSchema,
+  icon: z.string().max(40).optional(),
+  targetAmount: z.number().positive("Informe um valor alvo maior que zero"),
+  targetDate: z.string().optional(),
+  linkedAccountId: z.string().optional(),
+});
+export type CreateGoalInput = z.infer<typeof createGoalSchema>;
+
+export const updateGoalSchema = z.object({
+  name: z.string().min(1, "Informe o nome do objetivo").max(80, "Nome muito longo").optional(),
+  description: z.string().max(500, "Descrição muito longa").optional().nullable(),
+  type: goalTypeSchema.optional(),
+  icon: z.string().max(40).optional().nullable(),
+  targetAmount: z.number().positive("Informe um valor alvo maior que zero").optional(),
+  targetDate: z.string().optional().nullable(),
+  status: goalStatusSchema.optional(),
+  linkedAccountId: z.string().optional().nullable(),
+});
+export type UpdateGoalInput = z.infer<typeof updateGoalSchema>;
+
+export const addContributionSchema = z.object({
+  amount: z.number().positive("Informe um valor maior que zero"),
+  date: z.string().optional(),
+  note: z.string().max(200, "Nota muito longa").optional(),
+});
+export type AddContributionInput = z.infer<typeof addContributionSchema>;
+
+const planGoalMemberSchema = z.object({
+  goalId: z.string().min(1, "Informe o objetivo"),
+  monthlyAllocation: z.number().min(0, "Alocação não pode ser negativa"),
+});
+
+export const createPlanSchema = z.object({
+  name: z.string().min(1, "Informe o nome do plano").max(80, "Nome muito longo"),
+  description: z.string().max(500, "Descrição muito longa").optional(),
+  monthlyContribution: z.number().min(0, "Aporte mensal não pode ser negativo"),
+  goals: z.array(planGoalMemberSchema).min(1, "Selecione ao menos um objetivo"),
+});
+export type CreatePlanInput = z.infer<typeof createPlanSchema>;
+
+export const updatePlanSchema = z.object({
+  name: z.string().min(1, "Informe o nome do plano").max(80, "Nome muito longo").optional(),
+  description: z.string().max(500, "Descrição muito longa").optional().nullable(),
+  monthlyContribution: z.number().min(0, "Aporte mensal não pode ser negativo").optional(),
+  status: planStatusSchema.optional(),
+  goals: z.array(planGoalMemberSchema).min(1, "Selecione ao menos um objetivo").optional(),
+});
+export type UpdatePlanInput = z.infer<typeof updatePlanSchema>;
+
 export interface AuthUser {
   id: string;
   name: string;
@@ -227,11 +312,92 @@ export interface ChatThreadDTO {
   updatedAt: string;
 }
 
+export interface GoalContributionDTO {
+  id: string;
+  goalId: string;
+  amount: number;
+  date: string;
+  source: GoalContributionSource;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface GoalDTO {
+  id: string;
+  name: string;
+  description: string | null;
+  type: GoalType;
+  icon: string | null;
+  targetAmount: number;
+  currentAmount: number;
+  targetDate: string | null;
+  status: GoalStatus;
+  linkedAccountId: string | null;
+  progress: number;
+  projectedCompletionDate: string | null;
+  onTrack: boolean | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlanGoalDTO {
+  id: string;
+  goalId: string;
+  goalName: string;
+  monthlyAllocation: number;
+  currentAmount: number;
+  targetAmount: number;
+}
+
+export interface PlanDTO {
+  id: string;
+  name: string;
+  description: string | null;
+  monthlyContribution: number;
+  status: PlanStatus;
+  goals: PlanGoalDTO[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SavingsPathPoint {
+  month: string;
+  projectedAmount: number;
+  cumulativeContributions: number;
+  /** Rótulo curto no eixo X (ex.: "Hoje", "T2 2026", "Meta atingida") */
+  label?: string | null;
+  targetAmount?: number;
+}
+
+export interface GoalsSummaryDTO {
+  currencyCode: string;
+  monthlySurplus: number;
+  /** Aporte mensal efetivo usado na projeção (plano ou sobra) */
+  monthlyContribution: number;
+  totalCurrent: number;
+  totalTarget: number;
+  projectedCompletionMonth: string | null;
+  goals: GoalDTO[];
+  plans: PlanDTO[];
+  savingsPath: SavingsPathPoint[];
+  hasAccounts: boolean;
+}
+
+export interface ChatActionProposalDTO {
+  id: string;
+  type: ChatActionProposalType;
+  payload: Record<string, unknown>;
+  status: ChatActionProposalStatus;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
 export interface ChatMessageDTO {
   id: string;
   role: "user" | "assistant";
   content: string;
   createdAt: string;
+  proposal?: ChatActionProposalDTO;
 }
 
 export type BudgetStatus = "safe" | "warning" | "critical";

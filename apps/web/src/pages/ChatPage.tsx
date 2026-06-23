@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ChatThreadDTO, PersonDTO } from "@finance/shared";
 import { api } from "../lib/api";
 import { MarkdownMessage } from "../components/MarkdownMessage";
+import { ProposalCard } from "../components/chat/ProposalCard";
 import { ChatSidebar } from "../components/chat/ChatSidebar";
 import { ChatSuggestionChips } from "../components/chat/ChatSuggestionChips";
 import { ChatStatusBar } from "../components/chat/ChatStatusBar";
@@ -65,6 +66,7 @@ export function ChatPage() {
     regenerate,
     clearConversation,
     stop,
+    refetchMessages,
   } = useChatStream({
     threadId: activeThreadId,
     personId: selectedPersonId,
@@ -190,11 +192,20 @@ export function ChatPage() {
                 }`}
               >
                 {m.role === "assistant" ? (
-                  m.content ? (
-                    <MarkdownMessage content={m.content} />
-                  ) : streaming ? (
-                    <span className="animate-pulse text-slate-400">Pensando…</span>
-                  ) : null
+                  <>
+                    {m.content ? (
+                      <MarkdownMessage content={m.content} />
+                    ) : streaming ? (
+                      <span className="animate-pulse text-slate-400">Pensando…</span>
+                    ) : null}
+                    {m.proposal?.status === "pending" && (
+                      <ProposalCard
+                        proposal={m.proposal}
+                        threadId={activeThreadId}
+                        onResolved={refetchMessages}
+                      />
+                    )}
+                  </>
                 ) : (
                   m.content
                 )}

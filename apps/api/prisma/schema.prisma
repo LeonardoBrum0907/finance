@@ -15,10 +15,13 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  people       Person[]
-  chatMessages ChatMessage[]
-  chatThreads  ChatThread[]
-  budgets      BudgetGroup[]
+  people              Person[]
+  chatMessages        ChatMessage[]
+  chatThreads         ChatThread[]
+  budgets             BudgetGroup[]
+  goals               Goal[]
+  plans               Plan[]
+  chatActionProposals ChatActionProposal[]
 }
 
 model Person {
@@ -53,24 +56,24 @@ model BankConnection {
 }
 
 model Account {
-  id              String   @id @default(cuid())
-  pluggyAccountId String   @unique
-  name            String
-  type            String?
-  subtype         String?
-  number          String?
-  balance         Float    @default(0)
-  currencyCode    String   @default("BRL")
-  creditBrand            String?
-  creditLevel            String?
-  creditLimit            Float?
-  availableCreditLimit   Float?
-  minimumPayment         Float?
-  balanceCloseDate       DateTime?
-  balanceDueDate         DateTime?
-  connectionId    String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                   String    @id @default(cuid())
+  pluggyAccountId      String    @unique
+  name                 String
+  type                 String?
+  subtype              String?
+  number               String?
+  balance              Float     @default(0)
+  currencyCode         String    @default("BRL")
+  creditBrand          String?
+  creditLevel          String?
+  creditLimit          Float?
+  availableCreditLimit Float?
+  minimumPayment       Float?
+  balanceCloseDate     DateTime?
+  balanceDueDate       DateTime?
+  connectionId         String
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   connection   BankConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   transactions Transaction[]
@@ -102,8 +105,9 @@ model ChatThread {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages ChatMessage[]
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+  proposals ChatActionProposal[]
 
   @@index([userId])
 }
@@ -116,8 +120,9 @@ model ChatMessage {
   threadId  String
   createdAt DateTime @default(now())
 
-  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  thread ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  thread   ChatThread          @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  proposal ChatActionProposal?
 
   @@index([userId])
   @@index([threadId])
@@ -149,4 +154,89 @@ model BudgetGroupMember {
   @@unique([budgetGroupId, categoryGroup])
   @@unique([userId, categoryGroup])
   @@index([budgetGroupId])
+}
+
+model Goal {
+  id              String    @id @default(cuid())
+  userId          String
+  name            String
+  description     String?
+  type            String
+  icon            String?
+  targetAmount    Float
+  currentAmount   Float     @default(0)
+  targetDate      DateTime?
+  status          String    @default("active")
+  linkedAccountId String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contributions GoalContribution[]
+  planGoals     PlanGoal[]
+
+  @@index([userId])
+}
+
+model GoalContribution {
+  id        String   @id @default(cuid())
+  goalId    String
+  amount    Float
+  date      DateTime
+  source    String
+  note      String?
+  createdAt DateTime @default(now())
+
+  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([goalId])
+}
+
+model Plan {
+  id                  String   @id @default(cuid())
+  userId              String
+  name                String
+  description         String?
+  monthlyContribution Float    @default(0)
+  status              String   @default("active")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  members PlanGoal[]
+
+  @@index([userId])
+}
+
+model PlanGoal {
+  id                String @id @default(cuid())
+  planId            String
+  goalId            String
+  monthlyAllocation Float  @default(0)
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, goalId])
+  @@index([planId])
+  @@index([goalId])
+}
+
+model ChatActionProposal {
+  id         String    @id @default(cuid())
+  userId     String
+  threadId   String
+  messageId  String?   @unique
+  type       String
+  payload    Json
+  status     String    @default("pending")
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  thread  ChatThread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  message ChatMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([threadId])
 }

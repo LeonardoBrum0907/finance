@@ -1,15 +1,25 @@
 import { tool } from "ai";
 import { z } from "zod";
 import {
+  addContributionSchema,
+  createGoalSchema,
+  createPlanSchema,
+  updateGoalSchema,
+} from "@finance/shared";
+import {
   filterByDateRange,
   formatCurrency,
   getSpendingByCategory as aggregateByCategory,
   toLocalDateKey,
 } from "./aggregates.js";
 import { flattenTransactions, loadUserFinancialData } from "./queries.js";
+import { formatGoalsForTool, loadGoalsSummaryForUser } from "./goalsContext.js";
+import { prisma } from "../../prisma.js";
 
 const MAX_TRANSACTIONS = 50;
 const TOOL_TRANSACTIONS_PER_ACCOUNT = 500;
+
+const PROPOSAL_MARKER = { proposal: true as const };
 
 export function createFinanceTools(userId: string, personId?: string) {
   async function loadScopedData() {
@@ -131,6 +141,129 @@ export function createFinanceTools(userId: string, personId?: string) {
           totalBalance: total,
           formattedTotalBalance: formatCurrency(total),
           people,
+        };
+      },
+    }),
+
+    getGoalsAndPlans: tool({
+      description:
+        "Lista objetivos financeiros e planos de poupança do usuário, com ids, progresso, prazos e alocações. Use sempre que o usuário perguntar quais objetivos existem ou antes de propor um plano.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const summary = await loadGoalsSummaryForUser(userId);
+        return formatGoalsForTool(summary);
+      },
+    }),
+
+    proposeCreateGoal: tool({
+      description:
+        "Propõe a criação de um objetivo financeiro. NÃO cria no banco — o usuário deve confirmar no chat.",
+      inputSchema: createGoalSchema,
+      execute: async (input) => {
+        const parsed = createGoalSchema.safeParse(input);
+        if (!parsed.success) {
+          return { error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+        }
+        return {
+          ...PROPOSAL_MARKER,
+          type: "create_goal" as const,
+          payload: parsed.data,
+        };
+      },
+    }),
+
+    proposeUpdateGoal: tool({
+      description:
+        "Propõe a edição de um objetivo existente. NÃO altera o banco — o usuário deve confirmar no chat.",
+      inputSchema: updateGoalSchema.extend({
+        goalId: z.string().min(1, "Informe o ID do objetivo"),
+      }),
+      execute: async (input) => {
+        const schema = updateGoalSchema.extend({ goalId: z.string().min(1) });
+        const parsed = schema.safeParse(input);
+        if (!parsed.success) {
+          return { error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+        }
+        const { goalId, ...payload } = parsed.data;
+        return {
+          ...PROPOSAL_MARKER,
+          type: "update_goal" as const,
+          payload: { goalId, ...payload },
+        };
+      },
+    }),
+
+    proposeAddContribution: tool({
+      description:
+        "Propõe registrar um aporte em um objetivo. NÃO altera o banco — o usuário deve confirmar no chat.",
+      inputSchema: addContributionSchema.extend({
+        goalId: z.string().min(1, "Informe o ID do objetivo"),
+      }),
+      execute: async (input) => {
+        const schema = addContributionSchema.extend({ goalId: z.string().min(1) });
+        const parsed = schema.safeParse(input);
+        if (!parsed.success) {
+          return { error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+        }
+        return {
+          ...PROPOSAL_MARKER,
+          type: "add_contribution" as const,
+          payload: parsed.data,
+        };
+      },
+    }),
+
+    proposeCreatePlan: tool({
+      description:
+        "Propõe a criação de um plano de poupança agrupando objetivos JÁ CADASTRADOS (use goalId de getGoalsAndPlans). NÃO cria no banco — o usuário deve confirmar no chat.",
+      inputSchema: createPlanSchema,
+      execute: async (input) => {
+        const parsed = createPlanSchema.safeParse(input);
+        if (!parsed.success) {
+          return { error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+        }
+
+        const goalIds = parsed.data.goals.map((g) => g.goalId);
+        const activeGoals = await prisma.goal.findMany({
+          where: {
+            userId,
+            id: { in: goalIds },
+            status: { in: ["active", "paused"] },
+          },
+          select: { id: true, name: true },
+        });
+
+        if (activeGoals.length !== goalIds.length) {
+          const found = new Set(activeGoals.map((g) => g.id));
+          const missing = goalIds.filter((id) => !found.has(id));
+          const available = await prisma.goal.findMany({
+            where: { userId, status: "active" },
+            select: { id: true, name: true },
+            orderBy: { createdAt: "desc" },
+          });
+
+          return {
+            error:
+              "Um ou mais goalId não existem ou não estão ativos. Confirme objetivos pendentes no chat antes de criar o plano.",
+            missingGoalIds: missing,
+            availableGoals: available.map((g) => ({ id: g.id, name: g.name })),
+          };
+        }
+
+        const allocationSum = parsed.data.goals.reduce(
+          (sum, member) => sum + member.monthlyAllocation,
+          0,
+        );
+        if (allocationSum > parsed.data.monthlyContribution + 0.01) {
+          return {
+            error: `A soma das alocações (${allocationSum}) excede o aporte mensal (${parsed.data.monthlyContribution}).`,
+          };
+        }
+
+        return {
+          ...PROPOSAL_MARKER,
+          type: "create_plan" as const,
+          payload: parsed.data,
         };
       },
     }),

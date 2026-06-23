@@ -9,6 +9,8 @@ import {
 import { InvalidPersonError } from "./finance/queries.js";
 import { createFinanceTools } from "./finance/tools.js";
 import { touchThread } from "./chatThread.js";
+import { extractProposalFromSteps } from "./chatProposal.js";
+import { buildGoalsContextBlock } from "./finance/goalsContext.js";
 
 export interface RunChatStreamOptions {
   userId: string;
@@ -30,8 +32,12 @@ export async function runChatStream({
   log,
 }: RunChatStreamOptions): Promise<void> {
   let context: string;
+  let goalsContext: string;
   try {
-    context = await buildFinancialContext(userId, { personId });
+    [context, goalsContext] = await Promise.all([
+      buildFinancialContext(userId, { personId }),
+      buildGoalsContextBlock(userId, threadId),
+    ]);
   } catch (err) {
     if (err instanceof InvalidPersonError) {
       reply.code(400).send({ error: "Pessoa não encontrada" });
@@ -43,7 +49,7 @@ export async function runChatStream({
   const messages: CoreMessage[] = [
     {
       role: "system",
-      content: `${SYSTEM_PROMPT}\n\n# Dados financeiros do usuário\n${context}`,
+      content: `${SYSTEM_PROMPT}\n\n# Dados financeiros do usuário\n${context}\n\n# ${goalsContext}`,
     },
     ...historyRows.map((m) => ({
       role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
@@ -58,20 +64,22 @@ export async function runChatStream({
   let assistantText = "";
   let streamError: string | null = null;
   const tools = createFinanceTools(userId, personId);
+  let pendingSteps: Promise<Parameters<typeof extractProposalFromSteps>[0]> | null = null;
 
   try {
-    const result = streamText({
+    const streamResult = streamText({
       model: getModel(),
       messages,
       tools,
-      stopWhen: stepCountIs(5),
+      stopWhen: stepCountIs(8),
       abortSignal,
       onError({ error }) {
         streamError = error instanceof Error ? error.message : String(error);
       },
     });
+    pendingSteps = streamResult.steps as Promise<Parameters<typeof extractProposalFromSteps>[0]>;
 
-    for await (const chunk of result.textStream) {
+    for await (const chunk of streamResult.textStream) {
       if (abortSignal?.aborted) break;
       assistantText += chunk;
       reply.raw.write(chunk);
@@ -87,7 +95,7 @@ export async function runChatStream({
             model: getModel(),
             messages,
             tools,
-            stopWhen: stepCountIs(5),
+            stopWhen: stepCountIs(8),
             abortSignal,
           });
           assistantText = text;
@@ -114,9 +122,31 @@ export async function runChatStream({
   }
 
   if (assistantText && !abortSignal?.aborted) {
-    await prisma.chatMessage.create({
+    const message = await prisma.chatMessage.create({
       data: { userId, threadId, role: "assistant", content: assistantText },
     });
+
+    if (pendingSteps) {
+      try {
+        const steps = await pendingSteps;
+        const extracted = extractProposalFromSteps(steps);
+        if (extracted) {
+          await prisma.chatActionProposal.create({
+            data: {
+              userId,
+              threadId,
+              messageId: message.id,
+              type: extracted.type,
+              payload: extracted.payload as object,
+              status: "pending",
+            },
+          });
+        }
+      } catch (proposalErr) {
+        log.warn({ err: proposalErr }, "Falha ao persistir proposta da IA");
+      }
+    }
+
     await touchThread(threadId);
   }
 

@@ -9,6 +9,7 @@ import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
 import { isAiConfigured } from "../services/ai.js";
 import { runChatStream } from "../services/chatStream.js";
+import { applyChatProposal, serializeProposal } from "../services/chatProposal.js";
 import {
   autoTitleFromFirstMessage,
   findUserThread,
@@ -109,6 +110,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       where: { threadId },
       orderBy: { createdAt: "asc" },
       take: 100,
+      include: { proposal: true },
     });
     return reply.send(
       messages.map((m) => ({
@@ -116,6 +118,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
         role: m.role,
         content: m.content,
         createdAt: m.createdAt.toISOString(),
+        ...(m.proposal ? { proposal: serializeProposal(m.proposal) } : {}),
       })),
     );
   });
@@ -200,5 +203,54 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       log: request.log,
     });
     return reply;
+  });
+
+  app.post("/api/chat/proposals/:id/confirm", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const userId = request.user!.sub;
+
+    const proposal = await prisma.chatActionProposal.findFirst({
+      where: { id, userId, status: "pending" },
+    });
+    if (!proposal) {
+      return reply.code(404).send({ error: "Proposta não encontrada ou já resolvida" });
+    }
+
+    try {
+      await applyChatProposal(
+        userId,
+        proposal.type as Parameters<typeof applyChatProposal>[1],
+        proposal.payload as Record<string, unknown>,
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao aplicar proposta";
+      return reply.code(400).send({ error: message });
+    }
+
+    const updated = await prisma.chatActionProposal.update({
+      where: { id },
+      data: { status: "confirmed", resolvedAt: new Date() },
+    });
+
+    return reply.send({ proposal: serializeProposal(updated) });
+  });
+
+  app.post("/api/chat/proposals/:id/discard", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const userId = request.user!.sub;
+
+    const proposal = await prisma.chatActionProposal.findFirst({
+      where: { id, userId, status: "pending" },
+    });
+    if (!proposal) {
+      return reply.code(404).send({ error: "Proposta não encontrada ou já resolvida" });
+    }
+
+    const updated = await prisma.chatActionProposal.update({
+      where: { id },
+      data: { status: "discarded", resolvedAt: new Date() },
+    });
+
+    return reply.send({ proposal: serializeProposal(updated) });
   });
 }

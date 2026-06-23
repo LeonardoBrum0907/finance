@@ -21,7 +21,7 @@ const navItems: NavItem[] = [
   { label: "Painel", icon: LayoutDashboard, to: "/", end: true },
   { label: "Contas", icon: Landmark, comingSoon: true },
   { label: "Orçamentos", icon: PieChart, to: "/orcamentos" },
-  { label: "Relatórios", icon: TrendingUp, comingSoon: true },
+  { label: "Objetivos e Planos", icon: TrendingUp, to: "/objetivos" },
   { label: "Configurações", icon: Settings, comingSoon: true },
   { label: "Pessoas", icon: Users, to: "/pessoas" },
   { label: "Assistente", icon: MessageSquare, to: "/chat" },

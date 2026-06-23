@@ -221,5 +221,6 @@ export function useChatStream({ threadId, personId, enabled }: UseChatStreamOpti
     regenerate,
     clearConversation,
     stop,
+    refetchMessages: invalidateMessages,
   };
 }
