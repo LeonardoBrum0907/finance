@@ -142,8 +142,8 @@ export function BudgetsPage() {
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
           <p className="text-sm font-medium text-slate-700">Nenhuma conta conectada ainda</p>
           <p className="mt-1 text-sm text-slate-500">
-            Cadastre uma pessoa e conecte uma conta bancária na aba{" "}
-            <strong>Pessoas</strong> para acompanhar seus orçamentos.
+            Cadastre em <strong>Pessoas</strong> e conecte em <strong>Contas</strong> para
+            acompanhar seus orçamentos.
           </p>
         </div>
       ) : (

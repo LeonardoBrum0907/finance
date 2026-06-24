@@ -83,8 +83,7 @@ export function DashboardPage() {
             Nenhuma conta conectada ainda
           </p>
           <p className="mt-1 text-sm text-slate-500">
-            Cadastre uma pessoa e conecte uma conta bancária na aba{" "}
-            <strong>Pessoas</strong>.
+            Cadastre em <strong>Pessoas</strong> e conecte em <strong>Contas</strong>.
           </p>
         </div>
       ) : (

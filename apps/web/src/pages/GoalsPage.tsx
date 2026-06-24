@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Target } from "lucide-react";
 import type {
@@ -140,7 +141,11 @@ export function GoalsPage() {
 
           {!data?.hasAccounts && (
             <div className="rounded-xl border border-amber-200/60 bg-amber-50/50 px-4 py-3 text-sm text-amber-800">
-              Conecte contas bancárias para calcular a sobra mensal e projeções mais precisas.
+              Conecte contas bancárias em{" "}
+              <Link to="/contas" className="font-medium text-amber-900 underline">
+                Contas
+              </Link>{" "}
+              para calcular a sobra mensal e projeções mais precisas.
             </div>
           )}
 

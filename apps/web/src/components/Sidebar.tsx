@@ -19,12 +19,12 @@ type NavItem =
 
 const navItems: NavItem[] = [
   { label: "Painel", icon: LayoutDashboard, to: "/", end: true },
-  { label: "Contas", icon: Landmark, comingSoon: true },
+  { label: "Contas", icon: Landmark, to: "/contas" },
   { label: "Orçamentos", icon: PieChart, to: "/orcamentos" },
   { label: "Objetivos e Planos", icon: TrendingUp, to: "/objetivos" },
-  { label: "Configurações", icon: Settings, comingSoon: true },
   { label: "Pessoas", icon: Users, to: "/pessoas" },
   { label: "Assistente", icon: MessageSquare, to: "/chat" },
+  { label: "Configurações", icon: Settings, comingSoon: true },
 ];
 
 function NavItemLink({ item }: { item: Extract<NavItem, { to: string }> }) {

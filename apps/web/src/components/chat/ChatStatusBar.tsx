@@ -29,7 +29,7 @@ export function ChatStatusBar({ people, streamingPhase }: Props) {
     syncMessage = "Nenhuma conta conectada — respostas limitadas.";
   } else if (latestSync) {
     syncMessage = `Dados sincronizados em ${formatDate(latestSync)}`;
-    if (stale) syncMessage += " · podem estar desatualizados (sincronize em Pessoas)";
+    if (stale) syncMessage += " · podem estar desatualizados (sincronize em Contas)";
   } else {
     syncMessage = "Contas conectadas — aguardando primeira sincronização";
   }

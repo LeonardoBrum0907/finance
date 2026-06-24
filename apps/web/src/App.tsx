@@ -4,6 +4,7 @@ import { Layout } from "./components/Layout";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { AccountsPage } from "./pages/AccountsPage";
 import { PeoplePage } from "./pages/PeoplePage";
 import { BudgetsPage } from "./pages/BudgetsPage";
 import { GoalsPage } from "./pages/GoalsPage";
@@ -34,6 +35,7 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/contas" element={<AccountsPage />} />
         <Route path="/pessoas" element={<PeoplePage />} />
         <Route path="/orcamentos" element={<BudgetsPage />} />
         <Route path="/objetivos" element={<GoalsPage />} />
