@@ -162,8 +162,140 @@ export async function syncConnection(connectionId: string): Promise<void> {
     }
   }
 
+  await syncInvestments(pluggy, connectionId, connection.pluggyItemId);
+
   await prisma.bankConnection.update({
     where: { id: connectionId },
     data: { lastSyncedAt: new Date() },
   });
+}
+
+async function syncInvestments(
+  pluggy: PluggyClient,
+  connectionId: string,
+  itemId: string,
+): Promise<void> {
+  try {
+    const response = await pluggy.fetchInvestments(itemId);
+    const investments = response.results ?? [];
+    const seenInvestmentIds: string[] = [];
+
+    for (const inv of investments) {
+      seenInvestmentIds.push(inv.id);
+
+      const investment = await prisma.investment.upsert({
+        where: { pluggyInvestmentId: inv.id },
+        create: {
+          pluggyInvestmentId: inv.id,
+          connectionId,
+          name: inv.name,
+          type: inv.type ?? null,
+          subtype: inv.subtype ?? null,
+          code: inv.code ?? null,
+          isin: inv.isin ?? null,
+          status: inv.status ?? "ACTIVE",
+          balance: inv.balance ?? 0,
+          amount: inv.amount ?? null,
+          amountOriginal: inv.amountOriginal ?? null,
+          amountProfit: inv.amountProfit ?? null,
+          amountWithdrawal: inv.amountWithdrawal ?? null,
+          quantity: inv.quantity ?? null,
+          value: inv.value ?? null,
+          rate: inv.rate ?? null,
+          rateType: inv.rateType ?? null,
+          annualRate: inv.annualRate ?? inv.fixedAnnualRate ?? null,
+          lastMonthRate: inv.lastMonthRate ?? null,
+          lastTwelveMonthsRate: inv.lastTwelveMonthsRate ?? null,
+          currencyCode: inv.currencyCode ?? "BRL",
+          purchaseDate: inv.purchaseDate ? new Date(inv.purchaseDate) : null,
+          dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
+          owner: inv.owner ?? null,
+        },
+        update: {
+          name: inv.name,
+          type: inv.type ?? null,
+          subtype: inv.subtype ?? null,
+          code: inv.code ?? null,
+          isin: inv.isin ?? null,
+          status: inv.status ?? "ACTIVE",
+          balance: inv.balance ?? 0,
+          amount: inv.amount ?? null,
+          amountOriginal: inv.amountOriginal ?? null,
+          amountProfit: inv.amountProfit ?? null,
+          amountWithdrawal: inv.amountWithdrawal ?? null,
+          quantity: inv.quantity ?? null,
+          value: inv.value ?? null,
+          rate: inv.rate ?? null,
+          rateType: inv.rateType ?? null,
+          annualRate: inv.annualRate ?? inv.fixedAnnualRate ?? null,
+          lastMonthRate: inv.lastMonthRate ?? null,
+          lastTwelveMonthsRate: inv.lastTwelveMonthsRate ?? null,
+          currencyCode: inv.currencyCode ?? "BRL",
+          purchaseDate: inv.purchaseDate ? new Date(inv.purchaseDate) : null,
+          dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
+          owner: inv.owner ?? null,
+        },
+      });
+
+      const transactions = await pluggy.fetchAllInvestmentTransactions(inv.id);
+      const seenTxIds: string[] = [];
+
+      for (const tx of transactions) {
+        seenTxIds.push(tx.id);
+        await prisma.investmentTransaction.upsert({
+          where: { pluggyInvestmentTransactionId: tx.id },
+          create: {
+            pluggyInvestmentTransactionId: tx.id,
+            investmentId: investment.id,
+            date: new Date(tx.date),
+            tradeDate: tx.tradeDate ? new Date(tx.tradeDate) : null,
+            type: tx.type ?? null,
+            amount: tx.amount ?? 0,
+            netAmount: tx.netAmount ?? null,
+            quantity: tx.quantity ?? null,
+            value: tx.value ?? null,
+            description: tx.description ?? null,
+            movementType: tx.movementType ?? null,
+          },
+          update: {
+            date: new Date(tx.date),
+            tradeDate: tx.tradeDate ? new Date(tx.tradeDate) : null,
+            type: tx.type ?? null,
+            amount: tx.amount ?? 0,
+            netAmount: tx.netAmount ?? null,
+            quantity: tx.quantity ?? null,
+            value: tx.value ?? null,
+            description: tx.description ?? null,
+            movementType: tx.movementType ?? null,
+          },
+        });
+      }
+
+      if (seenTxIds.length > 0) {
+        await prisma.investmentTransaction.deleteMany({
+          where: {
+            investmentId: investment.id,
+            pluggyInvestmentTransactionId: { notIn: seenTxIds },
+          },
+        });
+      } else {
+        await prisma.investmentTransaction.deleteMany({
+          where: { investmentId: investment.id },
+        });
+      }
+    }
+
+    if (seenInvestmentIds.length > 0) {
+      await prisma.investment.deleteMany({
+        where: {
+          connectionId,
+          pluggyInvestmentId: { notIn: seenInvestmentIds },
+        },
+      });
+    } else {
+      await prisma.investment.deleteMany({ where: { connectionId } });
+    }
+  } catch {
+    // Conector pode não expor investimentos (ex.: Nu sem carteira)
+  }
 }

@@ -8,6 +8,7 @@ import { AccountsPage } from "./pages/AccountsPage";
 import { PeoplePage } from "./pages/PeoplePage";
 import { BudgetsPage } from "./pages/BudgetsPage";
 import { GoalsPage } from "./pages/GoalsPage";
+import { InvestmentsPage } from "./pages/InvestmentsPage";
 import { ChatPage } from "./pages/ChatPage";
 
 export default function App() {
@@ -35,6 +36,7 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/investimentos" element={<InvestmentsPage />} />
         <Route path="/contas" element={<AccountsPage />} />
         <Route path="/pessoas" element={<PeoplePage />} />
         <Route path="/orcamentos" element={<BudgetsPage />} />

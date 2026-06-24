@@ -16,6 +16,7 @@ import {
   parseDashboardMonths,
   summarizeTransactions,
 } from "../services/finance/aggregates.js";
+import { loadInvestmentData } from "./investments.js";
 
 export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
@@ -185,13 +186,21 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       currencyCode,
     });
 
+    const { investmentBalance, investments } = await loadInvestmentData(
+      request.user!.sub,
+      personId,
+      months,
+    );
+
     return reply.send({
-      totalBalance,
+      totalBalance: totalBalance + investmentBalance,
       netWorth: {
-        total: totalBalance,
+        total: totalBalance + investmentBalance,
         bankBalance,
         creditDebt,
+        investmentBalance,
       },
+      investments,
       currencyCode,
       perPerson,
       accounts,

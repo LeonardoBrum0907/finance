@@ -12,6 +12,7 @@ import { PeriodSelector } from "../components/dashboard/PeriodSelector";
 import { PersonSelector, type PersonFilter } from "../components/dashboard/PersonSelector";
 import { RecentTransactions } from "../components/dashboard/RecentTransactions";
 import { StatCards } from "../components/dashboard/StatCards";
+import { InvestmentSnapshot } from "../components/dashboard/InvestmentSnapshot";
 
 export function DashboardPage() {
   const [months, setMonths] = useState<DashboardMonths>(1);
@@ -59,7 +60,7 @@ export function DashboardPage() {
             Visão consolidada das suas finanças com comparativos por período.
           </p>
         </div>
-        {data && data.accounts.length > 0 && (
+        {data && (data.accounts.length > 0 || data.investments.positionCount > 0) && (
           <div className="flex flex-wrap items-center gap-3">
             <PersonSelector
               value={personId}
@@ -77,7 +78,7 @@ export function DashboardPage() {
         <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
           Não foi possível carregar o painel. Tente novamente em instantes.
         </div>
-      ) : !data || data.accounts.length === 0 ? (
+      ) : !data || (data.accounts.length === 0 && data.investments.positionCount === 0) ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
           <p className="text-sm font-medium text-slate-700">
             Nenhuma conta conectada ainda
@@ -93,6 +94,11 @@ export function DashboardPage() {
             currencyCode={data.currencyCode}
             period={data.period}
             previousPeriod={data.previousPeriod}
+          />
+
+          <InvestmentSnapshot
+            investments={data.investments}
+            currencyCode={data.currencyCode}
           />
 
           <div className="grid gap-8 lg:grid-cols-3">

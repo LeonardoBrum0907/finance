@@ -49,8 +49,9 @@ model BankConnection {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  person   Person    @relation(fields: [personId], references: [id], onDelete: Cascade)
+  person   Person       @relation(fields: [personId], references: [id], onDelete: Cascade)
   accounts Account[]
+  investments Investment[]
 
   @@index([personId])
 }
@@ -95,6 +96,63 @@ model Transaction {
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@index([accountId])
+  @@index([date])
+}
+
+model Investment {
+  id                  String    @id @default(cuid())
+  pluggyInvestmentId  String    @unique
+  name                String
+  type                String?
+  subtype             String?
+  code                String?
+  isin                String?
+  status              String    @default("ACTIVE")
+  balance             Float     @default(0)
+  amount              Float?
+  amountOriginal      Float?
+  amountProfit        Float?
+  amountWithdrawal    Float?
+  quantity            Float?
+  value               Float?
+  rate                Float?
+  rateType            String?
+  annualRate          Float?
+  lastMonthRate       Float?
+  lastTwelveMonthsRate Float?
+  currencyCode        String    @default("BRL")
+  purchaseDate        DateTime?
+  dueDate             DateTime?
+  owner               String?
+  connectionId        String
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  connection   BankConnection          @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  transactions InvestmentTransaction[]
+
+  @@index([connectionId])
+  @@index([status])
+}
+
+model InvestmentTransaction {
+  id                          String   @id @default(cuid())
+  pluggyInvestmentTransactionId String @unique
+  date                        DateTime
+  tradeDate                   DateTime?
+  type                        String?
+  amount                      Float
+  netAmount                   Float?
+  quantity                    Float?
+  value                       Float?
+  description                 String?
+  movementType                String?
+  investmentId                String
+  createdAt                   DateTime @default(now())
+
+  investment Investment @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+
+  @@index([investmentId])
   @@index([date])
 }
 

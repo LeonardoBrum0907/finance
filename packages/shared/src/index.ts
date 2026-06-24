@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { DashboardCategoryGroup } from "./categoryGroups";
+import type { InvestmentAllocationPoint } from "./investments";
 
 export { translateCategory } from "./categories";
 export {
@@ -16,6 +17,23 @@ export {
   accountNetWorthContribution,
   countsTowardCashFlow,
 } from "./transactions";
+export {
+  translateInvestmentType,
+  translateInvestmentSubtype,
+  translateInvestmentStatus,
+  isWithdrawnInvestment,
+  hasMeaningfulInvestmentBalance,
+  isActiveInvestment,
+  isDisplayableInvestment,
+  computePositionProfit,
+  summarizeInvestmentPortfolio,
+  computePeriodInvestmentProfit,
+  computeInvestmentAllocation,
+  INVESTMENT_BALANCE_EPSILON,
+  type InvestmentPositionLike,
+  type InvestmentTransactionLike,
+  type InvestmentAllocationPoint,
+} from "./investments";
 
 export const registerSchema = z.object({
   name: z.string().min(2, "Informe seu nome"),
@@ -273,11 +291,22 @@ export interface DashboardNetWorth {
   total: number;
   bankBalance: number;
   creditDebt: number;
+  investmentBalance: number;
+}
+
+export interface DashboardInvestmentsSummary {
+  totalBalance: number;
+  unrealizedProfit: number;
+  periodProfit: number | null;
+  previousPeriodProfit: number | null;
+  positionCount: number;
+  lastSyncedAt: string | null;
 }
 
 export interface DashboardSummary {
   totalBalance: number;
   netWorth: DashboardNetWorth;
+  investments: DashboardInvestmentsSummary;
   currencyCode: string;
   perPerson: {
     personId: string;
@@ -414,6 +443,58 @@ export interface BudgetItem {
 
 /** @deprecated Use BudgetItem */
 export type BudgetCategoryItem = BudgetItem & { group?: DashboardCategoryGroup };
+
+export interface InvestmentPositionDTO {
+  id: string;
+  name: string;
+  type: string | null;
+  subtype: string | null;
+  typeLabel: string;
+  subtypeLabel: string;
+  code: string | null;
+  status: string;
+  statusLabel: string;
+  balance: number;
+  amount: number | null;
+  amountOriginal: number | null;
+  profit: number;
+  annualRate: number | null;
+  lastTwelveMonthsRate: number | null;
+  dueDate: string | null;
+  purchaseDate: string | null;
+  personId: string;
+  personName: string;
+}
+
+export interface InvestmentTransactionDTO {
+  id: string;
+  date: string;
+  type: string | null;
+  typeLabel: string;
+  amount: number;
+  netAmount: number | null;
+  quantity: number | null;
+  value: number | null;
+  description: string | null;
+  investmentId: string;
+  investmentName: string;
+  personId: string;
+  personName: string;
+}
+
+export interface InvestmentsSummaryDTO {
+  summary: {
+    totalBalance: number;
+    unrealizedProfit: number;
+    positionCount: number;
+  };
+  allocation: InvestmentAllocationPoint[];
+  positions: InvestmentPositionDTO[];
+  recentTransactions: InvestmentTransactionDTO[];
+  currencyCode: string;
+  lastSyncedAt: string | null;
+  perPerson?: { personId: string; personName: string; totalBalance: number }[];
+}
 
 export interface BudgetsSummary {
   month: string;

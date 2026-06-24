@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Landmark,
   LayoutDashboard,
+  LineChart,
   LogOut,
   MessageSquare,
   PieChart,
@@ -19,6 +20,7 @@ type NavItem =
 
 const navItems: NavItem[] = [
   { label: "Painel", icon: LayoutDashboard, to: "/", end: true },
+  { label: "Investimentos", icon: LineChart, to: "/investimentos" },
   { label: "Contas", icon: Landmark, to: "/contas" },
   { label: "Orçamentos", icon: PieChart, to: "/orcamentos" },
   { label: "Objetivos e Planos", icon: TrendingUp, to: "/objetivos" },

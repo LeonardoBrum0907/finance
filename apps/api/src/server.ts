@@ -10,6 +10,7 @@ import { transactionRoutes } from "./routes/transactions.js";
 import { chatRoutes } from "./routes/chat.js";
 import { budgetRoutes } from "./routes/budgets.js";
 import { goalRoutes } from "./routes/goals.js";
+import { investmentRoutes } from "./routes/investments.js";
 
 async function main() {
   const app = Fastify({
@@ -37,6 +38,7 @@ async function main() {
   await app.register(chatRoutes);
   await app.register(budgetRoutes);
   await app.register(goalRoutes);
+  await app.register(investmentRoutes);
 
   await app.listen({ port: env.port, host: "0.0.0.0" });
 }

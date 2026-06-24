@@ -58,6 +58,7 @@ interface CardProps {
   iconClassName: string;
   iconBoxClassName: string;
   badgeTone?: "emerald" | "teal" | "rose";
+  subtitle?: string;
 }
 
 function StatCard({
@@ -73,6 +74,7 @@ function StatCard({
   iconClassName,
   iconBoxClassName,
   badgeTone = "emerald",
+  subtitle,
 }: CardProps) {
   const format = (n: number) => `${prefix}${formatCurrency(n, currencyCode)}`;
 
@@ -97,6 +99,11 @@ function StatCard({
       <p className={`font-display text-2xl font-bold tracking-tight md:text-3xl ${valueClassName}`}>
         <AnimatedValue value={value} format={format} />
       </p>
+      {subtitle && (
+        <p className="mt-2 text-[11px] leading-relaxed text-slate-400" title={subtitle}>
+          {subtitle}
+        </p>
+      )}
       {change !== undefined && (
         <div className="mt-2">
           <ChangeBadge change={change} tone={badgeTone} />
@@ -109,6 +116,8 @@ function StatCard({
 export function StatCards({ netWorth, currencyCode, period, previousPeriod }: Props) {
   const netPositive = period.net >= 0;
 
+  const netWorthBreakdown = `Contas ${formatCurrency(netWorth.bankBalance, currencyCode)} · Invest. ${formatCurrency(netWorth.investmentBalance, currencyCode)} · Cartão −${formatCurrency(netWorth.creditDebt, currencyCode)}`;
+
   return (
     <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
       <StatCard
@@ -120,6 +129,7 @@ export function StatCards({ netWorth, currencyCode, period, previousPeriod }: Pr
         icon={ArrowUpRight}
         iconClassName="text-emerald-600"
         iconBoxClassName="border border-emerald-500/10 bg-emerald-500/10"
+        subtitle={netWorthBreakdown}
       />
       <StatCard
         label="Entradas (Inflow)"
