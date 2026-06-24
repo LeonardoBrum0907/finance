@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { DashboardCategoryGroup } from "./categoryGroups";
 import type { InvestmentAllocationPoint } from "./investments";
+import type { PeriodMode } from "./payday";
 
 export { translateCategory } from "./categories";
 export {
@@ -12,11 +13,32 @@ export {
 } from "./categoryGroups";
 export {
   isCreditAccount,
+  isInvestmentAccount,
   isTransactionOutflow,
   toSignedDisplayAmount,
   accountNetWorthContribution,
   countsTowardCashFlow,
 } from "./transactions";
+export {
+  PERIOD_MODES,
+  periodModeSchema,
+  updateSettingsSchema,
+  parsePeriodMode,
+  effectivePaydayInMonth,
+  getPaydayCycleStart,
+  getPaydayCycleEnd,
+  getPaydayCycleRange,
+  getRecentPaydayCycles,
+  paydayCyclesToDateRange,
+  formatPaydayCycleLabel,
+  formatPaydayCycleShortLabel,
+  classifyIncome,
+  type PeriodMode,
+  type UpdateSettingsInput,
+  type UserSettingsDTO,
+  type PaydayCycleRange,
+  type IncomeBreakdown,
+} from "./payday";
 export {
   translateInvestmentType,
   translateInvestmentSubtype,
@@ -30,10 +52,24 @@ export {
   computePeriodInvestmentProfit,
   computeInvestmentAllocation,
   INVESTMENT_BALANCE_EPSILON,
+  INVESTMENT_POSITION_STALE_DAYS,
+  resolveInvestmentPositionReferenceDate,
+  getInvestmentPositionStaleDays,
+  isStaleInvestmentPosition,
   type InvestmentPositionLike,
   type InvestmentTransactionLike,
   type InvestmentAllocationPoint,
 } from "./investments";
+export {
+  isBrokerConnector,
+  selectConnectionsForInvestments,
+  resolveInvestmentSourceLabel,
+  investmentDedupKey,
+  scoreInvestmentSource,
+  type ConnectionWithInvestments,
+  type InvestmentLikeForDedup,
+  type InvestmentSourceMeta,
+} from "./investmentSources";
 
 export const registerSchema = z.object({
   name: z.string().min(2, "Informe seu nome"),
@@ -133,6 +169,8 @@ export type GoalStatus = "active" | "completed" | "paused" | "archived";
 
 export type GoalContributionSource = "manual" | "ai" | "auto";
 
+export type GoalTrackingMode = "manual" | "linked";
+
 export type PlanStatus = "active" | "paused" | "completed" | "archived";
 
 export type ChatActionProposalType =
@@ -184,6 +222,18 @@ export const addContributionSchema = z.object({
   note: z.string().max(200, "Nota muito longa").optional(),
 });
 export type AddContributionInput = z.infer<typeof addContributionSchema>;
+
+export const goalSourceInputSchema = z.object({
+  sourceType: z.enum(["account", "investment"]),
+  accountId: z.string().optional(),
+  investmentId: z.string().optional(),
+  allocationPercent: z.number().min(0.01, "Informe uma alocação maior que zero").max(100, "Alocação máxima é 100%"),
+});
+
+export const updateGoalSourcesSchema = z.object({
+  sources: z.array(goalSourceInputSchema).min(1, "Selecione ao menos uma fonte"),
+});
+export type UpdateGoalSourcesInput = z.infer<typeof updateGoalSourcesSchema>;
 
 const planGoalMemberSchema = z.object({
   goalId: z.string().min(1, "Informe o objetivo"),
@@ -269,6 +319,10 @@ export interface DashboardPeriodSummary {
   income: number;
   expenses: number;
   net: number;
+  periodMode?: PeriodMode;
+  from?: string;
+  to?: string;
+  label?: string;
 }
 
 export type DashboardMonths = 1 | 3 | 6 | 12;
@@ -278,6 +332,22 @@ export interface DashboardMonthlyPoint {
   income: number;
   expenses: number;
   net: number;
+  label?: string;
+}
+
+export interface DashboardCurrentCycle {
+  cycleKey: string;
+  from: string;
+  to: string;
+  dayIndex: number;
+  totalDays: number;
+  daysRemaining: number;
+  isComplete: boolean;
+  income: number;
+  expenses: number;
+  net: number;
+  salaryIncome: number;
+  extraIncome: number;
 }
 
 export interface DashboardCategoryPoint {
@@ -300,7 +370,9 @@ export interface DashboardInvestmentsSummary {
   periodProfit: number | null;
   previousPeriodProfit: number | null;
   positionCount: number;
+  stalePositionCount: number;
   lastSyncedAt: string | null;
+  investmentSource: string | null;
 }
 
 export interface DashboardSummary {
@@ -308,6 +380,9 @@ export interface DashboardSummary {
   netWorth: DashboardNetWorth;
   investments: DashboardInvestmentsSummary;
   currencyCode: string;
+  periodMode: PeriodMode;
+  paydayDay: number | null;
+  currentCycle: DashboardCurrentCycle | null;
   perPerson: {
     personId: string;
     personName: string;
@@ -351,6 +426,32 @@ export interface GoalContributionDTO {
   createdAt: string;
 }
 
+export interface GoalSourceDTO {
+  id: string;
+  sourceType: "account" | "investment";
+  accountId: string | null;
+  investmentId: string | null;
+  name: string;
+  sourceLabel: string;
+  balance: number;
+  allocationPercent: number;
+  allocatedAmount: number;
+  isStale: boolean;
+}
+
+export interface AvailableGoalSourceDTO {
+  sourceType: "account" | "investment";
+  accountId: string | null;
+  investmentId: string | null;
+  name: string;
+  sourceLabel: string;
+  balance: number;
+  usedPercent: number;
+  availablePercent: number;
+  isCredit: boolean;
+  isStale?: boolean;
+}
+
 export interface GoalDTO {
   id: string;
   name: string;
@@ -359,9 +460,12 @@ export interface GoalDTO {
   icon: string | null;
   targetAmount: number;
   currentAmount: number;
+  computedAmount: number;
   targetDate: string | null;
   status: GoalStatus;
+  trackingMode: GoalTrackingMode;
   linkedAccountId: string | null;
+  sources: GoalSourceDTO[];
   progress: number;
   projectedCompletionDate: string | null;
   onTrack: boolean | null;
@@ -410,6 +514,9 @@ export interface GoalsSummaryDTO {
   plans: PlanDTO[];
   savingsPath: SavingsPathPoint[];
   hasAccounts: boolean;
+  surplusPeriodMode: PeriodMode;
+  surplusLabel: string;
+  availableSources?: AvailableGoalSourceDTO[];
 }
 
 export interface ChatActionProposalDTO {
@@ -462,8 +569,13 @@ export interface InvestmentPositionDTO {
   lastTwelveMonthsRate: number | null;
   dueDate: string | null;
   purchaseDate: string | null;
+  positionDate: string | null;
+  referenceDate: string | null;
+  isStale: boolean;
+  staleDays: number | null;
   personId: string;
   personName: string;
+  connectorName: string | null;
 }
 
 export interface InvestmentTransactionDTO {
@@ -487,12 +599,14 @@ export interface InvestmentsSummaryDTO {
     totalBalance: number;
     unrealizedProfit: number;
     positionCount: number;
+    stalePositionCount: number;
   };
   allocation: InvestmentAllocationPoint[];
   positions: InvestmentPositionDTO[];
   recentTransactions: InvestmentTransactionDTO[];
   currencyCode: string;
   lastSyncedAt: string | null;
+  investmentSource: string | null;
   perPerson?: { personId: string; personName: string; totalBalance: number }[];
 }
 
@@ -506,4 +620,10 @@ export interface BudgetsSummary {
   budgets: BudgetItem[];
   availableCategories: DashboardCategoryGroup[];
   hasAccounts: boolean;
+  periodMode: PeriodMode;
+  periodFrom: string;
+  periodTo: string;
+  periodLabel: string;
+  cycleDayIndex: number | null;
+  cycleTotalDays: number | null;
 }

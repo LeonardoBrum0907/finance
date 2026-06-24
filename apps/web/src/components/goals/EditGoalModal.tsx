@@ -1,11 +1,24 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Trash2, X } from "lucide-react";
-import type { GoalDTO, GoalStatus, GoalType } from "@finance/shared";
+import type {
+  AvailableGoalSourceDTO,
+  GoalDTO,
+  GoalStatus,
+  GoalType,
+} from "@finance/shared";
+import {
+  GoalSourceSelector,
+  previewAllocatedTotal,
+  type GoalSourceSelection,
+} from "./GoalSourceSelector";
+import { formatCurrency } from "../../lib/format";
 
 interface Props {
   goal: GoalDTO | null;
   saving: boolean;
   deleting: boolean;
+  availableSources: AvailableGoalSourceDTO[];
+  currencyCode?: string;
   onClose: () => void;
   onSave: (data: {
     id: string;
@@ -15,6 +28,7 @@ interface Props {
     targetAmount?: number;
     targetDate?: string | null;
     status?: GoalStatus;
+    sources?: GoalSourceSelection[] | null;
   }) => void;
   onDelete: (id: string) => void;
 }
@@ -34,13 +48,28 @@ const STATUSES: { value: GoalStatus; label: string }[] = [
   { value: "archived", label: "Arquivado" },
 ];
 
-export function EditGoalModal({ goal, saving, deleting, onClose, onSave, onDelete }: Props) {
+export function EditGoalModal({
+  goal,
+  saving,
+  deleting,
+  availableSources,
+  currencyCode = "BRL",
+  onClose,
+  onSave,
+  onDelete,
+}: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState<GoalType>("savings");
   const [targetAmount, setTargetAmount] = useState("");
   const [targetDate, setTargetDate] = useState("");
   const [status, setStatus] = useState<GoalStatus>("active");
+  const [useAuto, setUseAuto] = useState(false);
+  const [sources, setSources] = useState<GoalSourceSelection[]>([]);
+
+  const handleSourcesChange = useCallback((next: GoalSourceSelection[]) => {
+    setSources(next);
+  }, []);
 
   useEffect(() => {
     if (goal) {
@@ -50,15 +79,28 @@ export function EditGoalModal({ goal, saving, deleting, onClose, onSave, onDelet
       setTargetAmount(String(goal.targetAmount));
       setTargetDate(goal.targetDate ? goal.targetDate.slice(0, 10) : "");
       setStatus(goal.status);
+      setUseAuto(goal.trackingMode === "linked");
+      setSources(
+        goal.sources.map((s) => ({
+          sourceType: s.sourceType,
+          accountId: s.accountId ?? undefined,
+          investmentId: s.investmentId ?? undefined,
+          allocationPercent: s.allocationPercent,
+        })),
+      );
     }
   }, [goal]);
 
   if (!goal) return null;
 
+  const previewTotal = previewAllocatedTotal(sources, availableSources);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(targetAmount);
     if (!name.trim() || isNaN(amount) || amount <= 0) return;
+    if (useAuto && sources.length === 0) return;
+
     onSave({
       id: goal.id,
       name: name.trim(),
@@ -67,6 +109,7 @@ export function EditGoalModal({ goal, saving, deleting, onClose, onSave, onDelet
       targetAmount: amount,
       targetDate: targetDate || null,
       status,
+      sources: useAuto ? sources : null,
     });
   };
 
@@ -95,7 +138,7 @@ export function EditGoalModal({ goal, saving, deleting, onClose, onSave, onDelet
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-emerald-400 focus:border-emerald-400 focus:bg-white"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800"
               required
             />
           </div>
@@ -179,9 +222,36 @@ export function EditGoalModal({ goal, saving, deleting, onClose, onSave, onDelet
             />
           </div>
 
+          <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-3">
+            <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={useAuto}
+                onChange={(e) => setUseAuto(e.target.checked)}
+              />
+              Acompanhar automaticamente por saldo vinculado
+            </label>
+            {useAuto && (
+              <div className="mt-3">
+                <GoalSourceSelector
+                  availableSources={availableSources}
+                  initialSources={goal.sources}
+                  currencyCode={currencyCode}
+                  onChange={handleSourcesChange}
+                />
+                {sources.length > 0 && (
+                  <p className="mt-2 text-xs text-emerald-700">
+                    Progresso estimado:{" "}
+                    <strong>{formatCurrency(previewTotal, currencyCode)}</strong>
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || (useAuto && sources.length === 0)}
             className="w-full cursor-pointer rounded-xl bg-slate-900 py-3 text-xs font-bold text-white shadow-md hover:bg-slate-800 disabled:opacity-60"
           >
             {saving ? "Salvando..." : "Salvar alterações"}

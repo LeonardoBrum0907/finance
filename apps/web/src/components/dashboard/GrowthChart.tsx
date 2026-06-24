@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import type { Chart as ChartJS, TooltipItem } from "chart.js";
 import { Bar, Line } from "react-chartjs-2";
 import type { DashboardMonthlyPoint, DashboardMonths } from "@finance/shared";
-import { formatCurrency, formatMonthLabel } from "../../lib/format";
+import { formatCurrency, formatSeriesLabel } from "../../lib/format";
 import { createAreaGradient, ensureChartJsRegistered } from "../../lib/chart";
 import {
   baseChartOptions,
@@ -44,7 +44,7 @@ export function GrowthChart({ data, months, currencyCode, className }: Props) {
     () =>
       isSingleMonth && view === "flow"
         ? ["Receitas", "Despesas"]
-        : data.map((point) => formatMonthLabel(point.month)),
+        : data.map((point) => formatSeriesLabel(point)),
     [data, isSingleMonth, view],
   );
 

@@ -33,6 +33,18 @@ export function InvestmentsPage() {
 
   const data = investments.data;
 
+  const stalePositions = useMemo(
+    () =>
+      (data?.positions ?? [])
+        .filter((p) => p.isStale)
+        .map((p) => ({
+          name: p.name,
+          referenceDate: p.referenceDate,
+          staleDays: p.staleDays,
+        })),
+    [data?.positions],
+  );
+
   const insights = useMemo(() => {
     if (!data || data.positions.length === 0) return [];
 
@@ -91,7 +103,12 @@ export function InvestmentsPage() {
         </div>
       ) : !data || data.summary.positionCount === 0 ? (
         <div className="space-y-4">
-          <InvestmentDataNotice lastSyncedAt={data?.lastSyncedAt ?? null} />
+          <InvestmentDataNotice
+            lastSyncedAt={data?.lastSyncedAt ?? null}
+            investmentSource={data?.investmentSource}
+            stalePositionCount={data?.summary?.stalePositionCount ?? 0}
+            stalePositions={stalePositions}
+          />
           <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
             <p className="text-sm font-medium text-slate-700">
               {data && data.recentTransactions.length > 0
@@ -101,7 +118,7 @@ export function InvestmentsPage() {
             <p className="mt-1 text-sm text-slate-500">
               {data && data.recentTransactions.length > 0
                 ? "Há movimentações no histórico, mas posições resgatadas ou com saldo zerado não aparecem aqui."
-                : "Conecte uma conta com carteira de investimentos e sincronize em Contas."}
+                : "Conecte sua corretora (ex.: Íon) e sincronize em Contas."}
             </p>
           </div>
           {data && data.recentTransactions.length > 0 && (
@@ -113,7 +130,12 @@ export function InvestmentsPage() {
         </div>
       ) : (
         <>
-          <InvestmentDataNotice lastSyncedAt={data.lastSyncedAt} />
+          <InvestmentDataNotice
+            lastSyncedAt={data.lastSyncedAt}
+            investmentSource={data.investmentSource}
+            stalePositionCount={data.summary.stalePositionCount}
+            stalePositions={stalePositions}
+          />
           <InvestmentStatCards
             totalBalance={data.summary.totalBalance}
             unrealizedProfit={data.summary.unrealizedProfit}

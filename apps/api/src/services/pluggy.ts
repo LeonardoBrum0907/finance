@@ -1,7 +1,8 @@
 import { PluggyClient } from "pluggy-sdk";
-import { translateCategory } from "@finance/shared";
+import { isBrokerConnector, translateCategory } from "@finance/shared";
 import { env, isPluggyConfigured } from "../env.js";
 import { prisma } from "../prisma.js";
+import { reconcileGoalsForUser } from "./finance/goalTracking.js";
 
 let client: PluggyClient | null = null;
 
@@ -168,6 +169,14 @@ export async function syncConnection(connectionId: string): Promise<void> {
     where: { id: connectionId },
     data: { lastSyncedAt: new Date() },
   });
+
+  const person = await prisma.bankConnection.findUnique({
+    where: { id: connectionId },
+    select: { person: { select: { userId: true } } },
+  });
+  if (person?.person.userId) {
+    await reconcileGoalsForUser(person.person.userId);
+  }
 }
 
 async function syncInvestments(
@@ -175,6 +184,48 @@ async function syncInvestments(
   connectionId: string,
   itemId: string,
 ): Promise<void> {
+  const connection = await prisma.bankConnection.findUnique({
+    where: { id: connectionId },
+    include: {
+      person: {
+        include: {
+          connections: {
+            include: {
+              accounts: { select: { id: true } },
+              investments: { select: { id: true, code: true, isin: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!connection) return;
+
+  const personConnections = connection.person.connections;
+  const currentConn = personConnections.find((c) => c.id === connectionId);
+  const accountCount = currentConn?.accounts.length ?? 0;
+
+  const personHasBroker = personConnections.some(
+    (c) => c.id !== connectionId && isBrokerConnector(c.connectorName),
+  );
+
+  if (personHasBroker && !isBrokerConnector(connection.connectorName)) {
+    await prisma.investment.deleteMany({ where: { connectionId } });
+    return;
+  }
+
+  const personHasInvestmentOnly = personConnections.some(
+    (c) =>
+      c.id !== connectionId &&
+      c.investments.length > 0 &&
+      c.accounts.length === 0,
+  );
+
+  if (personHasInvestmentOnly && accountCount > 0) {
+    await prisma.investment.deleteMany({ where: { connectionId } });
+    return;
+  }
+
   try {
     const response = await pluggy.fetchInvestments(itemId);
     const investments = response.results ?? [];
@@ -209,6 +260,7 @@ async function syncInvestments(
           currencyCode: inv.currencyCode ?? "BRL",
           purchaseDate: inv.purchaseDate ? new Date(inv.purchaseDate) : null,
           dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
+          positionDate: inv.date ? new Date(inv.date) : null,
           owner: inv.owner ?? null,
         },
         update: {
@@ -233,6 +285,7 @@ async function syncInvestments(
           currencyCode: inv.currencyCode ?? "BRL",
           purchaseDate: inv.purchaseDate ? new Date(inv.purchaseDate) : null,
           dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
+          positionDate: inv.date ? new Date(inv.date) : null,
           owner: inv.owner ?? null,
         },
       });

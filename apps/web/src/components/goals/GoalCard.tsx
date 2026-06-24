@@ -1,6 +1,7 @@
 import {
   AlertCircle,
   CheckCircle2,
+  Link2,
   Pencil,
   PiggyBank,
   Plus,
@@ -53,7 +54,10 @@ function ProgressRing({ progress }: { progress: number }) {
 }
 
 export function GoalCard({ goal, currencyCode, onEdit, onAddFunds }: Props) {
-  const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
+  const isLinked = goal.trackingMode === "linked";
+  const displayAmount = goal.computedAmount ?? goal.currentAmount;
+  const remaining = Math.max(0, goal.targetAmount - displayAmount);
+  const hasStaleSource = goal.sources.some((s) => s.isStale);
 
   return (
     <div className="flex flex-col justify-between rounded-2xl border border-slate-200/60 bg-white p-6 transition-all duration-200 hover:shadow-md">
@@ -70,15 +74,44 @@ export function GoalCard({ goal, currencyCode, onEdit, onAddFunds }: Props) {
             <Target className="h-4 w-4 shrink-0 text-emerald-500" />
           </div>
 
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {isLinked ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                <Link2 className="h-3 w-3" />
+                Automático
+              </span>
+            ) : (
+              <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                Manual
+              </span>
+            )}
+            {hasStaleSource && (
+              <span className="inline-flex rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                Fonte desatualizada
+              </span>
+            )}
+          </div>
+
           <div className="mt-3 space-y-1">
             <p className="font-mono text-lg font-bold text-slate-900">
-              {formatCurrency(goal.currentAmount, currencyCode)}
+              {formatCurrency(displayAmount, currencyCode)}
             </p>
             <p className="text-xs text-slate-500">
               de {formatCurrency(goal.targetAmount, currencyCode)} · faltam{" "}
               {formatCurrency(remaining, currencyCode)}
             </p>
           </div>
+
+          {isLinked && goal.sources.length > 0 && (
+            <ul className="mt-3 space-y-1">
+              {goal.sources.map((src) => (
+                <li key={src.id} className="text-[10px] text-slate-500">
+                  {src.name} · {src.allocationPercent.toFixed(0)}% ·{" "}
+                  {formatCurrency(src.allocatedAmount, currencyCode)}
+                </li>
+              ))}
+            </ul>
+          )}
 
           {goal.targetDate && (
             <p className="mt-2 text-[11px] text-slate-400">
@@ -109,18 +142,20 @@ export function GoalCard({ goal, currencyCode, onEdit, onAddFunds }: Props) {
       </div>
 
       <div className="mt-5 flex gap-2">
-        <button
-          type="button"
-          onClick={() => onAddFunds(goal)}
-          className="inline-flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Adicionar fundos
-        </button>
+        {!isLinked && (
+          <button
+            type="button"
+            onClick={() => onAddFunds(goal)}
+            className="inline-flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Adicionar fundos
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onEdit(goal)}
-          className="inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+          className={`inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 ${isLinked ? "flex-1" : ""}`}
         >
           <Pencil className="h-3.5 w-3.5" />
           Editar

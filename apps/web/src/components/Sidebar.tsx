@@ -26,7 +26,7 @@ const navItems: NavItem[] = [
   { label: "Objetivos e Planos", icon: TrendingUp, to: "/objetivos" },
   { label: "Pessoas", icon: Users, to: "/pessoas" },
   { label: "Assistente", icon: MessageSquare, to: "/chat" },
-  { label: "Configurações", icon: Settings, comingSoon: true },
+  { label: "Configurações", icon: Settings, to: "/configuracoes" },
 ];
 
 function NavItemLink({ item }: { item: Extract<NavItem, { to: string }> }) {

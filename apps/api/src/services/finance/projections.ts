@@ -1,6 +1,8 @@
 import type { GoalDTO, PlanDTO, SavingsPathPoint } from "@finance/shared";
+import { getRecentPaydayCycles } from "@finance/shared";
 import {
   addMonthsToMonthKey,
+  getCycleSummary,
   getMonthlySummary,
   getRecentMonthKeys,
   toLocalMonthKey,
@@ -53,6 +55,36 @@ export function computeMonthlySurplus(txs: FinancialTransaction[]): number {
   const nets = monthKeys.map((month) => getMonthlySummary(txs, month).net);
   const total = nets.reduce((sum, net) => sum + net, 0);
   return total / monthKeys.length;
+}
+
+export function computeCycleSurplus(
+  txs: FinancialTransaction[],
+  paydayDay: number,
+): number {
+  const cycleStarts = getRecentPaydayCycles(SURPLUS_MONTHS, paydayDay, 1);
+  if (cycleStarts.length === 0) return 0;
+
+  const nets = cycleStarts.map((start) => getCycleSummary(txs, start, paydayDay).net);
+  const total = nets.reduce((sum, net) => sum + net, 0);
+  return total / cycleStarts.length;
+}
+
+export function resolveSurplus(
+  txs: FinancialTransaction[],
+  paydayDay: number | null,
+): { surplus: number; periodMode: "calendar" | "payday"; label: string } {
+  if (paydayDay !== null) {
+    return {
+      surplus: computeCycleSurplus(txs, paydayDay),
+      periodMode: "payday",
+      label: "sobra média por ciclo",
+    };
+  }
+  return {
+    surplus: computeMonthlySurplus(txs),
+    periodMode: "calendar",
+    label: "sobra média mensal",
+  };
 }
 
 export interface GoalProjectionInput {
@@ -118,6 +150,7 @@ type GoalRecord = {
   currentAmount: number;
   targetDate: Date | null;
   status: string;
+  trackingMode?: string;
   linkedAccountId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -133,9 +166,12 @@ export function serializeGoal(goal: GoalRecord, monthlySurplus: number): GoalDTO
     icon: goal.icon,
     targetAmount: goal.targetAmount,
     currentAmount: goal.currentAmount,
+    computedAmount: goal.currentAmount,
     targetDate: goal.targetDate?.toISOString() ?? null,
     status: goal.status as GoalDTO["status"],
+    trackingMode: goal.trackingMode === "linked" ? "linked" : "manual",
     linkedAccountId: goal.linkedAccountId,
+    sources: [],
     progress: computeGoalProgress(goal.targetAmount, goal.currentAmount),
     projectedCompletionDate: projection.projectedCompletionDate,
     onTrack: projection.onTrack,

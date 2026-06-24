@@ -66,6 +66,9 @@ export function PositionsTable({ positions, currencyCode }: Props) {
                     {pos.code && (
                       <p className="text-xs text-slate-400">{pos.code}</p>
                     )}
+                    {pos.connectorName && (
+                      <p className="text-[10px] text-slate-400">{pos.connectorName}</p>
+                    )}
                   </td>
                   <td className="py-3 pr-4">
                     <PositionStatusCell position={pos} />

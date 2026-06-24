@@ -4,17 +4,10 @@ import {
   ArrowUpRight,
   type LucideIcon,
 } from "lucide-react";
-import type { DashboardNetWorth, DashboardPeriodSummary } from "@finance/shared";
+import type { DashboardNetWorth, DashboardPeriodSummary, PeriodMode } from "@finance/shared";
 import { formatCurrency, formatPercent } from "../../lib/format";
 import { AnimatedValue } from "./AnimatedValue";
 import { cardClass, cardHighlightClass, fadeUp } from "./motion";
-
-interface Props {
-  netWorth: DashboardNetWorth;
-  currencyCode: string;
-  period: DashboardPeriodSummary;
-  previousPeriod: DashboardPeriodSummary;
-}
 
 function calcChange(current: number, previous: number): number | null {
   if (previous === 0) return null;
@@ -24,9 +17,11 @@ function calcChange(current: number, previous: number): number | null {
 function ChangeBadge({
   change,
   tone = "emerald",
+  periodMode = "calendar",
 }: {
   change: number | null;
   tone?: "emerald" | "teal" | "rose";
+  periodMode?: PeriodMode;
 }) {
   if (change === null || Math.abs(change) < 0.5) return null;
 
@@ -36,11 +31,13 @@ function ChangeBadge({
     rose: "bg-rose-500/10 text-rose-600",
   };
 
+  const compareLabel = periodMode === "payday" ? "vs ciclo anterior" : "vs último mês";
+
   return (
     <span
       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${colors[tone]}`}
     >
-      {formatPercent(change)} vs último mês
+      {formatPercent(change)} {compareLabel}
     </span>
   );
 }
@@ -59,6 +56,7 @@ interface CardProps {
   iconBoxClassName: string;
   badgeTone?: "emerald" | "teal" | "rose";
   subtitle?: string;
+  periodMode?: PeriodMode;
 }
 
 function StatCard({
@@ -75,6 +73,7 @@ function StatCard({
   iconBoxClassName,
   badgeTone = "emerald",
   subtitle,
+  periodMode = "calendar",
 }: CardProps) {
   const format = (n: number) => `${prefix}${formatCurrency(n, currencyCode)}`;
 
@@ -106,14 +105,28 @@ function StatCard({
       )}
       {change !== undefined && (
         <div className="mt-2">
-          <ChangeBadge change={change} tone={badgeTone} />
+          <ChangeBadge change={change} tone={badgeTone} periodMode={periodMode} />
         </div>
       )}
     </motion.div>
   );
 }
 
-export function StatCards({ netWorth, currencyCode, period, previousPeriod }: Props) {
+interface StatCardsProps {
+  netWorth: DashboardNetWorth;
+  currencyCode: string;
+  period: DashboardPeriodSummary;
+  previousPeriod: DashboardPeriodSummary;
+  periodMode?: PeriodMode;
+}
+
+export function StatCards({
+  netWorth,
+  currencyCode,
+  period,
+  previousPeriod,
+  periodMode = "calendar",
+}: StatCardsProps) {
   const netPositive = period.net >= 0;
 
   const netWorthBreakdown = `Contas ${formatCurrency(netWorth.bankBalance, currencyCode)} · Invest. ${formatCurrency(netWorth.investmentBalance, currencyCode)} · Cartão −${formatCurrency(netWorth.creditDebt, currencyCode)}`;
@@ -143,6 +156,7 @@ export function StatCards({ netWorth, currencyCode, period, previousPeriod }: Pr
         iconClassName="text-teal-600"
         iconBoxClassName="border border-teal-500/10 bg-teal-500/10"
         badgeTone="teal"
+        periodMode={periodMode}
       />
       <StatCard
         label="Saídas (Outflow)"
@@ -156,6 +170,7 @@ export function StatCards({ netWorth, currencyCode, period, previousPeriod }: Pr
         iconClassName="text-rose-600"
         iconBoxClassName="border border-rose-500/10 bg-rose-500/10"
         badgeTone="rose"
+        periodMode={periodMode}
       />
       <StatCard
         label="Saldo Sobrando"
@@ -173,6 +188,7 @@ export function StatCards({ netWorth, currencyCode, period, previousPeriod }: Pr
             : "border border-rose-500/10 bg-rose-500/10"
         }
         badgeTone={netPositive ? "emerald" : "rose"}
+        periodMode={periodMode}
       />
     </div>
   );

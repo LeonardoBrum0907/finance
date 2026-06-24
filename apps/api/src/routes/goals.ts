@@ -3,28 +3,50 @@ import {
   addContributionSchema,
   createGoalSchema,
   createPlanSchema,
+  getRecentPaydayCycles,
+  paydayCyclesToDateRange,
   translateCategory,
   updateGoalSchema,
   updatePlanSchema,
+  updateGoalSourcesSchema,
   type GoalsSummaryDTO,
 } from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
 import type { FinancialTransaction } from "../services/finance/types.js";
-import { monthKeysToDateRange, getRecentMonthKeys } from "../services/finance/aggregates.js";
+import {
+  getRecentMonthKeys,
+  monthKeysToDateRange,
+} from "../services/finance/aggregates.js";
 import {
   buildSavingsPath,
   computeGoalsTotals,
-  computeMonthlySurplus,
   computeProjectedCompletionMonth,
   resolveMonthlyContribution,
+  resolveSurplus,
   serializeGoal,
   serializePlan,
 } from "../services/finance/projections.js";
+import { loadUserSettings } from "../services/userSettings.js";
+import {
+  applyGoalSources,
+  buildAvailableSources,
+  clearGoalSources,
+  loadGoalBalanceContext,
+  reconcileGoalsForUser,
+  resolveGoalCurrentAmount,
+  serializeGoalSources,
+  type GoalSourceInput,
+} from "../services/finance/goalTracking.js";
 
-async function loadRecentTransactions(userId: string): Promise<FinancialTransaction[]> {
-  const monthKeys = getRecentMonthKeys(3);
-  const range = monthKeysToDateRange(monthKeys);
+async function loadRecentTransactions(
+  userId: string,
+  paydayDay: number | null,
+): Promise<FinancialTransaction[]> {
+  const range =
+    paydayDay !== null
+      ? paydayCyclesToDateRange(getRecentPaydayCycles(4, paydayDay, 0), paydayDay)
+      : monthKeysToDateRange(getRecentMonthKeys(3));
   const dateFrom = range.from ? new Date(`${range.from}T00:00:00.000Z`) : new Date(0);
   const dateTo = range.to ? new Date(`${range.to}T23:59:59.999Z`) : new Date();
 
@@ -80,6 +102,7 @@ async function countUserAccounts(userId: string) {
 async function loadUserGoals(userId: string) {
   return prisma.goal.findMany({
     where: { userId, status: { not: "archived" } },
+    include: { sources: true },
     orderBy: { createdAt: "desc" },
   });
 }
@@ -97,16 +120,47 @@ async function loadUserPlans(userId: string) {
 }
 
 async function fetchGoalsSummary(userId: string): Promise<GoalsSummaryDTO> {
-  const [transactions, goalRows, planRows, accountCount] = await Promise.all([
-    loadRecentTransactions(userId),
+  const settings = await loadUserSettings(userId);
+  const [transactions, goalRows, planRows, accountCount, balanceContext] = await Promise.all([
+    loadRecentTransactions(userId, settings.paydayDay),
     loadUserGoals(userId),
     loadUserPlans(userId),
     countUserAccounts(userId),
+    loadGoalBalanceContext(userId),
   ]);
 
-  const monthlySurplus = computeMonthlySurplus(transactions);
-  const goals = goalRows.map((goal) => serializeGoal(goal, monthlySurplus));
-  const plans = planRows.map((plan) => serializePlan(plan));
+  const { surplus: monthlySurplus, periodMode: surplusPeriodMode, label: surplusLabel } =
+    resolveSurplus(transactions, settings.paydayDay);
+
+  const goals = goalRows.map((goal) => {
+    const computedAmount = resolveGoalCurrentAmount(goal, balanceContext);
+    const serialized = serializeGoal(
+      { ...goal, currentAmount: computedAmount },
+      monthlySurplus,
+    );
+    return {
+      ...serialized,
+      trackingMode: (goal.trackingMode === "linked" ? "linked" : "manual") as "manual" | "linked",
+      computedAmount,
+      currentAmount: computedAmount,
+      sources: serializeGoalSources(goal.sources, balanceContext),
+    };
+  });
+
+  const plans = planRows.map((plan) => {
+    const enrichedMembers = plan.members.map((member) => {
+      const goalRow = goalRows.find((g) => g.id === member.goalId);
+      const computedAmount = goalRow
+        ? resolveGoalCurrentAmount(goalRow, balanceContext)
+        : member.goal.currentAmount;
+      return {
+        ...member,
+        goal: { ...member.goal, currentAmount: computedAmount },
+      };
+    });
+    return serializePlan({ ...plan, members: enrichedMembers });
+  });
+
   const { totalCurrent, totalTarget } = computeGoalsTotals(goals);
   const monthlyContribution = resolveMonthlyContribution(plans, monthlySurplus);
 
@@ -125,6 +179,9 @@ async function fetchGoalsSummary(userId: string): Promise<GoalsSummaryDTO> {
     plans,
     savingsPath: buildSavingsPath(goals, plans, monthlySurplus),
     hasAccounts: accountCount > 0,
+    surplusPeriodMode,
+    surplusLabel,
+    availableSources: buildAvailableSources(balanceContext),
   };
 }
 
@@ -259,6 +316,12 @@ export async function goalRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(404).send({ error: "Objetivo não encontrado" });
     }
 
+    if (goal.trackingMode === "linked") {
+      return reply.code(400).send({
+        error: "Este objetivo usa acompanhamento automático. Edite as fontes vinculadas em vez de adicionar fundos manualmente.",
+      });
+    }
+
     const { amount, date, note } = parsed.data;
     const contributionDate = date ? new Date(date) : new Date();
 
@@ -283,6 +346,55 @@ export async function goalRoutes(app: FastifyInstance): Promise<void> {
 
     const summary = await fetchGoalsSummary(userId);
     return reply.code(201).send(summary);
+  });
+
+  app.get("/api/goals/sources", async (request, reply) => {
+    const userId = request.user!.sub;
+    const context = await loadGoalBalanceContext(userId);
+    return reply.send({ sources: buildAvailableSources(context) });
+  });
+
+  app.put("/api/goals/:id/sources", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateGoalSourcesSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message });
+    }
+
+    const userId = request.user!.sub;
+    const existing = await verifyGoalOwnership(userId, id);
+    if (!existing) {
+      return reply.code(404).send({ error: "Objetivo não encontrado" });
+    }
+
+    try {
+      await applyGoalSources(userId, id, parsed.data.sources as GoalSourceInput[]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Não foi possível vincular as fontes";
+      return reply.code(409).send({ error: message });
+    }
+
+    const summary = await fetchGoalsSummary(userId);
+    return reply.send(summary);
+  });
+
+  app.delete("/api/goals/:id/sources", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const userId = request.user!.sub;
+    const existing = await verifyGoalOwnership(userId, id);
+    if (!existing) {
+      return reply.code(404).send({ error: "Objetivo não encontrado" });
+    }
+
+    try {
+      await clearGoalSources(userId, id);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Não foi possível remover as fontes";
+      return reply.code(400).send({ error: message });
+    }
+
+    const summary = await fetchGoalsSummary(userId);
+    return reply.send(summary);
   });
 
   app.post("/api/plans", async (request, reply) => {

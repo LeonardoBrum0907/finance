@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowRight, TrendingDown, TrendingUp } from "lucide-react";
+import { AlertTriangle, ArrowRight, TrendingDown, TrendingUp } from "lucide-react";
 import type { DashboardInvestmentsSummary } from "@finance/shared";
 import { formatCurrency, formatPercent } from "../../lib/format";
 import { AnimatedValue } from "./AnimatedValue";
@@ -38,6 +38,14 @@ export function InvestmentSnapshot({ investments, currencyCode }: Props) {
           <p className="text-xs text-slate-500">
             Carteira sincronizada via Open Finance
           </p>
+          {investments.stalePositionCount > 0 && (
+            <p className="mt-1 flex items-center gap-1 text-xs text-amber-700">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              {investments.stalePositionCount === 1
+                ? "1 posição pode estar desatualizada"
+                : `${investments.stalePositionCount} posições podem estar desatualizadas`}
+            </p>
+          )}
         </div>
         <Link
           to="/investimentos"

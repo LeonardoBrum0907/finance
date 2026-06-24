@@ -1,60 +1,11 @@
 import type { FastifyInstance } from "fastify";
-import {
-  computeInvestmentAllocation,
-  computePeriodInvestmentProfit,
-  computePositionProfit,
-  isActiveInvestment,
-  isDisplayableInvestment,
-  summarizeInvestmentPortfolio,
-  translateInvestmentSubtype,
-  translateInvestmentStatus,
-  translateInvestmentType,
-} from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
-import { monthKeysToDateRange, getRecentMonthKeys } from "../services/finance/aggregates.js";
-
-function serializePosition(
-  inv: {
-    id: string;
-    name: string;
-    type: string | null;
-    subtype: string | null;
-    code: string | null;
-    status: string;
-    balance: number;
-    amount: number | null;
-    amountOriginal: number | null;
-    amountProfit: number | null;
-    annualRate: number | null;
-    lastTwelveMonthsRate: number | null;
-    dueDate: Date | null;
-    purchaseDate: Date | null;
-  },
-  person: { id: string; name: string },
-) {
-  return {
-    id: inv.id,
-    name: inv.name,
-    type: inv.type,
-    subtype: inv.subtype,
-    typeLabel: translateInvestmentType(inv.type),
-    subtypeLabel: translateInvestmentSubtype(inv.subtype),
-    code: inv.code,
-    status: inv.status,
-    statusLabel: translateInvestmentStatus(inv.status),
-    balance: inv.balance,
-    amount: inv.amount,
-    amountOriginal: inv.amountOriginal,
-    profit: computePositionProfit(inv),
-    annualRate: inv.annualRate,
-    lastTwelveMonthsRate: inv.lastTwelveMonthsRate,
-    dueDate: inv.dueDate?.toISOString() ?? null,
-    purchaseDate: inv.purchaseDate?.toISOString() ?? null,
-    personId: person.id,
-    personName: person.name,
-  };
-}
+import {
+  buildInvestmentAllocation,
+  buildInvestmentDashboardMetrics,
+  collectInvestmentPortfolio,
+} from "../services/finance/investmentPortfolio.js";
 
 function txTypeLabel(type: string | null): string {
   if (type === "BUY") return "Compra";
@@ -62,18 +13,6 @@ function txTypeLabel(type: string | null): string {
   if (type === "TAX") return "Imposto";
   if (type === "TRANSFER") return "Transferência";
   return type ?? "Movimentação";
-}
-
-function latestSyncAt(
-  connections: { lastSyncedAt: Date | null }[],
-): string | null {
-  let latest: Date | null = null;
-  for (const conn of connections) {
-    if (conn.lastSyncedAt && (!latest || conn.lastSyncedAt > latest)) {
-      latest = conn.lastSyncedAt;
-    }
-  }
-  return latest?.toISOString() ?? null;
 }
 
 export async function investmentRoutes(app: FastifyInstance): Promise<void> {
@@ -93,15 +32,30 @@ export async function investmentRoutes(app: FastifyInstance): Promise<void> {
       include: {
         connections: {
           include: {
-            investments: true,
+            accounts: { select: { id: true } },
+            investments: {
+              include: { transactions: true },
+            },
           },
         },
       },
     });
 
-    const positions: ReturnType<typeof serializePosition>[] = [];
-    const allConnections: { lastSyncedAt: Date | null }[] = [];
-    const allTransactions: {
+    const peopleForPortfolio = people.map((person) => ({
+      ...person,
+      connections: person.connections.map((conn) => ({
+        id: conn.id,
+        connectorName: conn.connectorName,
+        lastSyncedAt: conn.lastSyncedAt,
+        accountCount: conn.accounts.length,
+        investments: conn.investments,
+      })),
+    }));
+
+    const portfolio = collectInvestmentPortfolio(peopleForPortfolio);
+    const positionIds = portfolio.positions.map((p) => p.id);
+
+    const recentTransactions: {
       id: string;
       date: Date;
       type: string | null;
@@ -116,33 +70,9 @@ export async function investmentRoutes(app: FastifyInstance): Promise<void> {
       personName: string;
     }[] = [];
 
-    const perPersonMap = new Map<string, { personId: string; personName: string; totalBalance: number }>();
-    const allInvestmentIds: string[] = [];
-
-    for (const person of people) {
-      let personBalance = 0;
-      for (const conn of person.connections) {
-        allConnections.push(conn);
-        for (const inv of conn.investments) {
-          allInvestmentIds.push(inv.id);
-          if (!isDisplayableInvestment(inv)) continue;
-          positions.push(serializePosition(inv, person));
-          if (isActiveInvestment(inv.status, inv.balance)) {
-            personBalance += inv.balance;
-          }
-        }
-      }
-      perPersonMap.set(person.id, {
-        personId: person.id,
-        personName: person.name,
-        totalBalance: personBalance,
-      });
-    }
-
-    const investmentIds = [...new Set(allInvestmentIds)];
-    if (investmentIds.length > 0) {
+    if (positionIds.length > 0) {
       const txs = await prisma.investmentTransaction.findMany({
-        where: { investmentId: { in: investmentIds } },
+        where: { investmentId: { in: positionIds } },
         orderBy: { date: "desc" },
         take: 50,
         include: {
@@ -156,7 +86,7 @@ export async function investmentRoutes(app: FastifyInstance): Promise<void> {
 
       for (const tx of txs) {
         const person = tx.investment.connection.person;
-        allTransactions.push({
+        recentTransactions.push({
           id: tx.id,
           date: tx.date,
           type: tx.type,
@@ -173,31 +103,19 @@ export async function investmentRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
-    const portfolio = summarizeInvestmentPortfolio(
-      positions.map((p) => ({
-        status: p.status,
-        balance: p.balance,
-        amountOriginal: p.amountOriginal,
-        amountProfit: p.profit,
-        type: p.type,
-      })),
-    );
-
-    const allocation = computeInvestmentAllocation(
-      positions.map((p) => ({
-        status: p.status,
-        balance: p.balance,
-        amountOriginal: p.amountOriginal,
-        amountProfit: p.profit,
-        type: p.type,
-      })),
-    );
+    const summary = buildInvestmentDashboardMetrics(portfolio.positions, portfolio.profitTxs, 1);
+    const allocation = buildInvestmentAllocation(portfolio.positions);
 
     return reply.send({
-      summary: portfolio,
+      summary: {
+        totalBalance: summary.totalBalance,
+        unrealizedProfit: summary.unrealizedProfit,
+        positionCount: summary.positionCount,
+        stalePositionCount: summary.stalePositionCount,
+      },
       allocation,
-      positions: positions.sort((a, b) => b.balance - a.balance),
-      recentTransactions: allTransactions.map((tx) => ({
+      positions: portfolio.positions.sort((a, b) => b.balance - a.balance),
+      recentTransactions: recentTransactions.map((tx) => ({
         id: tx.id,
         date: tx.date.toISOString(),
         type: tx.type,
@@ -213,8 +131,9 @@ export async function investmentRoutes(app: FastifyInstance): Promise<void> {
         personName: tx.personName,
       })),
       currencyCode: "BRL",
-      lastSyncedAt: latestSyncAt(allConnections),
-      perPerson: [...perPersonMap.values()],
+      lastSyncedAt: portfolio.lastSyncedAt,
+      investmentSource: portfolio.investmentSource,
+      perPerson: portfolio.perPerson,
     });
   });
 }
@@ -234,6 +153,7 @@ export async function loadInvestmentData(
     include: {
       connections: {
         include: {
+          accounts: { select: { id: true } },
           investments: {
             include: { transactions: true },
           },
@@ -242,63 +162,26 @@ export async function loadInvestmentData(
     },
   });
 
-  const positions: {
-    status: string;
-    balance: number;
-    amountOriginal: number | null;
-    amountProfit: number | null;
-    type: string | null;
-  }[] = [];
+  const peopleForPortfolio = people.map((person) => ({
+    ...person,
+    connections: person.connections.map((conn) => ({
+      id: conn.id,
+      connectorName: conn.connectorName,
+      lastSyncedAt: conn.lastSyncedAt,
+      accountCount: conn.accounts.length,
+      investments: conn.investments,
+    })),
+  }));
 
-  const allConnections: { lastSyncedAt: Date | null }[] = [];
-  const allTxs: { date: Date; type: string | null; amount: number; netAmount: number | null }[] = [];
-  let investmentBalance = 0;
-
-  for (const person of people) {
-    for (const conn of person.connections) {
-      allConnections.push(conn);
-      for (const inv of conn.investments) {
-        for (const tx of inv.transactions) {
-          allTxs.push({
-            date: tx.date,
-            type: tx.type,
-            amount: tx.amount,
-            netAmount: tx.netAmount,
-          });
-        }
-
-        if (!isDisplayableInvestment(inv)) continue;
-
-        positions.push({
-          status: inv.status,
-          balance: inv.balance,
-          amountOriginal: inv.amountOriginal,
-          amountProfit: inv.amountProfit,
-          type: inv.type,
-        });
-        if (isActiveInvestment(inv.status, inv.balance)) {
-          investmentBalance += inv.balance;
-        }
-      }
-    }
-  }
-
-  const portfolio = summarizeInvestmentPortfolio(positions);
-  const currentMonthKeys = getRecentMonthKeys(months, 0);
-  const previousMonthKeys = getRecentMonthKeys(months, months);
-  const currentRange = monthKeysToDateRange(currentMonthKeys);
-  const previousRange = monthKeysToDateRange(previousMonthKeys);
-
-  const periodProfit = computePeriodInvestmentProfit(allTxs, currentRange);
-  const previousPeriodProfit = computePeriodInvestmentProfit(allTxs, previousRange);
+  const portfolio = collectInvestmentPortfolio(peopleForPortfolio);
+  const metrics = buildInvestmentDashboardMetrics(portfolio.positions, portfolio.profitTxs, months);
 
   return {
-    investmentBalance,
+    investmentBalance: portfolio.investmentBalance,
     investments: {
-      ...portfolio,
-      periodProfit,
-      previousPeriodProfit,
-      lastSyncedAt: latestSyncAt(allConnections),
+      ...metrics,
+      lastSyncedAt: portfolio.lastSyncedAt,
+      investmentSource: portfolio.investmentSource,
     },
   };
 }

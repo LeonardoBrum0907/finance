@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Target } from "lucide-react";
+import type { GoalSourceSelection } from "../components/goals/GoalSourceSelector";
 import type {
   CreateGoalInput,
   CreatePlanInput,
@@ -39,20 +40,50 @@ export function GoalsPage() {
 
   const createGoal = useMutation({
     mutationFn: (body: CreateGoalInput) => api.post<GoalsSummaryDTO>("/api/goals", body),
-    onSuccess: (data) => {
-      invalidateGoals(data);
-      setCreateGoalOpen(false);
-    },
   });
 
   const updateGoal = useMutation({
     mutationFn: ({ id, ...body }: UpdateGoalInput & { id: string }) =>
       api.put<GoalsSummaryDTO>(`/api/goals/${id}`, body),
-    onSuccess: (data) => {
-      invalidateGoals(data);
-      setEditingGoal(null);
-    },
   });
+
+  const handleCreateGoal = async (
+    payload: CreateGoalInput & { sources?: GoalSourceSelection[] },
+  ) => {
+    const summary = await createGoal.mutateAsync(payload);
+    if (payload.sources && payload.sources.length > 0) {
+      const created = summary.goals.find((g) => g.name === payload.name);
+      if (created) {
+        const linked = await api.put<GoalsSummaryDTO>(`/api/goals/${created.id}/sources`, {
+          sources: payload.sources,
+        });
+        invalidateGoals(linked);
+        setCreateGoalOpen(false);
+        return;
+      }
+    }
+    invalidateGoals(summary);
+    setCreateGoalOpen(false);
+  };
+
+  const handleUpdateGoal = async (
+    payload: UpdateGoalInput & { id: string; sources?: GoalSourceSelection[] | null },
+  ) => {
+    const { id, sources, ...body } = payload;
+    await updateGoal.mutateAsync({ id, ...body });
+
+    if (sources === null) {
+      const cleared = await api.delete<GoalsSummaryDTO>(`/api/goals/${id}/sources`);
+      invalidateGoals(cleared);
+    } else if (sources && sources.length > 0) {
+      const linked = await api.put<GoalsSummaryDTO>(`/api/goals/${id}/sources`, { sources });
+      invalidateGoals(linked);
+    } else {
+      const summary = await api.get<GoalsSummaryDTO>("/api/goals");
+      invalidateGoals(summary);
+    }
+    setEditingGoal(null);
+  };
 
   const deleteGoal = useMutation({
     mutationFn: (id: string) => api.delete<GoalsSummaryDTO>(`/api/goals/${id}`),
@@ -95,7 +126,8 @@ export function GoalsPage() {
             Objetivos e Planos
           </h1>
           <p className="mt-1 text-sm text-slate-500">
-            Acompanhe suas metas financeiras e veja como a sobra mensal impacta cada objetivo.
+            Acompanhe suas metas financeiras e veja como a{" "}
+            {data?.surplusLabel ?? "sobra média"} impacta cada objetivo.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -134,6 +166,7 @@ export function GoalsPage() {
             currencyCode={data?.currencyCode ?? "BRL"}
             monthlySurplus={data?.monthlySurplus ?? 0}
             monthlyContribution={data?.monthlyContribution ?? data?.monthlySurplus ?? 0}
+            surplusLabel={data?.surplusLabel}
             totalCurrent={data?.totalCurrent ?? 0}
             totalTarget={data?.totalTarget ?? 0}
             projectedCompletionMonth={data?.projectedCompletionMonth ?? null}
@@ -199,8 +232,10 @@ export function GoalsPage() {
       <CreateGoalModal
         open={createGoalOpen}
         saving={createGoal.isPending}
+        availableSources={data?.availableSources ?? []}
+        currencyCode={data?.currencyCode ?? "BRL"}
         onClose={() => setCreateGoalOpen(false)}
-        onSave={(payload) => createGoal.mutate(payload)}
+        onSave={(payload) => handleCreateGoal(payload)}
       />
 
       <CreatePlanModal
@@ -216,8 +251,10 @@ export function GoalsPage() {
         goal={editingGoal}
         saving={updateGoal.isPending}
         deleting={deleteGoal.isPending}
+        availableSources={data?.availableSources ?? []}
+        currencyCode={data?.currencyCode ?? "BRL"}
         onClose={() => setEditingGoal(null)}
-        onSave={(payload) => updateGoal.mutate(payload)}
+        onSave={(payload) => handleUpdateGoal(payload)}
         onDelete={(id) => deleteGoal.mutate(id)}
       />
 

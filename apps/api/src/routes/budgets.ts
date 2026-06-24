@@ -2,11 +2,14 @@ import type { FastifyInstance } from "fastify";
 import {
   createBudgetSchema,
   DASHBOARD_CATEGORY_GROUPS,
+  formatPaydayCycleShortLabel,
+  getPaydayCycleRange,
   translateCategory,
   updateBudgetSchema,
   type BudgetItem,
   type BudgetStatus,
   type DashboardCategoryGroup,
+  type PeriodMode,
 } from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
@@ -16,10 +19,12 @@ import {
   monthKeysToDateRange,
   toLocalMonthKey,
 } from "../services/finance/aggregates.js";
+import { loadUserSettings } from "../services/userSettings.js";
 
-function getBudgetStatus(ratio: number): BudgetStatus {
-  if (ratio > 90) return "critical";
-  if (ratio > 75) return "warning";
+function getBudgetStatus(ratio: number, timeRatio: number): BudgetStatus {
+  const pace = timeRatio > 0 ? ratio / timeRatio : ratio;
+  if (pace > 90) return "critical";
+  if (pace > 75) return "warning";
   return "safe";
 }
 
@@ -32,12 +37,11 @@ function isDashboardCategoryGroup(value: string): value is DashboardCategoryGrou
   return (DASHBOARD_CATEGORY_GROUPS as readonly string[]).includes(value);
 }
 
-async function loadMonthTransactions(
+async function loadPeriodTransactions(
   userId: string,
+  range: { from?: string; to?: string },
   personId?: string,
 ): Promise<FinancialTransaction[]> {
-  const currentMonth = toLocalMonthKey(new Date());
-  const range = monthKeysToDateRange([currentMonth]);
   const dateFrom = range.from ? new Date(`${range.from}T00:00:00.000Z`) : new Date(0);
   const dateTo = range.to ? new Date(`${range.to}T23:59:59.999Z`) : new Date();
 
@@ -98,15 +102,52 @@ type BudgetGroupWithMembers = {
   members: { categoryGroup: string }[];
 };
 
+function resolveBudgetPeriod(paydayDay: number | null): {
+  periodMode: PeriodMode;
+  range: { from: string; to: string };
+  periodLabel: string;
+  cycleDayIndex: number | null;
+  cycleTotalDays: number | null;
+  month: string;
+} {
+  if (paydayDay !== null) {
+    const cycleMeta = getPaydayCycleRange(paydayDay);
+    const refKey = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+    const effectiveTo = refKey < cycleMeta.to ? refKey : cycleMeta.to;
+    return {
+      periodMode: "payday",
+      range: { from: cycleMeta.from, to: effectiveTo },
+      periodLabel: formatPaydayCycleShortLabel(cycleMeta.cycleKey, paydayDay),
+      cycleDayIndex: cycleMeta.dayIndex,
+      cycleTotalDays: cycleMeta.totalDays,
+      month: cycleMeta.cycleKey,
+    };
+  }
+
+  const currentMonth = toLocalMonthKey(new Date());
+  const range = monthKeysToDateRange([currentMonth]);
+  return {
+    periodMode: "calendar",
+    range: { from: range.from!, to: range.to! },
+    periodLabel: currentMonth,
+    cycleDayIndex: null,
+    cycleTotalDays: null,
+    month: currentMonth,
+  };
+}
+
 function buildBudgetsSummary(
   transactions: FinancialTransaction[],
   groups: BudgetGroupWithMembers[],
   hasAccounts: boolean,
+  periodInfo: ReturnType<typeof resolveBudgetPeriod>,
 ) {
-  const currentMonth = toLocalMonthKey(new Date());
-  const range = monthKeysToDateRange([currentMonth]);
-  const spending = getSpendingByCategory(transactions, range);
+  const spending = getSpendingByCategory(transactions, periodInfo.range);
   const spentByGroup = new Map(spending.map((item) => [item.category, item.total]));
+  const timeRatio =
+    periodInfo.cycleDayIndex !== null && periodInfo.cycleTotalDays
+      ? (periodInfo.cycleDayIndex / periodInfo.cycleTotalDays) * 100
+      : 100;
 
   const assignedCategories = new Set<string>();
   for (const group of groups) {
@@ -128,7 +169,7 @@ function buildBudgetsSummary(
       spent,
       limit: group.limit,
       ratio,
-      status: getBudgetStatus(ratio),
+      status: getBudgetStatus(ratio, timeRatio),
     };
   });
 
@@ -142,7 +183,7 @@ function buildBudgetsSummary(
   const potentialSavings = Math.max(0, totalLimit - totalSpent);
 
   return {
-    month: currentMonth,
+    month: periodInfo.month,
     currencyCode: "BRL",
     totalSpent,
     totalLimit,
@@ -151,6 +192,12 @@ function buildBudgetsSummary(
     budgets,
     availableCategories,
     hasAccounts,
+    periodMode: periodInfo.periodMode,
+    periodFrom: periodInfo.range.from,
+    periodTo: periodInfo.range.to,
+    periodLabel: periodInfo.periodLabel,
+    cycleDayIndex: periodInfo.cycleDayIndex,
+    cycleTotalDays: periodInfo.cycleTotalDays,
   };
 }
 
@@ -176,13 +223,15 @@ async function countUserAccounts(userId: string, personId?: string) {
 }
 
 async function fetchBudgetsSummary(userId: string, personId?: string) {
+  const settings = await loadUserSettings(userId);
+  const periodInfo = resolveBudgetPeriod(settings.paydayDay);
   const [transactions, groups, accountCount] = await Promise.all([
-    loadMonthTransactions(userId, personId),
+    loadPeriodTransactions(userId, periodInfo.range, personId),
     loadUserBudgetGroups(userId),
     countUserAccounts(userId, personId),
   ]);
 
-  return buildBudgetsSummary(transactions, groups, accountCount > 0);
+  return buildBudgetsSummary(transactions, groups, accountCount > 0, periodInfo);
 }
 
 function validateCategories(categories: string[]): categories is DashboardCategoryGroup[] {

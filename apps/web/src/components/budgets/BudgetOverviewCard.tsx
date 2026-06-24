@@ -5,7 +5,15 @@ import { formatCurrency } from "../../lib/format";
 interface Props {
   data: Pick<
     BudgetsSummary,
-    "totalSpent" | "totalLimit" | "overallRatio" | "potentialSavings" | "currencyCode"
+    | "totalSpent"
+    | "totalLimit"
+    | "overallRatio"
+    | "potentialSavings"
+    | "currencyCode"
+    | "periodMode"
+    | "periodLabel"
+    | "cycleDayIndex"
+    | "cycleTotalDays"
   >;
 }
 
@@ -17,13 +25,24 @@ function progressColor(ratio: number): string {
 
 export function BudgetOverviewCard({ data }: Props) {
   const barWidth = data.totalLimit > 0 ? `${Math.min(100, data.overallRatio)}%` : "0%";
+  const periodTitle =
+    data.periodMode === "payday" ? "Consumo do Ciclo Atual" : "Consumo Mensal Agregado";
+  const cycleHint =
+    data.periodMode === "payday" &&
+    data.cycleDayIndex !== null &&
+    data.cycleTotalDays !== null
+      ? ` · Dia ${data.cycleDayIndex} de ${data.cycleTotalDays} (${data.periodLabel})`
+      : "";
 
   return (
     <div className="grid grid-cols-1 items-center gap-8 rounded-3xl border border-slate-200/60 bg-white p-6 shadow-xs md:grid-cols-3">
       <div className="flex flex-col gap-4 md:col-span-2">
         <div className="mb-1 flex items-baseline justify-between">
           <span className="font-sans text-sm font-semibold uppercase tracking-wider text-slate-500">
-            Consumo Mensal Agregado
+            {periodTitle}
+            {cycleHint && (
+              <span className="ml-1 normal-case font-normal text-slate-400">{cycleHint}</span>
+            )}
           </span>
           <span className="text-base font-bold text-slate-800">
             {data.overallRatio.toFixed(1)}% do teto global

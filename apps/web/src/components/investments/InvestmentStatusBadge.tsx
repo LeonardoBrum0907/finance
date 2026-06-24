@@ -31,9 +31,25 @@ export function InvestmentStatusBadge({ status, label }: Props) {
 
 export function PositionStatusCell({ position }: { position: InvestmentPositionDTO }) {
   return (
-    <InvestmentStatusBadge
-      status={position.status}
-      label={position.statusLabel}
-    />
+    <div className="flex flex-col items-start gap-1">
+      <InvestmentStatusBadge
+        status={position.status}
+        label={position.statusLabel}
+      />
+      {position.isStale && (
+        <span
+          className="inline-flex rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+          title={
+            position.referenceDate
+              ? `Posição reportada em ${position.referenceDate}${
+                  position.staleDays != null ? ` (${position.staleDays} dias atrás)` : ""
+                }`
+              : "Posição possivelmente desatualizada"
+          }
+        >
+          Desatualizada
+        </span>
+      )}
+    </div>
   );
 }

@@ -1,10 +1,18 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import type { CategoryChartSelection, DashboardMonths, DashboardSummary, PersonDTO } from "@finance/shared";
+import type {
+  CategoryChartSelection,
+  DashboardMonths,
+  DashboardSummary,
+  PeriodMode,
+  PersonDTO,
+  UserSettingsDTO,
+} from "@finance/shared";
 import { isCreditAccount } from "@finance/shared";
 import { api } from "../lib/api";
 import { CategoryChart } from "../components/dashboard/CategoryChart";
 import { CreditCardList } from "../components/dashboard/CreditCardList";
+import { CycleProgressCard } from "../components/dashboard/CycleProgressCard";
 import { DashboardSkeleton } from "../components/dashboard/DashboardSkeleton";
 import { GrowthChart } from "../components/dashboard/GrowthChart";
 import { InsightsPanel } from "../components/dashboard/InsightsPanel";
@@ -17,8 +25,23 @@ import { InvestmentSnapshot } from "../components/dashboard/InvestmentSnapshot";
 export function DashboardPage() {
   const [months, setMonths] = useState<DashboardMonths>(1);
   const [personId, setPersonId] = useState<PersonFilter>("all");
+  const [periodMode, setPeriodMode] = useState<PeriodMode>("calendar");
   const [categorySelection, setCategorySelection] = useState<CategoryChartSelection | null>(null);
   const transactionsRef = useRef<HTMLElement>(null);
+
+  const settings = useQuery({
+    queryKey: ["settings"],
+    queryFn: () => api.get<UserSettingsDTO>("/api/settings"),
+  });
+
+  useEffect(() => {
+    if (settings.data?.paydayConfigured) {
+      setPeriodMode(settings.data.defaultPeriodMode);
+    }
+  }, [settings.data?.defaultPeriodMode, settings.data?.paydayConfigured]);
+
+  const effectivePeriodMode =
+    periodMode === "payday" && settings.data?.paydayConfigured ? "payday" : "calendar";
 
   const handleCategorySelect = useCallback((selection: CategoryChartSelection) => {
     setCategorySelection(selection);
@@ -36,18 +59,20 @@ export function DashboardPage() {
     queryFn: () => api.get<PersonDTO[]>("/api/people"),
   });
 
-  const dashboardUrl =
-    personId === "all"
-      ? `/api/dashboard?months=${months}`
-      : `/api/dashboard?months=${months}&personId=${personId}`;
+  const dashboardParams = new URLSearchParams({ months: String(months) });
+  if (personId !== "all") dashboardParams.set("personId", personId);
+  if (effectivePeriodMode === "payday") dashboardParams.set("periodMode", "payday");
 
   const dashboard = useQuery({
-    queryKey: ["dashboard", months, personId],
-    queryFn: () => api.get<DashboardSummary>(dashboardUrl),
+    queryKey: ["dashboard", months, personId, effectivePeriodMode],
+    queryFn: () => api.get<DashboardSummary>(`/api/dashboard?${dashboardParams}`),
+    enabled: settings.isSuccess,
   });
 
   const data = dashboard.data;
   const hasCreditCards = data?.accounts.some((acc) => isCreditAccount(acc.type)) ?? false;
+  const showCycleCard =
+    data?.currentCycle && data.paydayDay !== null && effectivePeriodMode === "payday";
 
   return (
     <div className="space-y-8">
@@ -67,12 +92,28 @@ export function DashboardPage() {
               people={people.data ?? []}
               onChange={setPersonId}
             />
-            <PeriodSelector value={months} onChange={setMonths} />
+            <PeriodSelector
+              value={months}
+              onChange={setMonths}
+              periodMode={effectivePeriodMode}
+              onPeriodModeChange={setPeriodMode}
+              paydayConfigured={settings.data?.paydayConfigured ?? false}
+            />
           </div>
         )}
       </div>
 
-      {dashboard.isLoading ? (
+      {!settings.data?.paydayConfigured && settings.isSuccess && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Configure o dia que você recebe em{" "}
+          <a href="/configuracoes" className="font-medium underline">
+            Configurações
+          </a>{" "}
+          para usar o modo &quot;Meu ciclo&quot;.
+        </div>
+      )}
+
+      {dashboard.isLoading || settings.isLoading ? (
         <DashboardSkeleton />
       ) : dashboard.isError ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
@@ -89,11 +130,20 @@ export function DashboardPage() {
         </div>
       ) : (
         <>
+          {showCycleCard && data.paydayDay !== null && (
+            <CycleProgressCard
+              cycle={data.currentCycle!}
+              currencyCode={data.currencyCode}
+              paydayDay={data.paydayDay}
+            />
+          )}
+
           <StatCards
             netWorth={data.netWorth}
             currencyCode={data.currencyCode}
             period={data.period}
             previousPeriod={data.previousPeriod}
+            periodMode={effectivePeriodMode}
           />
 
           <InvestmentSnapshot

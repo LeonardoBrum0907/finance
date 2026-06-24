@@ -1,5 +1,14 @@
 import type { FinancialConnection, FinancialTransaction } from "./types.js";
 import {
+  classifyIncome,
+  formatPaydayCycleShortLabel,
+  getPaydayCycleStart,
+  getPaydayCycleRange,
+  getRecentPaydayCycles,
+  paydayCyclesToDateRange,
+  type PeriodMode,
+} from "@finance/shared";
+import {
   countsTowardCashFlow,
   groupCategoryForDashboard,
   isTransactionOutflow,
@@ -55,6 +64,7 @@ export interface MonthlySummary {
   income: number;
   expenses: number;
   net: number;
+  label?: string;
 }
 
 export function getMonthlySummary(
@@ -231,10 +241,21 @@ export function buildDashboardInsights(params: {
   previousCategories: CategorySpending[];
   topExpense?: FinancialTransaction;
   currencyCode: string;
+  periodMode?: PeriodMode;
 }): string[] {
   const insights: string[] = [];
-  const { period, previousPeriod, categories, previousCategories, topExpense, currencyCode } =
-    params;
+  const {
+    period,
+    previousPeriod,
+    categories,
+    previousCategories,
+    topExpense,
+    currencyCode,
+    periodMode = "calendar",
+  } = params;
+
+  const periodLabel = periodMode === "payday" ? "ciclo" : "período";
+  const previousLabel = periodMode === "payday" ? "ciclo anterior" : "período anterior";
 
   if (previousPeriod.expenses > 0) {
     const change =
@@ -243,12 +264,12 @@ export function buildDashboardInsights(params: {
     if (Math.abs(change) >= 1) {
       insights.push(
         change > 0
-          ? `Você gastou ${abs}% a mais que no período anterior.`
-          : `Você gastou ${abs}% a menos que no período anterior.`,
+          ? `Você gastou ${abs}% a mais que no ${previousLabel}.`
+          : `Você gastou ${abs}% a menos que no ${previousLabel}.`,
       );
     }
   } else if (period.expenses > 0 && previousPeriod.expenses === 0) {
-    insights.push("Este é o primeiro período com despesas registradas para comparação.");
+    insights.push(`Este é o primeiro ${periodLabel} com despesas registradas para comparação.`);
   }
 
   if (topExpense) {
@@ -275,15 +296,15 @@ export function buildDashboardInsights(params: {
   }
   if (maxGrowth.growth >= 10) {
     insights.push(
-      `${maxGrowth.category} cresceu ${maxGrowth.growth.toFixed(0)}% em relação ao período anterior.`,
+      `${maxGrowth.category} cresceu ${maxGrowth.growth.toFixed(0)}% em relação ao ${previousLabel}.`,
     );
   }
 
   if (period.income > 0 || period.expenses > 0) {
     insights.push(
       period.net >= 0
-        ? `Resultado positivo de ${formatCurrency(period.net, currencyCode)} no período.`
-        : `Déficit de ${formatCurrency(Math.abs(period.net), currencyCode)} no período.`,
+        ? `Resultado positivo de ${formatCurrency(period.net, currencyCode)} no ${periodLabel}.`
+        : `Déficit de ${formatCurrency(Math.abs(period.net), currencyCode)} no ${periodLabel}.`,
     );
   }
 
@@ -298,4 +319,109 @@ export function parseDashboardMonths(value: unknown): DashboardMonths {
   return (DASHBOARD_MONTH_OPTIONS as readonly number[]).includes(n)
     ? (n as DashboardMonths)
     : 1;
+}
+
+export interface PeriodRanges {
+  currentKeys: string[];
+  previousKeys: string[];
+  currentRange: DateRange;
+  previousRange: DateRange;
+  periodMode: PeriodMode;
+  currentLabel?: string;
+}
+
+export function resolvePeriodRanges(
+  months: DashboardMonths,
+  periodMode: PeriodMode,
+  paydayDay: number | null,
+): PeriodRanges {
+  if (periodMode === "payday" && paydayDay !== null) {
+    const currentKeys = getRecentPaydayCycles(months, paydayDay, 0);
+    const previousKeys = getRecentPaydayCycles(months, paydayDay, months);
+    const currentRange = paydayCyclesToDateRange(currentKeys, paydayDay);
+    const previousRange = paydayCyclesToDateRange(previousKeys, paydayDay);
+    const lastKey = currentKeys[currentKeys.length - 1];
+    const currentLabel = lastKey
+      ? formatPaydayCycleShortLabel(lastKey, paydayDay)
+      : undefined;
+    return {
+      currentKeys,
+      previousKeys,
+      currentRange,
+      previousRange,
+      periodMode,
+      currentLabel,
+    };
+  }
+
+  const currentKeys = getRecentMonthKeys(months, 0);
+  const previousKeys = getRecentMonthKeys(months, months);
+  return {
+    currentKeys,
+    previousKeys,
+    currentRange: monthKeysToDateRange(currentKeys),
+    previousRange: monthKeysToDateRange(previousKeys),
+    periodMode: "calendar",
+  };
+}
+
+export function getCycleSummary(
+  txs: FinancialTransaction[],
+  cycleEndKey: string,
+  paydayDay: number,
+): MonthlySummary {
+  const from = getPaydayCycleStart(cycleEndKey, paydayDay);
+  const range = { from, to: cycleEndKey };
+  const totals = summarizeTransactions(txs, range);
+  return {
+    month: cycleEndKey,
+    label: formatPaydayCycleShortLabel(cycleEndKey, paydayDay),
+    ...totals,
+  };
+}
+
+export function getPaydayCycleSeries(
+  txs: FinancialTransaction[],
+  cycleEndKeys: string[],
+  paydayDay: number,
+): MonthlySummary[] {
+  return cycleEndKeys.map((end) => getCycleSummary(txs, end, paydayDay));
+}
+
+export function buildCurrentCycleSummary(
+  txs: FinancialTransaction[],
+  paydayDay: number,
+): {
+  cycleKey: string;
+  from: string;
+  to: string;
+  dayIndex: number;
+  totalDays: number;
+  daysRemaining: number;
+  isComplete: boolean;
+  income: number;
+  expenses: number;
+  net: number;
+  salaryIncome: number;
+  extraIncome: number;
+} {
+  const meta = getPaydayCycleRange(paydayDay);
+  const range = { from: meta.from, to: meta.to };
+  const totals = summarizeTransactions(txs, range);
+  const incomeBreakdown = classifyIncome(txs, range, paydayDay);
+
+  return {
+    cycleKey: meta.cycleKey,
+    from: meta.from,
+    to: meta.to,
+    dayIndex: meta.dayIndex,
+    totalDays: meta.totalDays,
+    daysRemaining: meta.daysRemaining,
+    isComplete: meta.isComplete,
+    income: totals.income,
+    expenses: totals.expenses,
+    net: totals.net,
+    salaryIncome: incomeBreakdown.salary,
+    extraIncome: incomeBreakdown.extra,
+  };
 }

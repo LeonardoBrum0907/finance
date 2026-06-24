@@ -8,12 +8,14 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  name               String
+  email              String   @unique
+  passwordHash       String
+  paydayDay          Int?
+  defaultPeriodMode  String   @default("calendar")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   people              Person[]
   chatMessages        ChatMessage[]
@@ -78,6 +80,7 @@ model Account {
 
   connection   BankConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   transactions Transaction[]
+  goalSources  GoalSource[]
 
   @@index([connectionId])
 }
@@ -123,6 +126,8 @@ model Investment {
   currencyCode        String    @default("BRL")
   purchaseDate        DateTime?
   dueDate             DateTime?
+  /** Data em que a instituição reportou a posição (campo date da Pluggy). */
+  positionDate        DateTime?
   owner               String?
   connectionId        String
   createdAt           DateTime  @default(now())
@@ -130,6 +135,7 @@ model Investment {
 
   connection   BankConnection          @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   transactions InvestmentTransaction[]
+  goalSources  GoalSource[]
 
   @@index([connectionId])
   @@index([status])
@@ -215,25 +221,49 @@ model BudgetGroupMember {
 }
 
 model Goal {
-  id              String    @id @default(cuid())
-  userId          String
-  name            String
-  description     String?
-  type            String
-  icon            String?
-  targetAmount    Float
-  currentAmount   Float     @default(0)
-  targetDate      DateTime?
-  status          String    @default("active")
-  linkedAccountId String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  userId            String
+  name              String
+  description       String?
+  type              String
+  icon              String?
+  targetAmount      Float
+  currentAmount     Float     @default(0)
+  targetDate        DateTime?
+  status            String    @default("active")
+  trackingMode      String    @default("manual")
+  lastSyncedBalance Float?
+  linkedAccountId   String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   contributions GoalContribution[]
   planGoals     PlanGoal[]
+  sources       GoalSource[]
 
   @@index([userId])
+}
+
+model GoalSource {
+  id                String   @id @default(cuid())
+  goalId            String
+  sourceType        String
+  accountId         String?
+  investmentId      String?
+  allocationPercent Float
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  goal       Goal        @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  account    Account?    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  investment Investment? @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+
+  @@unique([goalId, accountId])
+  @@unique([goalId, investmentId])
+  @@index([goalId])
+  @@index([accountId])
+  @@index([investmentId])
 }
 
 model GoalContribution {

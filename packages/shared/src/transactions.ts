@@ -28,11 +28,18 @@ export function toSignedDisplayAmount(
   return isCreditAccount(accountType) ? -amount : amount;
 }
 
+/** Conta de investimento agregada no Open Finance (saldo já entra na carteira de posições). */
+export function isInvestmentAccount(accountType: string | null | undefined): boolean {
+  if (!accountType) return false;
+  return accountType.toUpperCase() === "INVESTMENT";
+}
+
 /** Contribuição da conta para o patrimônio líquido (contas somam, faturas de cartão subtraem). */
 export function accountNetWorthContribution(
   balance: number,
   accountType: string | null | undefined,
 ): number {
+  if (isInvestmentAccount(accountType)) return 0;
   if (isCreditAccount(accountType)) return -Math.abs(balance);
   return balance;
 }

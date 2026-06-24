@@ -154,6 +154,53 @@ export interface InvestmentAllocationPoint {
   percent: number;
 }
 
+/** Dias sem atualização da posição na instituição após a última sync. */
+export const INVESTMENT_POSITION_STALE_DAYS = 30;
+
+function toDateKey(date: Date | string): string {
+  return typeof date === "string" ? date.slice(0, 10) : date.toISOString().slice(0, 10);
+}
+
+/** Data de referência da posição: snapshot da instituição ou última movimentação. */
+export function resolveInvestmentPositionReferenceDate(
+  positionDate: Date | string | null | undefined,
+  lastTransactionDate: Date | string | null | undefined,
+): string | null {
+  const keys: string[] = [];
+  if (positionDate) keys.push(toDateKey(positionDate));
+  if (lastTransactionDate) keys.push(toDateKey(lastTransactionDate));
+  if (keys.length === 0) return null;
+  return keys.sort().at(-1) ?? null;
+}
+
+export function getInvestmentPositionStaleDays(
+  referenceDate: Date | string | null | undefined,
+  lastSyncedAt: Date | string | null | undefined,
+): number | null {
+  if (!referenceDate || !lastSyncedAt) return null;
+  const ref = new Date(toDateKey(referenceDate));
+  const sync = new Date(
+    typeof lastSyncedAt === "string" ? lastSyncedAt : lastSyncedAt.toISOString(),
+  );
+  if (Number.isNaN(ref.getTime()) || Number.isNaN(sync.getTime())) return null;
+  const diffDays = Math.floor((sync.getTime() - ref.getTime()) / (1000 * 60 * 60 * 24));
+  return diffDays >= 0 ? diffDays : null;
+}
+
+export function isStaleInvestmentPosition(
+  positionDate: Date | string | null | undefined,
+  lastSyncedAt: Date | string | null | undefined,
+  lastTransactionDate?: Date | string | null | undefined,
+  staleAfterDays = INVESTMENT_POSITION_STALE_DAYS,
+): boolean {
+  const referenceDate = resolveInvestmentPositionReferenceDate(
+    positionDate,
+    lastTransactionDate,
+  );
+  const staleDays = getInvestmentPositionStaleDays(referenceDate, lastSyncedAt);
+  return staleDays != null && staleDays > staleAfterDays;
+}
+
 export function computeInvestmentAllocation(
   positions: (InvestmentPositionLike & { type: string | null })[],
 ): InvestmentAllocationPoint[] {

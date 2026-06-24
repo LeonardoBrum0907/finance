@@ -224,7 +224,7 @@ export function RecentTransactions({
               </div>
             )}
           </div>
-          <PeriodSelector value={periodMonths} onChange={setPeriodMonths} />
+          <PeriodSelector value={periodMonths} onChange={setPeriodMonths} showModeToggle={false} />
         </div>
 
         <div className="flex flex-wrap gap-2.5">

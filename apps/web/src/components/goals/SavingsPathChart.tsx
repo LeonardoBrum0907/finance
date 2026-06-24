@@ -12,6 +12,7 @@ interface Props {
   currencyCode: string;
   monthlySurplus: number;
   monthlyContribution: number;
+  surplusLabel?: string;
   totalCurrent: number;
   totalTarget: number;
   projectedCompletionMonth: string | null;
@@ -26,6 +27,7 @@ export function SavingsPathChart({
   currencyCode,
   monthlySurplus,
   monthlyContribution,
+  surplusLabel = "sobra média",
   totalCurrent,
   totalTarget,
   projectedCompletionMonth,
@@ -134,14 +136,14 @@ export function SavingsPathChart({
           </div>
           <div className="rounded-xl border border-emerald-200/60 bg-emerald-50/50 px-3 py-2 text-right">
             <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">
-              Aporte/mês
+              Aporte estimado
             </p>
             <p className="font-mono text-sm font-bold text-emerald-700">
               {formatCurrency(monthlyContribution, currencyCode)}
             </p>
             {monthlyContribution !== monthlySurplus && (
               <p className="text-[10px] text-emerald-600">
-                Sobra média: {formatCurrency(monthlySurplus, currencyCode)}
+                {surplusLabel}: {formatCurrency(monthlySurplus, currencyCode)}
               </p>
             )}
           </div>

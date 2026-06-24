@@ -25,6 +25,19 @@ export function formatMonthLabel(monthKey: string): string {
   return date.toLocaleDateString("pt-BR", { month: "short", year: "2-digit" });
 }
 
+export function formatPaydayCycleLabel(fromKey: string, toKey: string): string {
+  const formatPart = (key: string) => {
+    const [year, month, day] = key.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString("pt-BR", { day: "numeric", month: "short" });
+  };
+  return `${formatPart(fromKey)} – ${formatPart(toKey)}`;
+}
+
+export function formatSeriesLabel(point: { month: string; label?: string }): string {
+  return point.label ?? formatMonthLabel(point.month);
+}
+
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("pt-BR", {
     day: "2-digit",

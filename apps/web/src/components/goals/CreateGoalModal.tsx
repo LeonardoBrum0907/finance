@@ -1,10 +1,18 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { X } from "lucide-react";
-import type { GoalType } from "@finance/shared";
+import type { AvailableGoalSourceDTO, GoalType } from "@finance/shared";
+import {
+  GoalSourceSelector,
+  previewAllocatedTotal,
+  type GoalSourceSelection,
+} from "./GoalSourceSelector";
+import { formatCurrency } from "../../lib/format";
 
 interface Props {
   open: boolean;
   saving: boolean;
+  availableSources: AvailableGoalSourceDTO[];
+  currencyCode?: string;
   onClose: () => void;
   onSave: (data: {
     name: string;
@@ -12,6 +20,7 @@ interface Props {
     type: GoalType;
     targetAmount: number;
     targetDate?: string;
+    sources?: GoalSourceSelection[];
   }) => void;
 }
 
@@ -23,12 +32,25 @@ const GOAL_TYPES: { value: GoalType; label: string }[] = [
   { value: "custom", label: "Personalizado" },
 ];
 
-export function CreateGoalModal({ open, saving, onClose, onSave }: Props) {
+export function CreateGoalModal({
+  open,
+  saving,
+  availableSources,
+  currencyCode = "BRL",
+  onClose,
+  onSave,
+}: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState<GoalType>("savings");
   const [targetAmount, setTargetAmount] = useState("");
   const [targetDate, setTargetDate] = useState("");
+  const [useAuto, setUseAuto] = useState(true);
+  const [sources, setSources] = useState<GoalSourceSelection[]>([]);
+
+  const handleSourcesChange = useCallback((next: GoalSourceSelection[]) => {
+    setSources(next);
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -37,21 +59,31 @@ export function CreateGoalModal({ open, saving, onClose, onSave }: Props) {
       setType("savings");
       setTargetAmount("");
       setTargetDate("");
+      setSources([]);
+      const hasSources = availableSources.some(
+        (s) => !s.isCredit && s.availablePercent > 0,
+      );
+      setUseAuto(hasSources);
     }
-  }, [open]);
+  }, [open, availableSources]);
 
   if (!open) return null;
+
+  const previewTotal = previewAllocatedTotal(sources, availableSources);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const amount = parseFloat(targetAmount);
     if (!name.trim() || isNaN(amount) || amount <= 0) return;
+    if (useAuto && sources.length === 0) return;
+
     onSave({
       name: name.trim(),
       description: description.trim() || undefined,
       type,
       targetAmount: amount,
       targetDate: targetDate || undefined,
+      sources: useAuto ? sources : undefined,
     });
   };
 
@@ -69,7 +101,7 @@ export function CreateGoalModal({ open, saving, onClose, onSave }: Props) {
 
         <h3 className="mb-1 font-display text-lg font-bold text-slate-900">Novo Objetivo</h3>
         <p className="mb-6 font-sans text-xs text-slate-400">
-          Defina uma meta financeira com valor alvo e prazo opcional.
+          Defina a meta e, se quiser, vincule contas ou investimentos para acompanhar automaticamente.
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -97,7 +129,7 @@ export function CreateGoalModal({ open, saving, onClose, onSave }: Props) {
               id="goal-type"
               value={type}
               onChange={(e) => setType(e.target.value as GoalType)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-emerald-400 focus:border-emerald-400 focus:bg-white"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800"
             >
               {GOAL_TYPES.map((item) => (
                 <option key={item.value} value={item.value}>
@@ -118,7 +150,7 @@ export function CreateGoalModal({ open, saving, onClose, onSave }: Props) {
               min="0.01"
               value={targetAmount}
               onChange={(e) => setTargetAmount(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-emerald-400 focus:border-emerald-400 focus:bg-white"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800"
               required
             />
           </div>
@@ -132,7 +164,7 @@ export function CreateGoalModal({ open, saving, onClose, onSave }: Props) {
               type="date"
               value={targetDate}
               onChange={(e) => setTargetDate(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-emerald-400 focus:border-emerald-400 focus:bg-white"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800"
             />
           </div>
 
@@ -145,16 +177,42 @@ export function CreateGoalModal({ open, saving, onClose, onSave }: Props) {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-emerald-400 focus:border-emerald-400 focus:bg-white"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800"
             />
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-3">
+            <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-700">
+              <input
+                type="checkbox"
+                checked={useAuto}
+                onChange={(e) => setUseAuto(e.target.checked)}
+              />
+              Acompanhar automaticamente por saldo vinculado
+            </label>
+            {useAuto && (
+              <div className="mt-3">
+                <GoalSourceSelector
+                  availableSources={availableSources}
+                  currencyCode={currencyCode}
+                  onChange={handleSourcesChange}
+                />
+                {sources.length > 0 && (
+                  <p className="mt-2 text-xs text-emerald-700">
+                    Progresso inicial estimado:{" "}
+                    <strong>{formatCurrency(previewTotal, currencyCode)}</strong>
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <button
             type="submit"
-            disabled={saving}
-            className="w-full cursor-pointer rounded-xl bg-slate-900 py-3 text-xs font-bold text-white shadow-md transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={saving || (useAuto && sources.length === 0)}
+            className="w-full cursor-pointer rounded-xl bg-slate-900 py-3 text-xs font-bold text-white shadow-md hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {saving ? "Criando..." : "Criar objetivo"}
+            {saving ? "Criando..." : useAuto ? "Criar objetivo automático" : "Criar objetivo manual"}
           </button>
         </form>
       </div>
