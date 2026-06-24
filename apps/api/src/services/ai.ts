@@ -6,11 +6,34 @@ import { getAiEnv } from "../env.js";
 
 export { buildFinancialContext } from "./finance/context.js";
 
-const DEFAULT_MODELS: Record<string, string> = {
+export type AiProvider = "openai" | "anthropic" | "google";
+
+export interface ModelCandidate {
+  provider: AiProvider;
+  modelId: string;
+}
+
+const DEFAULT_MODELS: Record<AiProvider, string> = {
   openai: "gpt-4o-mini",
   anthropic: "claude-3-5-sonnet-latest",
-  google: "gemini-flash-latest",
+  google: "gemini-3.5-flash",
 };
+
+/** Modelos Google elegíveis ao tier free (Standard). Ordem: mais capaz → mais leve. */
+const FALLBACK_MODELS: Record<AiProvider, string[]> = {
+  google: [
+    "gemini-3.5-flash",
+    "gemini-2.5-flash",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-pro",
+    "gemini-flash-latest",
+  ],
+  openai: ["gpt-4o-mini"],
+  anthropic: ["claude-3-5-haiku-latest", "claude-3-5-sonnet-latest"],
+};
+
+export const AI_MAX_RETRIES = 2;
 
 export function isAiConfigured(): boolean {
   const ai = getAiEnv();
@@ -26,10 +49,38 @@ export function isAiConfigured(): boolean {
   }
 }
 
-export function getModel(): LanguageModel {
+function dedupeCandidates(candidates: ModelCandidate[]): ModelCandidate[] {
+  const seen = new Set<string>();
+  return candidates.filter((c) => {
+    const key = `${c.provider}:${c.modelId}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function getModelCandidates(): ModelCandidate[] {
   const ai = getAiEnv();
-  const modelId = ai.model || DEFAULT_MODELS[ai.provider];
-  switch (ai.provider) {
+  const provider = ai.provider as AiProvider;
+  const primary = ai.model || DEFAULT_MODELS[provider];
+  const sameProvider = [...new Set([primary, ...(FALLBACK_MODELS[provider] ?? [])])].map(
+    (modelId) => ({ provider, modelId }),
+  );
+
+  const crossProvider: ModelCandidate[] = [];
+  if (provider !== "openai" && ai.openaiKey) {
+    crossProvider.push({ provider: "openai", modelId: DEFAULT_MODELS.openai });
+  }
+  if (provider !== "anthropic" && ai.anthropicKey) {
+    crossProvider.push({ provider: "anthropic", modelId: "claude-3-5-haiku-latest" });
+  }
+
+  return dedupeCandidates([...sameProvider, ...crossProvider]);
+}
+
+export function getModelForCandidate({ provider, modelId }: ModelCandidate): LanguageModel {
+  const ai = getAiEnv();
+  switch (provider) {
     case "openai":
       return createOpenAI({ apiKey: ai.openaiKey })(modelId);
     case "anthropic":
@@ -37,8 +88,50 @@ export function getModel(): LanguageModel {
     case "google":
       return createGoogleGenerativeAI({ apiKey: ai.googleKey })(modelId);
     default:
-      throw new Error(`Provider de IA desconhecido: ${ai.provider}`);
+      throw new Error(`Provider de IA desconhecido: ${provider}`);
   }
+}
+
+export function getModel(modelId?: string): LanguageModel {
+  const ai = getAiEnv();
+  return getModelForCandidate({
+    provider: ai.provider as AiProvider,
+    modelId: modelId ?? ai.model ?? DEFAULT_MODELS[ai.provider as AiProvider],
+  });
+}
+
+export function isTransientAiError(err: unknown): boolean {
+  if (err instanceof Error && err.name === "AI_RetryError") return true;
+  const msg = err instanceof Error ? err.message : String(err);
+  return /high demand|503|UNAVAILABLE|overloaded|resource exhausted|Failed after \d+ attempts/i.test(
+    msg,
+  );
+}
+
+export function isRetryableWithNextModel(err: unknown): boolean {
+  if (isTransientAiError(err)) return true;
+  const msg = err instanceof Error ? err.message : String(err);
+  return /not found|NoSuchModel|is not supported|404/i.test(msg);
+}
+
+export function formatAiErrorMessage(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (/high demand|503|UNAVAILABLE|overloaded|resource exhausted/i.test(msg)) {
+    return "O serviço de IA está temporariamente sobrecarregado. Aguarde alguns segundos e tente novamente.";
+  }
+  if (/Failed after \d+ attempts/i.test(msg)) {
+    return "Não foi possível contactar a IA após várias tentativas. Tente novamente em instantes.";
+  }
+  return msg;
+}
+
+export function buildAllCandidatesFailedMessage(streamError: string): string {
+  const ai = getAiEnv();
+  const hasAlternate = Boolean(ai.openaiKey || ai.anthropicKey);
+  const hint = hasAlternate
+    ? ""
+    : " Como alternativa, configure OPENAI_API_KEY no .env e defina AI_PROVIDER=openai.";
+  return `Erro da IA: ${streamError}.${hint}`;
 }
 
 export const SYSTEM_PROMPT = `Você é um assistente financeiro pessoal em português do Brasil.

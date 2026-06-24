@@ -425,3 +425,197 @@ export function buildCurrentCycleSummary(
     extraIncome: incomeBreakdown.extra,
   };
 }
+
+function calcPeriodChange(current: number, previous: number): number | null {
+  if (previous === 0) return null;
+  return ((current - previous) / previous) * 100;
+}
+
+function diffDateKeys(from: string, to: string): number {
+  const a = parseDateKey(from).getTime();
+  const b = parseDateKey(to).getTime();
+  return Math.round((b - a) / 86_400_000);
+}
+
+export interface GrowthMetrics {
+  savingsRate: number | null;
+  expenseRatio: number | null;
+  vsPrevious: {
+    incomeChange: number | null;
+    expenseChange: number | null;
+    netChange: number | null;
+  };
+  incomeBreakdown: { salary: number; extra: number } | null;
+  projection: {
+    dailyAvgExpense: number;
+    projectedExpense: number;
+    projectedIncome: number;
+    projectedNet: number;
+    pendingSalary: number | null;
+    salaryPending: boolean;
+    daysElapsed: number;
+    daysTotal: number;
+    daysRemaining: number;
+    isPartialPeriod: boolean;
+  } | null;
+}
+
+const SALARY_CATEGORY = "Salário";
+
+function sumCategoryInflowInRange(
+  txs: FinancialTransaction[],
+  range: DateRange,
+  category: string,
+): number {
+  let total = 0;
+  for (const tx of txs) {
+    if (!countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description)) {
+      continue;
+    }
+    if (isTransactionOutflow(tx.amount, tx.accountType)) continue;
+    if (tx.category !== category) continue;
+
+    const dateKey = toLocalDateKey(tx.date);
+    if (range.from && dateKey < range.from) continue;
+    if (range.to && dateKey > range.to) continue;
+    total += Math.abs(tx.amount);
+  }
+  return total;
+}
+
+function estimatePendingCycleSalary(
+  txs: FinancialTransaction[],
+  previousRange: DateRange,
+  paydayDay: number,
+  receivedSalary: number,
+): number | null {
+  if (receivedSalary > 0) return null;
+
+  let estimate = classifyIncome(txs, previousRange, paydayDay).salary;
+  if (estimate <= 0) {
+    estimate = sumCategoryInflowInRange(txs, previousRange, SALARY_CATEGORY);
+  }
+
+  if (estimate <= 0) {
+    for (let offset = 2; offset <= 6; offset++) {
+      const keys = getRecentPaydayCycles(1, paydayDay, offset);
+      if (keys.length === 0) break;
+      const range = paydayCyclesToDateRange(keys, paydayDay);
+      estimate = classifyIncome(txs, range, paydayDay).salary;
+      if (estimate <= 0) {
+        estimate = sumCategoryInflowInRange(txs, range, SALARY_CATEGORY);
+      }
+      if (estimate > 0) break;
+    }
+  }
+
+  return estimate > 0 ? estimate : null;
+}
+
+export function buildGrowthMetrics(params: {
+  period: { income: number; expenses: number; net: number };
+  previousPeriod: { income: number; expenses: number; net: number };
+  currentRange: DateRange;
+  previousRange: DateRange;
+  txs: FinancialTransaction[];
+  paydayDay: number | null;
+  periodMode: PeriodMode;
+}): GrowthMetrics {
+  const { period, previousPeriod, currentRange, previousRange, txs, paydayDay, periodMode } = params;
+  const { income, expenses, net } = period;
+
+  const savingsRate = income > 0 ? (net / income) * 100 : null;
+  const expenseRatio = income > 0 ? (expenses / income) * 100 : null;
+
+  const vsPrevious = {
+    incomeChange: calcPeriodChange(income, previousPeriod.income),
+    expenseChange: calcPeriodChange(expenses, previousPeriod.expenses),
+    netChange: calcPeriodChange(net, previousPeriod.net),
+  };
+
+  const incomeBreakdown =
+    paydayDay !== null
+      ? (() => {
+          const range =
+            periodMode === "payday"
+              ? (() => {
+                  const meta = getPaydayCycleRange(paydayDay);
+                  return { from: meta.from, to: meta.to };
+                })()
+              : currentRange;
+          const b = classifyIncome(txs, range, paydayDay);
+          return { salary: b.salary, extra: b.extra };
+        })()
+      : null;
+
+  let projection: GrowthMetrics["projection"] = null;
+  const today = toLocalDateKey(new Date());
+
+  const buildProjection = (
+    projectionIncome: number,
+    projectionExpenses: number,
+    daysElapsed: number,
+    daysTotal: number,
+    receivedSalary: number,
+  ) => {
+    if (daysElapsed <= 0 || daysElapsed >= daysTotal) return null;
+
+    const daysRemaining = daysTotal - daysElapsed;
+    const dailyAvgExpense = projectionExpenses / daysElapsed;
+    const projectedExpense = projectionExpenses + dailyAvgExpense * daysRemaining;
+
+    let pendingSalary: number | null = null;
+    if (periodMode === "payday" && paydayDay !== null) {
+      pendingSalary = estimatePendingCycleSalary(
+        txs,
+        previousRange,
+        paydayDay,
+        receivedSalary,
+      );
+    }
+
+    const projectedIncome = projectionIncome + (pendingSalary ?? 0);
+    const salaryPending =
+      periodMode === "payday" &&
+      paydayDay !== null &&
+      receivedSalary === 0 &&
+      pendingSalary === null;
+
+    return {
+      dailyAvgExpense,
+      projectedExpense,
+      projectedIncome,
+      projectedNet: projectedIncome - projectedExpense,
+      pendingSalary,
+      salaryPending,
+      daysElapsed,
+      daysTotal,
+      daysRemaining,
+      isPartialPeriod: true,
+    };
+  };
+
+  if (periodMode === "payday" && paydayDay !== null) {
+    const meta = getPaydayCycleRange(paydayDay);
+    if (today >= meta.from && today <= meta.to) {
+      const cycleTotals = summarizeTransactions(txs, { from: meta.from, to: meta.to });
+      projection = buildProjection(
+        cycleTotals.income,
+        cycleTotals.expenses,
+        meta.dayIndex,
+        meta.totalDays,
+        incomeBreakdown?.salary ?? 0,
+      );
+    }
+  } else {
+    const { from, to } = currentRange;
+    if (from && to && today >= from && today <= to) {
+      const daysTotal = diffDateKeys(from, to) + 1;
+      const daysElapsed = diffDateKeys(from, today) + 1;
+      projection = buildProjection(income, expenses, daysElapsed, daysTotal, 0);
+    }
+  }
+
+  return { savingsRate, expenseRatio, vsPrevious, incomeBreakdown, projection };
+}
+

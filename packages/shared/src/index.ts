@@ -375,6 +375,33 @@ export interface DashboardInvestmentsSummary {
   investmentSource: string | null;
 }
 
+
+export interface DashboardGrowthMetrics {
+  savingsRate: number | null;
+  expenseRatio: number | null;
+  vsPrevious: {
+    incomeChange: number | null;
+    expenseChange: number | null;
+    netChange: number | null;
+  };
+  incomeBreakdown: {
+    salary: number;
+    extra: number;
+  } | null;
+  projection: {
+    dailyAvgExpense: number;
+    projectedExpense: number;
+    projectedIncome: number;
+    projectedNet: number;
+    pendingSalary: number | null;
+    salaryPending: boolean;
+    daysElapsed: number;
+    daysTotal: number;
+    daysRemaining: number;
+    isPartialPeriod: boolean;
+  } | null;
+}
+
 export interface DashboardSummary {
   totalBalance: number;
   netWorth: DashboardNetWorth;
@@ -394,6 +421,7 @@ export interface DashboardSummary {
   monthlySeries: DashboardMonthlyPoint[];
   categories: DashboardCategoryPoint[];
   previousCategories: DashboardCategoryPoint[];
+  growthMetrics: DashboardGrowthMetrics;
   insights: string[];
 }
 

@@ -8,6 +8,7 @@ import { computeNextBill } from "../services/finance/creditBill.js";
 import {
   buildCurrentCycleSummary,
   buildDashboardInsights,
+  buildGrowthMetrics,
   getCategoriesWithPercent,
   getMonthlySeries,
   getPaydayCycleSeries,
@@ -220,6 +221,16 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     const currentCycle =
       paydayDay !== null ? buildCurrentCycleSummary(financialTransactions, paydayDay) : null;
 
+    const growthMetrics = buildGrowthMetrics({
+      period,
+      previousPeriod,
+      currentRange: periods.currentRange,
+      previousRange: periods.previousRange,
+      txs: financialTransactions,
+      paydayDay,
+      periodMode: periods.periodMode,
+    });
+
     const { investmentBalance, investments } = await loadInvestmentData(
       userId,
       personId,
@@ -246,6 +257,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       monthlySeries,
       categories,
       previousCategories,
+      growthMetrics,
       insights,
     });
   });

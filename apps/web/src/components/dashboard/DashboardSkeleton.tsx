@@ -22,20 +22,19 @@ export function DashboardSkeleton() {
         ))}
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-3">
-        <div className={`${cardLargeClass} lg:col-span-2`}>
-          <SkeletonBar className="h-5 w-48" />
-          <SkeletonBar className="mt-2 h-4 w-56" />
-          <SkeletonBar className="mt-6 h-64 w-full" />
-        </div>
-        <div className={cardLargeClass}>
-          <SkeletonBar className="h-5 w-44" />
-          <SkeletonBar className="mt-2 h-4 w-48" />
-          <SkeletonBar className="mt-6 h-44 w-full max-w-[180px] mx-auto" />
-          <div className="mt-6 space-y-2.5">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <SkeletonBar key={i} className="h-10 w-full" />
-            ))}
+      <div className={cardLargeClass}>
+        <SkeletonBar className="h-5 w-48" />
+        <SkeletonBar className="mt-2 h-4 w-56" />
+        <SkeletonBar className="mt-6 h-52 w-full" />
+        <div className="mt-8 border-t border-slate-100 pt-8">
+          <SkeletonBar className="h-4 w-44" />
+          <div className="mt-4 grid gap-6 sm:grid-cols-[auto_1fr]">
+            <SkeletonBar className="h-44 w-[180px]" />
+            <div className="space-y-2.5">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <SkeletonBar key={i} className="h-10 w-full" />
+              ))}
+            </div>
           </div>
         </div>
       </div>

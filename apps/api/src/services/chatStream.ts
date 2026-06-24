@@ -1,10 +1,16 @@
 import type { FastifyBaseLogger, FastifyReply } from "fastify";
-import { streamText, generateText, stepCountIs, type CoreMessage } from "ai";
+import { streamText, stepCountIs, type CoreMessage } from "ai";
 import { prisma } from "../prisma.js";
 import {
   buildFinancialContext,
-  getModel,
+  getModelForCandidate,
+  getModelCandidates,
+  buildAllCandidatesFailedMessage,
+  formatAiErrorMessage,
+  isRetryableWithNextModel,
+  AI_MAX_RETRIES,
   SYSTEM_PROMPT,
+  type ModelCandidate,
 } from "./ai.js";
 import { InvalidPersonError } from "./finance/queries.js";
 import { createFinanceTools } from "./finance/tools.js";
@@ -46,75 +52,81 @@ export async function runChatStream({
     throw err;
   }
 
-  const messages: CoreMessage[] = [
-    {
-      role: "system",
-      content: `${SYSTEM_PROMPT}\n\n# Dados financeiros do usuário\n${context}\n\n# ${goalsContext}`,
-    },
-    ...historyRows.map((m) => ({
-      role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
-      content: m.content,
-    })),
-  ];
+  const systemPrompt = `${SYSTEM_PROMPT}\n\n# Dados financeiros do usuário\n${context}\n\n# ${goalsContext}`;
+  const messages: CoreMessage[] = historyRows.map((m) => ({
+    role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
+    content: m.content,
+  }));
 
   reply.raw.setHeader("Content-Type", "text/plain; charset=utf-8");
   reply.raw.setHeader("Cache-Control", "no-cache");
   reply.raw.setHeader("X-Accel-Buffering", "no");
 
+  const tools = createFinanceTools(userId, personId);
   let assistantText = "";
   let streamError: string | null = null;
-  const tools = createFinanceTools(userId, personId);
-  let pendingSteps: Promise<Parameters<typeof extractProposalFromSteps>[0]> | null = null;
+  let streamErrorRaw: unknown = null;
+  let streamResult: Awaited<ReturnType<typeof streamText>> | null = null;
+  let usedCandidate: ModelCandidate | null = null;
+  const candidates = getModelCandidates();
 
   try {
-    const streamResult = streamText({
-      model: getModel(),
-      messages,
-      tools,
-      stopWhen: stepCountIs(8),
-      abortSignal,
-      onError({ error }) {
-        streamError = error instanceof Error ? error.message : String(error);
-      },
-    });
-    pendingSteps = streamResult.steps as Promise<Parameters<typeof extractProposalFromSteps>[0]>;
-
-    for await (const chunk of streamResult.textStream) {
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i]!;
       if (abortSignal?.aborted) break;
-      assistantText += chunk;
-      reply.raw.write(chunk);
-    }
 
-    if (!assistantText && !abortSignal?.aborted) {
-      if (streamError) {
-        assistantText = `Erro da IA: ${streamError}`;
-        reply.raw.write(assistantText);
-      } else {
-        try {
-          const { text } = await generateText({
-            model: getModel(),
-            messages,
-            tools,
-            stopWhen: stepCountIs(8),
-            abortSignal,
-          });
-          assistantText = text;
-          reply.raw.write(text);
-        } catch (fallbackErr) {
-          const errMsg =
-            fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
-          assistantText = `Erro da IA: ${errMsg}`;
-          reply.raw.write(assistantText);
+      assistantText = "";
+      streamError = null;
+      streamErrorRaw = null;
+      usedCandidate = candidate;
+
+      streamResult = streamText({
+        model: getModelForCandidate(candidate),
+        system: systemPrompt,
+        messages,
+        tools,
+        maxRetries: AI_MAX_RETRIES,
+        stopWhen: stepCountIs(8),
+        abortSignal,
+        onError({ error }) {
+          streamErrorRaw = error;
+          streamError = formatAiErrorMessage(error);
+        },
+      });
+
+      for await (const part of streamResult.fullStream) {
+        if (abortSignal?.aborted) break;
+        if (part.type === "text-delta") {
+          assistantText += part.text;
+          reply.raw.write(part.text);
+        } else if (part.type === "error") {
+          streamErrorRaw = part.error;
+          streamError = formatAiErrorMessage(part.error);
         }
       }
+
+      const canRetry =
+        streamErrorRaw != null &&
+        isRetryableWithNextModel(streamErrorRaw) &&
+        i < candidates.length - 1;
+
+      if (assistantText || abortSignal?.aborted) break;
+      if (!canRetry) break;
+
+      log.warn({ candidate, err: streamError }, "Modelo indisponível, tentando fallback");
+    }
+
+    if (!assistantText && !abortSignal?.aborted && streamError) {
+      assistantText = buildAllCandidatesFailedMessage(streamError);
+      reply.raw.write(assistantText);
     }
   } catch (err) {
     if (abortSignal?.aborted) {
       reply.raw.end();
       return;
     }
-    const errMsg = err instanceof Error ? err.message : String(err);
-    log.error({ err }, "Erro no streaming da IA");
+    const errMsg = formatAiErrorMessage(err);
+    log.error({ err, candidate: usedCandidate }, "Erro no streaming da IA");
     if (!assistantText) {
       assistantText = `Erro da IA: ${errMsg}`;
       reply.raw.write(assistantText);
@@ -126,9 +138,9 @@ export async function runChatStream({
       data: { userId, threadId, role: "assistant", content: assistantText },
     });
 
-    if (pendingSteps) {
+    if (streamResult && !streamError && !assistantText.startsWith("Erro da IA:")) {
       try {
-        const steps = await pendingSteps;
+        const steps = await streamResult.steps;
         const extracted = extractProposalFromSteps(steps);
         if (extracted) {
           await prisma.chatActionProposal.create({

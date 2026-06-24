@@ -10,7 +10,6 @@ import type {
 } from "@finance/shared";
 import { isCreditAccount } from "@finance/shared";
 import { api } from "../lib/api";
-import { CategoryChart } from "../components/dashboard/CategoryChart";
 import { CreditCardList } from "../components/dashboard/CreditCardList";
 import { CycleProgressCard } from "../components/dashboard/CycleProgressCard";
 import { DashboardSkeleton } from "../components/dashboard/DashboardSkeleton";
@@ -151,20 +150,18 @@ export function DashboardPage() {
             currencyCode={data.currencyCode}
           />
 
-          <div className="grid gap-8 lg:grid-cols-3">
-            <GrowthChart
-              className="lg:col-span-2"
-              data={data.monthlySeries}
-              months={months}
-              currencyCode={data.currencyCode}
-            />
-            <CategoryChart
-              data={data.categories}
-              previousCategories={data.previousCategories}
-              currencyCode={data.currencyCode}
-              onCategorySelect={handleCategorySelect}
-            />
-          </div>
+          <GrowthChart
+            data={data.monthlySeries}
+            months={months}
+            currencyCode={data.currencyCode}
+            growthMetrics={data.growthMetrics}
+            categories={data.categories}
+            previousCategories={data.previousCategories}
+            periodLabel={data.period.label}
+            periodMode={effectivePeriodMode}
+            hideIncomeBreakdown={Boolean(showCycleCard)}
+            onCategorySelect={handleCategorySelect}
+          />
 
           <div className="grid gap-8 lg:grid-cols-2">
             <InsightsPanel insights={data.insights} />
