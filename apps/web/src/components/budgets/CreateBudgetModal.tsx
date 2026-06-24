@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import type { DashboardCategoryGroup } from "@finance/shared";
+import { Modal } from "../Modal";
 
 interface Props {
   open: boolean;
@@ -49,8 +50,7 @@ export function CreateBudgetModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-      <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+    <Modal onClose={onClose} disableBackdropClose={saving}>
         <button
           type="button"
           onClick={onClose}
@@ -143,7 +143,6 @@ export function CreateBudgetModal({
             {saving ? "Criando..." : "Criar orçamento"}
           </button>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }

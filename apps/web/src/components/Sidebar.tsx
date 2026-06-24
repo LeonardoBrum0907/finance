@@ -116,7 +116,7 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="sidebar-nav-scroll mt-8 min-h-0 flex-1 overflow-y-auto">
+      <nav className="mt-8 min-h-0 flex-1 overflow-y-auto">
         <div className="flex flex-col gap-1.5 pr-1">
           {navItems.map((item) =>
             "comingSoon" in item ? (

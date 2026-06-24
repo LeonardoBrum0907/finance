@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Trash2, X } from "lucide-react";
 import type { BudgetItem, DashboardCategoryGroup } from "@finance/shared";
+import { useConfirm } from "../../lib/confirm";
+import { Modal } from "../Modal";
 
 interface Props {
   budget: BudgetItem | null;
@@ -26,6 +28,7 @@ export function EditBudgetModal({
   onSave,
   onDelete,
 }: Props) {
+  const confirm = useConfirm();
   const [name, setName] = useState("");
   const [limit, setLimit] = useState("");
   const [selected, setSelected] = useState<DashboardCategoryGroup[]>([]);
@@ -67,15 +70,18 @@ export function EditBudgetModal({
     });
   };
 
-  const handleDelete = () => {
-    if (confirm(`Excluir o orçamento "${budget.name}"?`)) {
-      onDelete(budget.id);
-    }
+  const handleDelete = async () => {
+    const ok = await confirm({
+      title: "Excluir orçamento",
+      message: `Excluir o orçamento "${budget.name}"?`,
+      confirmLabel: "Excluir",
+      variant: "danger",
+    });
+    if (ok) onDelete(budget.id);
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-      <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+    <Modal onClose={onClose} disableBackdropClose={saving || deleting}>
         <button
           type="button"
           onClick={onClose}
@@ -172,7 +178,6 @@ export function EditBudgetModal({
             {deleting ? "Excluindo..." : "Excluir orçamento"}
           </button>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { PersonDTO } from "@finance/shared";
 import { api } from "../lib/api";
+import { useConfirm } from "../lib/confirm";
 
 function countAccounts(person: PersonDTO): number {
   return person.connections.reduce((sum, conn) => sum + conn.accounts.length, 0);
@@ -21,6 +22,7 @@ function formatConnectionsBadge(person: PersonDTO): string {
 
 export function PeoplePage() {
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   const [name, setName] = useState("");
   const [relationship, setRelationship] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -92,15 +94,19 @@ export function PeoplePage() {
     });
   }
 
-  function handleDelete(person: PersonDTO) {
+  async function handleDelete(person: PersonDTO) {
     const hasConnections = person.connections.length > 0;
     const message = hasConnections
       ? `Remover "${person.name}"? Isso também desconectará ${person.connections.length} banco(s) e apagará todas as contas e transações vinculadas.`
       : `Remover "${person.name}"?`;
 
-    if (window.confirm(message)) {
-      deleteMutation.mutate(person.id);
-    }
+    const ok = await confirm({
+      title: "Remover pessoa",
+      message,
+      confirmLabel: "Remover",
+      variant: "danger",
+    });
+    if (ok) deleteMutation.mutate(person.id);
   }
 
   return (

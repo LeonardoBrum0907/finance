@@ -12,6 +12,8 @@ import {
   type GoalSourceSelection,
 } from "./GoalSourceSelector";
 import { formatCurrency } from "../../lib/format";
+import { useConfirm } from "../../lib/confirm";
+import { Modal } from "../Modal";
 
 interface Props {
   goal: GoalDTO | null;
@@ -58,6 +60,7 @@ export function EditGoalModal({
   onSave,
   onDelete,
 }: Props) {
+  const confirm = useConfirm();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [type, setType] = useState<GoalType>("savings");
@@ -114,8 +117,7 @@ export function EditGoalModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-      <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+    <Modal onClose={onClose} disableBackdropClose={saving || deleting}>
         <button
           type="button"
           onClick={onClose}
@@ -259,10 +261,14 @@ export function EditGoalModal({
 
           <button
             type="button"
-            onClick={() => {
-              if (confirm(`Excluir o objetivo "${goal.name}"?`)) {
-                onDelete(goal.id);
-              }
+            onClick={async () => {
+              const ok = await confirm({
+                title: "Excluir objetivo",
+                message: `Excluir o objetivo "${goal.name}"?`,
+                confirmLabel: "Excluir",
+                variant: "danger",
+              });
+              if (ok) onDelete(goal.id);
             }}
             disabled={deleting}
             className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-rose-200 py-3 text-xs font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-60"
@@ -271,7 +277,6 @@ export function EditGoalModal({
             {deleting ? "Excluindo..." : "Excluir objetivo"}
           </button>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }

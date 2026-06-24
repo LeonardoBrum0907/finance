@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ChatThreadDTO } from "@finance/shared";
 import { api } from "../../lib/api";
+import { useConfirm } from "../../lib/confirm";
 import { useSidebarCollapsed } from "../../hooks/useSidebarCollapsed";
 import { useState } from "react";
 
@@ -12,6 +13,7 @@ interface Props {
 
 export function ChatSidebar({ activeThreadId, onSelectThread, disabled }: Props) {
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   const { collapsed, toggleCollapsed } = useSidebarCollapsed();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -132,8 +134,14 @@ export function ChatSidebar({ activeThreadId, onSelectThread, disabled }: Props)
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (confirm("Excluir esta conversa?")) deleteThread.mutate(thread.id);
+              onClick={async () => {
+                const ok = await confirm({
+                  title: "Excluir conversa",
+                  message: "Excluir esta conversa?",
+                  confirmLabel: "Excluir",
+                  variant: "danger",
+                });
+                if (ok) deleteThread.mutate(thread.id);
               }}
               disabled={disabled}
               className="hidden rounded p-1 text-slate-400 hover:text-red-600 group-hover:inline"

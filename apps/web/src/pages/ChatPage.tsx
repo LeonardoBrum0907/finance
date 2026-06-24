@@ -9,9 +9,11 @@ import { ChatSuggestionChips } from "../components/chat/ChatSuggestionChips";
 import { ChatStatusBar } from "../components/chat/ChatStatusBar";
 import { useChatStream } from "../hooks/useChatStream";
 import { getChatSuggestions } from "../lib/chatSuggestions";
+import { useConfirm } from "../lib/confirm";
 
 export function ChatPage() {
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   const [input, setInput] = useState("");
   const [selectedPersonId, setSelectedPersonId] = useState("");
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
@@ -122,10 +124,14 @@ export function ChatPage() {
             {activeThreadId && (
               <button
                 type="button"
-                onClick={() => {
-                  if (confirm("Limpar todas as mensagens desta conversa?")) {
-                    clearConversation();
-                  }
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: "Limpar conversa",
+                    message: "Limpar todas as mensagens desta conversa?",
+                    confirmLabel: "Limpar",
+                    variant: "danger",
+                  });
+                  if (ok) clearConversation();
                 }}
                 disabled={streaming || messages.length === 0}
                 className="rounded-md border border-slate-300 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-60"

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import type { GoalDTO } from "@finance/shared";
 import { formatCurrency } from "../../lib/format";
+import { Modal } from "../Modal";
 
 interface Props {
   open: boolean;
@@ -67,8 +68,7 @@ export function CreatePlanModal({ open, goals, currencyCode, saving, onClose, on
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-      <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+    <Modal onClose={onClose} disableBackdropClose={saving}>
         <button
           type="button"
           onClick={onClose}
@@ -167,7 +167,6 @@ export function CreatePlanModal({ open, goals, currencyCode, saving, onClose, on
             {saving ? "Criando..." : "Criar plano"}
           </button>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }

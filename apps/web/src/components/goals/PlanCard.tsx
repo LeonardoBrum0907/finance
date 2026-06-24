@@ -1,6 +1,7 @@
 import { Layers, Trash2 } from "lucide-react";
 import type { PlanDTO } from "@finance/shared";
 import { formatCurrency } from "../../lib/format";
+import { useConfirm } from "../../lib/confirm";
 
 interface Props {
   plan: PlanDTO;
@@ -10,6 +11,8 @@ interface Props {
 }
 
 export function PlanCard({ plan, currencyCode, onDelete, deleting }: Props) {
+  const confirm = useConfirm();
+
   return (
     <div className="rounded-2xl border border-slate-200/60 bg-white p-6">
       <div className="mb-4 flex items-start justify-between gap-3">
@@ -24,10 +27,14 @@ export function PlanCard({ plan, currencyCode, onDelete, deleting }: Props) {
         </div>
         <button
           type="button"
-          onClick={() => {
-            if (confirm(`Excluir o plano "${plan.name}"?`)) {
-              onDelete(plan.id);
-            }
+          onClick={async () => {
+            const ok = await confirm({
+              title: "Excluir plano",
+              message: `Excluir o plano "${plan.name}"?`,
+              confirmLabel: "Excluir",
+              variant: "danger",
+            });
+            if (ok) onDelete(plan.id);
           }}
           disabled={deleting}
           className="cursor-pointer rounded-lg border border-slate-200 p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-60"

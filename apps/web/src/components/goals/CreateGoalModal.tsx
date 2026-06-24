@@ -7,6 +7,7 @@ import {
   type GoalSourceSelection,
 } from "./GoalSourceSelector";
 import { formatCurrency } from "../../lib/format";
+import { Modal } from "../Modal";
 
 interface Props {
   open: boolean;
@@ -88,8 +89,7 @@ export function CreateGoalModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-      <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl">
+    <Modal onClose={onClose} disableBackdropClose={saving}>
         <button
           type="button"
           onClick={onClose}
@@ -215,7 +215,6 @@ export function CreateGoalModal({
             {saving ? "Criando..." : useAuto ? "Criar objetivo automático" : "Criar objetivo manual"}
           </button>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
