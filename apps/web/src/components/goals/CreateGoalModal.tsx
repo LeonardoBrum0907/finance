@@ -14,6 +14,12 @@ interface Props {
   saving: boolean;
   availableSources: AvailableGoalSourceDTO[];
   currencyCode?: string;
+  initialValues?: {
+    name?: string;
+    type?: GoalType;
+    targetAmount?: number;
+    targetDate?: string;
+  };
   onClose: () => void;
   onSave: (data: {
     name: string;
@@ -38,6 +44,7 @@ export function CreateGoalModal({
   saving,
   availableSources,
   currencyCode = "BRL",
+  initialValues,
   onClose,
   onSave,
 }: Props) {
@@ -55,18 +62,20 @@ export function CreateGoalModal({
 
   useEffect(() => {
     if (open) {
-      setName("");
+      setName(initialValues?.name ?? "");
       setDescription("");
-      setType("savings");
-      setTargetAmount("");
-      setTargetDate("");
+      setType(initialValues?.type ?? "savings");
+      setTargetAmount(
+        initialValues?.targetAmount != null ? String(initialValues.targetAmount) : "",
+      );
+      setTargetDate(initialValues?.targetDate?.slice(0, 10) ?? "");
       setSources([]);
       const hasSources = availableSources.some(
         (s) => !s.isCredit && s.availablePercent > 0,
       );
-      setUseAuto(hasSources);
+      setUseAuto(hasSources && !initialValues);
     }
-  }, [open, availableSources]);
+  }, [open, availableSources, initialValues]);
 
   if (!open) return null;
 

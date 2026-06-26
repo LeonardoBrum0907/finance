@@ -208,3 +208,34 @@ export function serializeProposal(proposal: {
     resolvedAt: proposal.resolvedAt?.toISOString() ?? null,
   };
 }
+
+export function computeProposalImpact(
+  type: string,
+  payload: unknown,
+): string | undefined {
+  if (!payload || typeof payload !== "object") return undefined;
+  const p = payload as Record<string, unknown>;
+
+  switch (type) {
+    case "create_goal": {
+      const target = Number(p.targetAmount ?? 0);
+      if (target <= 0) return undefined;
+      return `Meta de R$ ${target.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+    }
+    case "create_plan": {
+      const monthly = Number(p.monthlyContribution ?? 0);
+      const goals = Array.isArray(p.goals) ? p.goals : [];
+      if (monthly <= 0) return undefined;
+      const monthsHint =
+        goals.length > 0 ? " — distribuído entre seus objetivos" : "";
+      return `Aporte de R$ ${monthly.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}/mês${monthsHint}`;
+    }
+    case "add_contribution": {
+      const amount = Number(p.amount ?? 0);
+      if (amount <= 0) return undefined;
+      return `Registra R$ ${amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} no objetivo`;
+    }
+    default:
+      return undefined;
+  }
+}

@@ -9,19 +9,48 @@ import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
 import { isAiConfigured } from "../services/ai.js";
 import { runChatStream } from "../services/chatStream.js";
-import { applyChatProposal, serializeProposal } from "../services/chatProposal.js";
+import { applyChatProposal, serializeProposal, computeProposalImpact } from "../services/chatProposal.js";
 import {
   autoTitleFromFirstMessage,
   findUserThread,
   resetThreadTitle,
   touchThread,
 } from "../services/chatThread.js";
+import { buildChatSuggestions, buildChatContextSummary } from "../services/chatSuggestions.js";
+import { buildChatAlerts } from "../services/chatAlerts.js";
+import { createWeeklyRecap } from "../services/chatRecap.js";
+import { serializeMessage } from "../services/chatMessage.js";
 
 export async function chatRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
 
   app.get("/api/chat/status", async (_request, reply) => {
     return reply.send({ configured: isAiConfigured() });
+  });
+
+  app.get("/api/chat/suggestions", async (request, reply) => {
+    const personId = (request.query as { personId?: string }).personId;
+    const suggestions = await buildChatSuggestions(request.user!.sub, personId);
+    return reply.send(suggestions);
+  });
+
+  app.get("/api/chat/context-summary", async (request, reply) => {
+    const personId = (request.query as { personId?: string }).personId;
+    const summary = await buildChatContextSummary(request.user!.sub, personId);
+    return reply.send(summary);
+  });
+
+  app.get("/api/chat/alerts", async (request, reply) => {
+    const alerts = await buildChatAlerts(request.user!.sub);
+    return reply.send(alerts);
+  });
+
+  app.post("/api/chat/recap", async (request, reply) => {
+    if (!isAiConfigured()) {
+      return reply.code(503).send({ error: "IA não configurada no servidor" });
+    }
+    const recap = await createWeeklyRecap(request.user!.sub);
+    return reply.send(recap);
   });
 
   app.get("/api/chat/threads", async (request, reply) => {
@@ -112,15 +141,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       take: 100,
       include: { proposal: true },
     });
-    return reply.send(
-      messages.map((m) => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-        createdAt: m.createdAt.toISOString(),
-        ...(m.proposal ? { proposal: serializeProposal(m.proposal) } : {}),
-      })),
-    );
+    return reply.send(messages.map((m) => serializeMessage(m)));
   });
 
   app.post("/api/chat", async (request, reply) => {
@@ -133,7 +154,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const userId = request.user!.sub;
-    const { message: userText, threadId, personId } = parsed.data;
+    const { message: userText, threadId, personId, contextHint } = parsed.data;
 
     const thread = await findUserThread(userId, threadId);
     if (!thread) return reply.code(404).send({ error: "Conversa não encontrada" });
@@ -154,6 +175,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       userId,
       threadId,
       personId,
+      contextHint,
       historyRows: history,
       reply,
       abortSignal: request.signal,
@@ -232,7 +254,12 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       data: { status: "confirmed", resolvedAt: new Date() },
     });
 
-    return reply.send({ proposal: serializeProposal(updated) });
+    return reply.send({
+      proposal: {
+        ...serializeProposal(updated),
+        impactSummary: computeProposalImpact(updated.type, updated.payload),
+      },
+    });
   });
 
   app.post("/api/chat/proposals/:id/discard", async (request, reply) => {
@@ -251,6 +278,11 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       data: { status: "discarded", resolvedAt: new Date() },
     });
 
-    return reply.send({ proposal: serializeProposal(updated) });
+    return reply.send({
+      proposal: {
+        ...serializeProposal(updated),
+        impactSummary: computeProposalImpact(updated.type, updated.payload),
+      },
+    });
   });
 }

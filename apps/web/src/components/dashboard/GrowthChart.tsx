@@ -22,6 +22,7 @@ import {
 import { CategoryBreakdown } from "./CategoryBreakdown";
 import { ChartViewToggle } from "./ChartViewToggle";
 import { GrowthSingleMonthView } from "./GrowthSingleMonthView";
+import { AssistantSpotlightButton } from "../chat/AssistantSpotlightButton";
 import { cardLargeClass, fadeUp } from "./motion";
 
 ensureChartJsRegistered();
@@ -203,6 +204,16 @@ export function GrowthChart({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <AssistantSpotlightButton
+            label="Analisar período"
+            message={`Analise meu desempenho financeiro no período: ${periodLabel ?? "atual"}`}
+            contextHint={JSON.stringify({
+              source: "growth_chart",
+              periodLabel,
+              months,
+              view,
+            })}
+          />
           <ChartViewToggle
             value={view}
             onChange={setView}

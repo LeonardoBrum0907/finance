@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import type { DashboardNetWorth, DashboardPeriodSummary, PeriodMode } from "@finance/shared";
 import { formatCurrency, formatPercent } from "../../lib/format";
+import { AssistantSpotlightButton } from "../chat/AssistantSpotlightButton";
 import { AnimatedValue } from "./AnimatedValue";
 import { cardClass, cardHighlightClass, fadeUp } from "./motion";
 
@@ -57,6 +58,8 @@ interface CardProps {
   badgeTone?: "emerald" | "teal" | "rose";
   subtitle?: string;
   periodMode?: PeriodMode;
+  spotlightMessage?: string;
+  spotlightContext?: string;
 }
 
 function StatCard({
@@ -74,6 +77,8 @@ function StatCard({
   badgeTone = "emerald",
   subtitle,
   periodMode = "calendar",
+  spotlightMessage,
+  spotlightContext,
 }: CardProps) {
   const format = (n: number) => `${prefix}${formatCurrency(n, currencyCode)}`;
 
@@ -138,7 +143,9 @@ export function StatCards({
 }: StatCardsProps) {
   const netPositive = period.net >= 0;
 
-  const netWorthBreakdown = `Contas ${formatCurrency(netWorth.bankBalance, currencyCode)} · Invest. ${formatCurrency(netWorth.investmentBalance, currencyCode)} · Cartão −${formatCurrency(netWorth.creditDebt, currencyCode)}`;
+  const netWorthBreakdown = netWorth.investmentsIncluded
+    ? `Contas ${formatCurrency(netWorth.bankBalance, currencyCode)} · Invest. ${formatCurrency(netWorth.investmentBalance, currencyCode)} · Cartão −${formatCurrency(netWorth.creditDebt, currencyCode)}`
+    : `Contas ${formatCurrency(netWorth.bankBalance, currencyCode)} · Cartão −${formatCurrency(netWorth.creditDebt, currencyCode)} · Invest. excluído (${formatCurrency(netWorth.investmentBalance, currencyCode)})`;
 
   return (
     <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
@@ -198,6 +205,16 @@ export function StatCards({
         }
         badgeTone={netPositive ? "emerald" : "rose"}
         periodMode={periodMode}
+        spotlightMessage={
+          !netPositive
+            ? "Meu saldo está negativo neste período. Onde posso cortar gastos?"
+            : undefined
+        }
+        spotlightContext={
+          !netPositive
+            ? JSON.stringify({ source: "stat_card", metric: "net", value: period.net })
+            : undefined
+        }
       />
     </div>
   );

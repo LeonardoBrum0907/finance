@@ -100,6 +100,8 @@ export const chatMessageSchema = z.object({
   message: z.string().min(1, "Digite uma mensagem"),
   threadId: z.string().min(1, "Informe a conversa"),
   personId: z.string().cuid().optional(),
+  contextHint: z.string().max(2000).optional(),
+  source: z.string().max(80).optional(),
 });
 export type ChatMessageInput = z.infer<typeof chatMessageSchema>;
 
@@ -555,6 +557,56 @@ export interface ChatActionProposalDTO {
   status: ChatActionProposalStatus;
   createdAt: string;
   resolvedAt: string | null;
+  impactSummary?: string;
+}
+
+export type ChatSuggestionIntent = "goal" | "plan" | "analyze" | "what_if";
+
+export interface ChatSuggestionDTO {
+  label: string;
+  message: string;
+  intent?: ChatSuggestionIntent;
+}
+
+export type ChatBlock =
+  | { type: "markdown"; content: string }
+  | { type: "table"; headers: string[]; rows: string[][] }
+  | { type: "metric"; label: string; value: string; delta?: string }
+  | {
+      type: "chart";
+      chartKind: "category_bar";
+      data: { category: string; total: number; formattedTotal: string; percent: number }[];
+    }
+  | { type: "action_prompt"; message: string; intent: string };
+
+export interface ChatMessageMetadata {
+  followUps?: ChatSuggestionDTO[];
+  blocks?: ChatBlock[];
+  toolActivity?: string[];
+  dataPeriod?: string;
+  syncAt?: string | null;
+}
+
+export interface ChatAlertDTO {
+  id: string;
+  message: string;
+  severity: "info" | "warning" | "success";
+  suggestionMessage: string;
+}
+
+export interface ChatContextSummaryDTO {
+  balance?: string;
+  monthlyExpenses?: string;
+  monthlyNet?: string;
+  activeGoalsCount?: number;
+  hasAccounts: boolean;
+}
+
+export interface ChatRecapDTO {
+  threadId: string;
+  preview: string;
+  content: string;
+  createdAt: string;
 }
 
 export interface ChatMessageDTO {
@@ -563,6 +615,7 @@ export interface ChatMessageDTO {
   content: string;
   createdAt: string;
   proposal?: ChatActionProposalDTO;
+  metadata?: ChatMessageMetadata;
 }
 
 export type BudgetStatus = "safe" | "warning" | "critical";
@@ -655,4 +708,109 @@ export interface BudgetsSummary {
   periodLabel: string;
   cycleDayIndex: number | null;
   cycleTotalDays: number | null;
+}
+
+export const SIMULATION_TYPES = [
+  "single_purchase",
+  "installments",
+  "recurring_expense",
+  "save_for_goal",
+] as const;
+
+export type SimulationType = (typeof SIMULATION_TYPES)[number];
+
+export type SimulationVerdict = "affordable" | "caution" | "risky";
+
+export const simulationInputSchema = z.object({
+  type: z.enum(SIMULATION_TYPES),
+  name: z.string().max(80).optional(),
+  amount: z.number().positive("Informe um valor maior que zero"),
+  installments: z.number().int().min(2).max(48).optional(),
+  interestRate: z.number().min(0).max(100).optional(),
+  durationMonths: z.number().int().min(1).max(120).optional(),
+  targetDate: z.string().optional(),
+  paymentMethod: z.enum(["cash", "credit"]).optional(),
+  creditAccountId: z.string().optional(),
+  categoryGroup: dashboardCategoryGroupSchema.optional(),
+  personId: z.string().cuid().optional(),
+});
+
+export type SimulationInput = z.infer<typeof simulationInputSchema>;
+
+export interface SimulatorCreditAccountDTO {
+  id: string;
+  name: string;
+  personName: string;
+  nextBillAmount: number | null;
+  nextBillDueDate: string | null;
+}
+
+export interface SimulatorBaselineDTO {
+  currencyCode: string;
+  periodMode: PeriodMode;
+  periodLabel: string;
+  surplusLabel: string;
+  averageSurplus: number;
+  averageIncome: number;
+  averageExpenses: number;
+  bankBalance: number;
+  monthlyContribution: number;
+  projectedNet: number | null;
+  creditAccounts: SimulatorCreditAccountDTO[];
+  hasAccounts: boolean;
+}
+
+export interface SimulationMonthlyPoint {
+  month: string;
+  label?: string;
+  baselineSurplus: number;
+  scenarioSurplus: number;
+}
+
+export interface SimulationGoalImpactDTO {
+  monthsDelayed: number | null;
+  affectedGoals: { id: string; name: string; monthsDelayed: number }[];
+}
+
+export interface SimulationBudgetImpactDTO {
+  category: string;
+  spent: number;
+  limit: number;
+  ratioAfter: number;
+  statusAfter: BudgetStatus;
+}
+
+export interface SimulationCreditImpactDTO {
+  accountId: string;
+  accountName: string;
+  nextBillBefore: number;
+  nextBillAfter: number;
+  billIncrease: number;
+}
+
+export interface SimulationResultDTO {
+  type: SimulationType;
+  name?: string;
+  verdict: SimulationVerdict;
+  recommendation: string;
+  disclaimer: string;
+  baseline: {
+    surplus: number;
+    income: number;
+    expenses: number;
+    bankBalance: number;
+  };
+  projected: {
+    surplusAfter: number;
+    surplusDelta: number;
+    bankBalanceAfter: number | null;
+    monthlySeries: SimulationMonthlyPoint[];
+    estimatedMonths: number | null;
+    monthlyNeeded: number | null;
+    installmentAmount: number | null;
+  };
+  goalImpact: SimulationGoalImpactDTO;
+  budgetImpact: SimulationBudgetImpactDTO | null;
+  creditImpact: SimulationCreditImpactDTO | null;
+  warnings: string[];
 }

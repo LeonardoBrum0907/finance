@@ -4,9 +4,10 @@ import { formatDate } from "../../lib/format";
 interface Props {
   people: PersonDTO[];
   streamingPhase: "thinking" | "streaming" | null;
+  toolActivity?: string | null;
 }
 
-export function ChatStatusBar({ people, streamingPhase }: Props) {
+export function ChatStatusBar({ people, streamingPhase, toolActivity }: Props) {
   const syncDates = people.flatMap((p) =>
     p.connections.map((c) => c.lastSyncedAt).filter((d): d is string => Boolean(d)),
   );
@@ -38,7 +39,9 @@ export function ChatStatusBar({ people, streamingPhase }: Props) {
     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
       <span>{syncMessage}</span>
       {streamingPhase === "thinking" && (
-        <span className="animate-pulse text-brand-600">Pensando…</span>
+        <span className="animate-pulse text-brand-600">
+          {toolActivity ?? "Pensando…"}
+        </span>
       )}
       {streamingPhase === "streaming" && (
         <span className="text-brand-600">Respondendo…</span>

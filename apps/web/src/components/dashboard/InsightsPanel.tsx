@@ -5,6 +5,7 @@ import {
   TrendingUp,
   type LucideIcon,
 } from "lucide-react";
+import { AssistantSpotlightButton } from "../chat/AssistantSpotlightButton";
 import { cardLargeClass, fadeUp } from "./motion";
 
 interface Props {
@@ -94,9 +95,12 @@ export function InsightsPanel({ insights }: Props) {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold leading-snug text-slate-800">{text}</p>
-                <span className="mt-1 block font-mono text-[10px] font-medium uppercase tracking-wide text-slate-400">
-                  Recomendado
-                </span>
+                <div className="mt-2">
+                  <AssistantSpotlightButton
+                    message={`Explique este insight e sugira uma ação prática: "${text}"`}
+                    contextHint={JSON.stringify({ source: "insight", text, type })}
+                  />
+                </div>
               </div>
             </li>
           );

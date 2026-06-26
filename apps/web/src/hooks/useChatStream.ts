@@ -16,6 +16,7 @@ export function useChatStream({ threadId, personId, enabled }: UseChatStreamOpti
   const [messages, setMessages] = useState<ChatMessageDTO[]>([]);
   const [streaming, setStreaming] = useState(false);
   const [streamingPhase, setStreamingPhase] = useState<StreamingPhase>(null);
+  const [toolActivity, setToolActivity] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   const messagesQueryKey = ["chat-messages", threadId] as const;
@@ -59,12 +60,16 @@ export function useChatStream({ threadId, personId, enabled }: UseChatStreamOpti
       const decoder = new TextDecoder();
       let totalBytes = 0;
       setStreamingPhase("thinking");
+      setToolActivity("Consultando seus dados…");
 
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         totalBytes += value?.length ?? 0;
-        if (totalBytes > 0) setStreamingPhase("streaming");
+        if (totalBytes > 0) {
+          setStreamingPhase("streaming");
+          setToolActivity(null);
+        }
         const chunk = decoder.decode(value, { stream: true });
         setMessages((prev) =>
           prev.map((m) =>
@@ -87,7 +92,7 @@ export function useChatStream({ threadId, personId, enabled }: UseChatStreamOpti
   }, []);
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, contextHint?: string) => {
       if (!threadId || streaming || !text.trim()) return;
 
       const userMsg: ChatMessageDTO = {
@@ -106,6 +111,7 @@ export function useChatStream({ threadId, personId, enabled }: UseChatStreamOpti
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setStreaming(true);
       setStreamingPhase("thinking");
+      setToolActivity("Consultando seus dados…");
 
       const controller = new AbortController();
       abortControllerRef.current = controller;
@@ -119,6 +125,7 @@ export function useChatStream({ threadId, personId, enabled }: UseChatStreamOpti
             message: text.trim(),
             threadId,
             ...(personId ? { personId } : {}),
+            ...(contextHint ? { contextHint } : {}),
           }),
           signal: controller.signal,
         });
@@ -143,6 +150,7 @@ export function useChatStream({ threadId, personId, enabled }: UseChatStreamOpti
       } finally {
         setStreaming(false);
         setStreamingPhase(null);
+        setToolActivity(null);
         abortControllerRef.current = null;
       }
     },
@@ -165,6 +173,7 @@ export function useChatStream({ threadId, personId, enabled }: UseChatStreamOpti
     setMessages((prev) => [...prev.slice(0, -1), assistantMsg]);
     setStreaming(true);
     setStreamingPhase("thinking");
+    setToolActivity("Consultando seus dados…");
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -201,6 +210,7 @@ export function useChatStream({ threadId, personId, enabled }: UseChatStreamOpti
     } finally {
       setStreaming(false);
       setStreamingPhase(null);
+      setToolActivity(null);
       abortControllerRef.current = null;
     }
   }, [threadId, personId, streaming, messages, consumeStream, invalidateMessages, queryClient]);
@@ -217,6 +227,7 @@ export function useChatStream({ threadId, personId, enabled }: UseChatStreamOpti
     messages,
     streaming,
     streamingPhase,
+    toolActivity,
     sendMessage,
     regenerate,
     clearConversation,

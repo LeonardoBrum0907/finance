@@ -10,6 +10,7 @@ import { BudgetsPage } from "./pages/BudgetsPage";
 import { GoalsPage } from "./pages/GoalsPage";
 import { InvestmentsPage } from "./pages/InvestmentsPage";
 import { ChatPage } from "./pages/ChatPage";
+import { SimulatorPage } from "./pages/SimulatorPage";
 import { SettingsPage } from "./pages/SettingsPage";
 
 export default function App() {
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="/contas" element={<AccountsPage />} />
         <Route path="/pessoas" element={<PeoplePage />} />
         <Route path="/orcamentos" element={<BudgetsPage />} />
+        <Route path="/simulador" element={<SimulatorPage />} />
         <Route path="/objetivos" element={<GoalsPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/configuracoes" element={<SettingsPage />} />

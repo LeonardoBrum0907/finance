@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Target } from "lucide-react";
+import { AssistantSpotlightButton } from "../components/chat/AssistantSpotlightButton";
 import type { GoalSourceSelection } from "../components/goals/GoalSourceSelector";
 import type {
   CreateGoalInput,
@@ -131,6 +132,17 @@ export function GoalsPage() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {activeGoals.length > 0 && (
+            <AssistantSpotlightButton
+              label="Montar plano com IA"
+              message={`Monte um plano de poupança para meus objetivos: ${activeGoals.map((g) => g.name).join(", ")}`}
+              contextHint={JSON.stringify({
+                source: "goals_page",
+                goalIds: activeGoals.map((g) => g.id),
+              })}
+              className="px-3 py-2.5 text-sm"
+            />
+          )}
           <button
             type="button"
             onClick={() => setCreateGoalOpen(true)}

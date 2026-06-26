@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger, FastifyReply } from "fastify";
 import { streamText, stepCountIs, type CoreMessage } from "ai";
+import type { ChatMessageMetadata } from "@finance/shared";
 import { prisma } from "../prisma.js";
 import {
   buildFinancialContext,
@@ -17,11 +18,20 @@ import { createFinanceTools } from "./finance/tools.js";
 import { touchThread } from "./chatThread.js";
 import { extractProposalFromSteps } from "./chatProposal.js";
 import { buildGoalsContextBlock } from "./finance/goalsContext.js";
+import { buildFollowUpSuggestions } from "./chatFollowUps.js";
+import { extractBlocksFromSteps, extractToolActivityFromSteps } from "./chatBlocks.js";
+import {
+  formatMonthLabel,
+  getLastSyncInfo,
+  toLocalMonthKey,
+} from "./finance/aggregates.js";
+import { flattenConnections, loadUserFinancialData } from "./finance/queries.js";
 
 export interface RunChatStreamOptions {
   userId: string;
   threadId: string;
   personId?: string;
+  contextHint?: string;
   historyRows: { role: string; content: string }[];
   reply: FastifyReply;
   abortSignal?: AbortSignal;
@@ -32,6 +42,7 @@ export async function runChatStream({
   userId,
   threadId,
   personId,
+  contextHint,
   historyRows,
   reply,
   abortSignal,
@@ -39,7 +50,18 @@ export async function runChatStream({
 }: RunChatStreamOptions): Promise<void> {
   let context: string;
   let goalsContext: string;
+  let syncAt: string | null = null;
   try {
+    const data = await loadUserFinancialData(userId, { personId });
+    const connections = flattenConnections(data);
+    const syncInfo = getLastSyncInfo(connections);
+    if (syncInfo.length > 0) {
+      const latest = syncInfo.reduce((a, b) =>
+        (a.lastSyncedAt ?? "") > (b.lastSyncedAt ?? "") ? a : b,
+      );
+      syncAt = latest.lastSyncedAt ?? null;
+    }
+
     [context, goalsContext] = await Promise.all([
       buildFinancialContext(userId, { personId }),
       buildGoalsContextBlock(userId, threadId),
@@ -52,7 +74,12 @@ export async function runChatStream({
     throw err;
   }
 
-  const systemPrompt = `${SYSTEM_PROMPT}\n\n# Dados financeiros do usuário\n${context}\n\n# ${goalsContext}`;
+  const currentMonth = toLocalMonthKey(new Date());
+  const contextBlock = contextHint
+    ? `\n\n## Contexto da interface\nO usuário veio de uma ação no app. Contexto adicional:\n${contextHint}`
+    : "";
+
+  const systemPrompt = `${SYSTEM_PROMPT}\n\n# Dados financeiros do usuário\n${context}${contextBlock}\n\n# ${goalsContext}`;
   const messages: CoreMessage[] = historyRows.map((m) => ({
     role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
     content: m.content,
@@ -66,7 +93,7 @@ export async function runChatStream({
   let assistantText = "";
   let streamError: string | null = null;
   let streamErrorRaw: unknown = null;
-  let streamResult: Awaited<ReturnType<typeof streamText>> | null = null;
+  let streamResult: ReturnType<typeof streamText> | null = null;
   let usedCandidate: ModelCandidate | null = null;
   const candidates = getModelCandidates();
 
@@ -92,9 +119,9 @@ export async function runChatStream({
           streamErrorRaw = error;
           streamError = formatAiErrorMessage(error);
         },
-      });
+      }) as unknown as ReturnType<typeof streamText>;
 
-      for await (const part of streamResult.fullStream) {
+      for await (const part of streamResult!.fullStream) {
         if (abortSignal?.aborted) break;
         if (part.type === "text-delta") {
           assistantText += part.text;
@@ -134,8 +161,35 @@ export async function runChatStream({
   }
 
   if (assistantText && !abortSignal?.aborted) {
+    const lastUser = [...historyRows].reverse().find((m) => m.role === "user");
+    const metadata: ChatMessageMetadata = {
+      dataPeriod: formatMonthLabel(currentMonth),
+      syncAt,
+    };
+
+    if (streamResult && !streamError && !assistantText.startsWith("Erro da IA:")) {
+      try {
+        const steps = await streamResult.steps;
+        metadata.toolActivity = extractToolActivityFromSteps(steps);
+        metadata.blocks = extractBlocksFromSteps(steps);
+        if (lastUser) {
+          metadata.followUps = buildFollowUpSuggestions(lastUser.content, assistantText);
+        }
+      } catch (metaErr) {
+        log.warn({ err: metaErr }, "Falha ao extrair metadata da resposta");
+      }
+    } else if (lastUser) {
+      metadata.followUps = buildFollowUpSuggestions(lastUser.content, assistantText);
+    }
+
     const message = await prisma.chatMessage.create({
-      data: { userId, threadId, role: "assistant", content: assistantText },
+      data: {
+        userId,
+        threadId,
+        role: "assistant",
+        content: assistantText,
+        metadata: metadata as object,
+      } as Parameters<typeof prisma.chatMessage.create>[0]["data"],
     });
 
     if (streamResult && !streamError && !assistantText.startsWith("Erro da IA:")) {

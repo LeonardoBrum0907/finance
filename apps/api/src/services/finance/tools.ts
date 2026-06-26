@@ -14,6 +14,7 @@ import {
 } from "./aggregates.js";
 import { flattenTransactions, loadUserFinancialData } from "./queries.js";
 import { formatGoalsForTool, loadGoalsSummaryForUser } from "./goalsContext.js";
+import { runSinglePurchaseSimulation } from "./purchaseSimulation.js";
 import { prisma } from "../../prisma.js";
 
 const MAX_TRANSACTIONS = 50;
@@ -265,6 +266,29 @@ export function createFinanceTools(userId: string, personId?: string) {
           type: "create_plan" as const,
           payload: parsed.data,
         };
+      },
+    }),
+
+    simulateWhatIf: tool({
+      description:
+        "Simula o impacto de uma compra ou gasto extra no orçamento mensal. Use para perguntas 'consigo comprar', 'quanto posso gastar' ou cenários what-if. Não é recomendação de investimento.",
+      inputSchema: z.object({
+        purchaseAmount: z.number().positive("Informe um valor positivo"),
+        monthlyIncome: z.number().optional().describe("Receita mensal (default: do contexto)"),
+        monthlyExpenses: z.number().optional().describe("Despesas mensais (default: do contexto)"),
+        monthlySavingsGoal: z
+          .number()
+          .optional()
+          .describe("Quanto o usuário quer guardar por mês"),
+      }),
+      execute: async ({ purchaseAmount, monthlyIncome, monthlyExpenses, monthlySavingsGoal }) => {
+        return runSinglePurchaseSimulation(userId, {
+          purchaseAmount,
+          monthlyIncome,
+          monthlyExpenses,
+          monthlySavingsGoal,
+          personId,
+        });
       },
     }),
   };

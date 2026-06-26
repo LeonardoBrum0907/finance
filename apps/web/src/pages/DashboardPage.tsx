@@ -20,6 +20,10 @@ import { PersonSelector, type PersonFilter } from "../components/dashboard/Perso
 import { RecentTransactions } from "../components/dashboard/RecentTransactions";
 import { StatCards } from "../components/dashboard/StatCards";
 import { InvestmentSnapshot } from "../components/dashboard/InvestmentSnapshot";
+import {
+  AssistantAlertBanner,
+  WeeklyRecapCard,
+} from "../components/chat/AssistantAlertBanner";
 
 export function DashboardPage() {
   const [months, setMonths] = useState<DashboardMonths>(1);
@@ -129,6 +133,8 @@ export function DashboardPage() {
         </div>
       ) : (
         <>
+          <AssistantAlertBanner />
+
           {showCycleCard && data.paydayDay !== null && (
             <CycleProgressCard
               cycle={data.currentCycle!}
@@ -165,7 +171,10 @@ export function DashboardPage() {
 
           <div className="grid gap-8 lg:grid-cols-2">
             <InsightsPanel insights={data.insights} />
-            {hasCreditCards && <CreditCardList accounts={data.accounts} />}
+            <div className="flex flex-col gap-4">
+              <WeeklyRecapCard />
+              {hasCreditCards && <CreditCardList accounts={data.accounts} />}
+            </div>
           </div>
 
           <RecentTransactions
