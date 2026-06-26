@@ -237,13 +237,17 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       months,
     );
 
+    const investmentsIncluded = settings.includeInvestmentsInNetWorth;
+    const netWorthInvestmentContribution = investmentsIncluded ? investmentBalance : 0;
+
     return reply.send({
-      totalBalance: totalBalance + investmentBalance,
+      totalBalance: totalBalance + netWorthInvestmentContribution,
       netWorth: {
-        total: totalBalance + investmentBalance,
+        total: totalBalance + netWorthInvestmentContribution,
         bankBalance,
         creditDebt,
         investmentBalance,
+        investmentsIncluded,
       },
       investments,
       currencyCode,

@@ -12,8 +12,9 @@ model User {
   name               String
   email              String   @unique
   passwordHash       String
-  paydayDay          Int?
-  defaultPeriodMode  String   @default("calendar")
+  paydayDay                    Int?
+  defaultPeriodMode            String   @default("calendar")
+  includeInvestmentsInNetWorth Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 

@@ -362,6 +362,7 @@ export interface DashboardNetWorth {
   bankBalance: number;
   creditDebt: number;
   investmentBalance: number;
+  investmentsIncluded: boolean;
 }
 
 export interface DashboardInvestmentsSummary {

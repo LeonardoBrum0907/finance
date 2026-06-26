@@ -19,7 +19,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const userId = request.user!.sub;
-    const { paydayDay, defaultPeriodMode } = parsed.data;
+    const { paydayDay, defaultPeriodMode, includeInvestmentsInNetWorth } = parsed.data;
 
     if (defaultPeriodMode === "payday") {
       const current = await prisma.user.findUnique({
@@ -39,6 +39,9 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       data: {
         ...(paydayDay !== undefined ? { paydayDay } : {}),
         ...(defaultPeriodMode !== undefined ? { defaultPeriodMode } : {}),
+        ...(includeInvestmentsInNetWorth !== undefined
+          ? { includeInvestmentsInNetWorth }
+          : {}),
       },
     });
 

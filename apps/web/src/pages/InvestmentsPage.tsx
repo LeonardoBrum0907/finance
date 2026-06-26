@@ -8,6 +8,7 @@ import { InvestmentStatCards } from "../components/investments/InvestmentStatCar
 import { InvestmentTransactionsList } from "../components/investments/InvestmentTransactionsList";
 import { InvestmentsSkeleton } from "../components/investments/InvestmentsSkeleton";
 import { InvestmentDataNotice } from "../components/investments/InvestmentDataNotice";
+import { InvestmentNetWorthSetting } from "../components/investments/InvestmentNetWorthSetting";
 import { PositionsTable } from "../components/investments/PositionsTable";
 import { cardClass } from "../components/dashboard/motion";
 
@@ -103,6 +104,7 @@ export function InvestmentsPage() {
         </div>
       ) : !data || data.summary.positionCount === 0 ? (
         <div className="space-y-4">
+          <InvestmentNetWorthSetting />
           <InvestmentDataNotice
             lastSyncedAt={data?.lastSyncedAt ?? null}
             investmentSource={data?.investmentSource}
@@ -130,6 +132,7 @@ export function InvestmentsPage() {
         </div>
       ) : (
         <>
+          <InvestmentNetWorthSetting />
           <InvestmentDataNotice
             lastSyncedAt={data.lastSyncedAt}
             investmentSource={data.investmentSource}

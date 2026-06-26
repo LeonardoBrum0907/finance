@@ -108,6 +108,15 @@ function StatCard({
           <ChangeBadge change={change} tone={badgeTone} periodMode={periodMode} />
         </div>
       )}
+      {spotlightMessage && (
+        <div className="mt-2">
+          <AssistantSpotlightButton
+            message={spotlightMessage}
+            contextHint={spotlightContext}
+            label="Analisar"
+          />
+        </div>
+      )}
     </motion.div>
   );
 }

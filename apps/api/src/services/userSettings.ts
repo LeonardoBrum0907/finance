@@ -5,7 +5,11 @@ import { prisma } from "../prisma.js";
 export async function loadUserSettings(userId: string): Promise<UserSettingsDTO> {
   const user = await prisma.user.findUniqueOrThrow({
     where: { id: userId },
-    select: { paydayDay: true, defaultPeriodMode: true },
+    select: {
+      paydayDay: true,
+      defaultPeriodMode: true,
+      includeInvestmentsInNetWorth: true,
+    },
   });
 
   const paydayDay = user.paydayDay;
@@ -15,6 +19,7 @@ export async function loadUserSettings(userId: string): Promise<UserSettingsDTO>
     paydayDay,
     defaultPeriodMode,
     paydayConfigured: paydayDay !== null && paydayDay >= 1 && paydayDay <= 31,
+    includeInvestmentsInNetWorth: user.includeInvestmentsInNetWorth,
   };
 }
 
