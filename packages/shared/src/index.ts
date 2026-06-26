@@ -5,6 +5,16 @@ import type { PeriodMode } from "./payday";
 
 export { translateCategory } from "./categories";
 export {
+  FINE_GRAINED_CATEGORIES,
+  needsAiCategorization,
+  hasHighCategoryConfidence,
+  resolveTransactionCategory,
+  normalizeCategoryPattern,
+  sanitizeFineGrainedCategory,
+  classifyWithRules,
+  type CategorySource,
+} from "./categories";
+export {
   groupCategoryForDashboard,
   resolveDashboardCategoryGroup,
   DASHBOARD_CATEGORY_GROUPS,
@@ -309,11 +319,26 @@ export interface TransactionDTO {
   amount: number;
   currencyCode: string;
   category: string | null;
+  userCategory?: string | null;
+  categorySource?: string | null;
+  categoryConfidence?: number | null;
+  merchantName?: string | null;
   accountId: string;
   accountName: string;
   accountType: string | null;
   personId: string;
   personName: string;
+}
+
+export const updateTransactionCategorySchema = z.object({
+  category: z.string().min(1, "Informe a categoria").max(80),
+});
+export type UpdateTransactionCategoryInput = z.infer<typeof updateTransactionCategorySchema>;
+
+export interface RecategorizeTransactionsResponse {
+  processed: number;
+  updated: number;
+  skipped: number;
 }
 
 export interface DashboardPeriodSummary {

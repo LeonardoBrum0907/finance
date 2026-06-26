@@ -1,8 +1,12 @@
 import { PluggyClient } from "pluggy-sdk";
-import { isBrokerConnector, translateCategory } from "@finance/shared";
+import { isBrokerConnector } from "@finance/shared";
 import { env, isPluggyConfigured } from "../env.js";
 import { prisma } from "../prisma.js";
 import { reconcileGoalsForUser } from "./finance/goalTracking.js";
+import {
+  normalizePluggyTransaction,
+  processSyncedTransactions,
+} from "./categoryPipeline.js";
 
 let client: PluggyClient | null = null;
 
@@ -35,7 +39,7 @@ async function fetchAllTransactions(
   pluggy: PluggyClient,
   accountId: string,
   dateFrom: string,
-): Promise<Array<{ id: string; date: string; description: string; amount: number; currencyCode: string | null; category: string | null }>> {
+): Promise<Record<string, unknown>[]> {
   const anyClient = pluggy as unknown as Record<string, unknown>;
   if (typeof anyClient.fetchAllTransactions === "function") {
     const all = await (anyClient.fetchAllTransactions as (
@@ -91,6 +95,12 @@ export async function syncConnection(connectionId: string): Promise<void> {
   dateFrom.setDate(dateFrom.getDate() - 365);
   const dateFromStr = dateFrom.toISOString().slice(0, 10);
 
+  const connectionWithUser = await prisma.bankConnection.findUnique({
+    where: { id: connectionId },
+    select: { person: { select: { userId: true } } },
+  });
+  const userId = connectionWithUser?.person.userId;
+
   for (const acc of accounts) {
     const creditFields =
       acc.type === "CREDIT" && acc.creditData
@@ -142,24 +152,40 @@ export async function syncConnection(connectionId: string): Promise<void> {
     });
 
     const transactions = await fetchAllTransactions(pluggy, acc.id, dateFromStr);
-    for (const tx of transactions) {
-      await prisma.transaction.upsert({
-        where: { pluggyTransactionId: tx.id },
-        create: {
-          pluggyTransactionId: tx.id,
-          date: new Date(tx.date),
-          description: tx.description ?? "Transação",
-          amount: tx.amount ?? 0,
-          currencyCode: tx.currencyCode ?? account.currencyCode,
-          category: translateCategory(tx.category, tx.description ?? "Transação"),
-          accountId: account.id,
-        },
-        update: {
-          description: tx.description ?? "Transação",
-          amount: tx.amount ?? 0,
-          category: translateCategory(tx.category, tx.description ?? "Transação"),
-        },
-      });
+    const normalized = transactions.map((tx) => normalizePluggyTransaction(tx));
+
+    if (userId) {
+      await processSyncedTransactions(
+        userId,
+        account.id,
+        account.type,
+        account.subtype,
+        normalized,
+      );
+    } else {
+      for (const tx of normalized) {
+        await prisma.transaction.upsert({
+          where: { pluggyTransactionId: tx.id },
+          create: {
+            pluggyTransactionId: tx.id,
+            date: new Date(tx.date),
+            description: tx.description,
+            amount: tx.amount,
+            currencyCode: tx.currencyCode ?? account.currencyCode,
+            pluggyCategory: tx.category,
+            merchantName: tx.merchantName,
+            category: tx.category,
+            categorySource: "pluggy",
+            accountId: account.id,
+          },
+          update: {
+            description: tx.description,
+            amount: tx.amount,
+            pluggyCategory: tx.category,
+            merchantName: tx.merchantName,
+          },
+        });
+      }
     }
   }
 

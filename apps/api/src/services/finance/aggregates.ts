@@ -12,7 +12,6 @@ import {
   countsTowardCashFlow,
   groupCategoryForDashboard,
   isTransactionOutflow,
-  translateCategory,
 } from "@finance/shared";
 
 /** Datas no fuso America/Sao_Paulo para alinhar "mês atual" ao usuário brasileiro. */
@@ -43,8 +42,7 @@ export interface DateRange {
 function resolveDashboardCategory(
   tx: Pick<FinancialTransaction, "category" | "description">,
 ): string {
-  const resolved = translateCategory(tx.category, tx.description);
-  return groupCategoryForDashboard(resolved, tx.description);
+  return groupCategoryForDashboard(tx.category, tx.description);
 }
 
 export function filterByDateRange(

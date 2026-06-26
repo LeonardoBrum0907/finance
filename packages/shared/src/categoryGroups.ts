@@ -122,6 +122,63 @@ const GROUP_BY_CATEGORY: Record<string, DashboardCategoryGroup> = {
   "Imposto de renda": "Tarifas e impostos",
   "Custos de atraso e cheque especial": "Tarifas e impostos",
   "Juros cobrados": "Tarifas e impostos",
+
+  // Renda
+  Salário: "Outros",
+  Renda: "Outros",
+  Aposentadoria: "Outros",
+  "Atividades empresariais": "Outros",
+  "Auxílio governamental": "Outros",
+  "Renda não recorrente": "Outros",
+
+  // Investimentos
+  Investimentos: "Outros",
+  "Investimento automático": "Outros",
+  "Renda fixa": "Outros",
+  "Fundos de investimento": "Outros",
+  "Renda variável": "Outros",
+  Previdência: "Outros",
+  "Juros e dividendos": "Outros",
+
+  // Empréstimos
+  "Empréstimos e financiamento": "Outros",
+  Empréstimos: "Outros",
+  Financiamento: "Outros",
+  "Financiamento imobiliário": "Contas fixas",
+  "Financiamento de veículo": "Transporte",
+
+  // Lazer e viagem
+  "Cinema, teatro e shows": "Serviços",
+  "Estádios e arenas": "Serviços",
+  "Pontos turísticos e museus": "Serviços",
+  Ingressos: "Serviços",
+  "Aeroporto e companhias aéreas": "Serviços",
+  Hospedagem: "Serviços",
+  "Programas de milhagem": "Serviços",
+  "Aluguel de carro": "Transporte",
+  Bicicleta: "Transporte",
+  "Prática esportiva": "Saúde e bem-estar",
+  "Pet shop e veterinário": "Compras",
+  Cashback: "Compras",
+  Loteria: "Outros",
+  "Aposta online": "Outros",
+  "Apostas e jogos": "Outros",
+  "Pensão alimentícia": "Contas fixas",
+  "Obrigações legais": "Outros",
+  Escola: "Assinaturas",
+  Universidade: "Assinaturas",
+  "Educação infantil": "Assinaturas",
+  "Utilidades domésticas": "Contas fixas",
+  "Seguro de vida": "Contas fixas",
+  "Seguro residencial": "Contas fixas",
+  "Seguro veicular": "Contas fixas",
+  "IPVA e taxas veiculares": "Transporte",
+  "Manutenção veicular": "Transporte",
+  "Tarifas de transferência e caixa eletrônico": "Tarifas e impostos",
+  "Impostos sobre investimentos": "Tarifas e impostos",
+  "Pagamento de cartão de crédito": "Transferências",
+  "Cartão de débito": "Transferências",
+  "Saldos bloqueados": "Outros",
 };
 
 /** Agrupa categoria resolvida em um rótulo amigável para o gráfico do dashboard. */

@@ -284,3 +284,115 @@ export function translateCategory(
 
   return applyDescriptionCategoryRules(category, translated, description);
 }
+
+export type CategorySource = "pluggy" | "rules" | "ai" | "user" | "cache";
+
+/** Categorias finas em português (taxonomia Pluggy traduzida). */
+export const FINE_GRAINED_CATEGORIES = [
+  ...new Set(Object.values(CATEGORY_TRANSLATIONS)),
+].sort() as string[];
+
+const FINE_GRAINED_SET = new Set(FINE_GRAINED_CATEGORIES);
+
+/** Categorias genéricas que merecem refinamento por IA. */
+const GENERIC_CATEGORIES = new Set([
+  "Outros",
+  "Sem categoria",
+  "Compras",
+  "Serviços",
+  "Alimentação e bebidas",
+  "Transferências",
+  "Lazer",
+  "Viagem",
+  "Educação",
+  "Saúde",
+  "Transporte",
+  "Moradia",
+  "Telecomunicações",
+  "Investimentos",
+  "Renda",
+]);
+
+function isGenericPluggyCategory(raw: string | null | undefined): boolean {
+  if (raw == null || !raw.trim()) return true;
+  const lower = raw.trim().toLowerCase();
+  return (
+    lower === "other" ||
+    lower === "uncategorized" ||
+    lower === "sem categoria" ||
+    lower === "shopping" ||
+    lower === "services" ||
+    lower === "food and drinks"
+  );
+}
+
+/** Indica se a transação deve passar por categorização com IA. */
+export function needsAiCategorization(
+  pluggyCategory: string | null | undefined,
+  resolvedCategory: string | null | undefined,
+): boolean {
+  if (isGenericPluggyCategory(pluggyCategory)) return true;
+  const cat = resolvedCategory?.trim();
+  if (!cat || cat === "Outros" || cat === "Sem categoria") return true;
+  if (GENERIC_CATEGORIES.has(cat)) return true;
+  return false;
+}
+
+/** Indica se a categoria resolvida por regras é confiável o suficiente. */
+export function hasHighCategoryConfidence(
+  pluggyCategory: string | null | undefined,
+  resolvedCategory: string | null | undefined,
+): boolean {
+  return !needsAiCategorization(pluggyCategory, resolvedCategory);
+}
+
+/** Categoria efetiva: override do usuário > categoria resolvida > tradução legada. */
+export function resolveTransactionCategory(tx: {
+  category?: string | null;
+  userCategory?: string | null;
+  pluggyCategory?: string | null;
+  description?: string | null;
+}): string | null {
+  if (tx.userCategory?.trim()) return tx.userCategory.trim();
+  if (tx.category?.trim()) return tx.category.trim();
+  return translateCategory(tx.pluggyCategory, tx.description);
+}
+
+/** Normaliza descrição/estabelecimento para cache de categorias. */
+export function normalizeCategoryPattern(
+  description: string,
+  merchantName?: string | null,
+): string {
+  const merchant = merchantName?.trim().toLowerCase();
+  if (merchant) return `merchant:${merchant}`;
+  const normalized = description
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/\d{2}\/\d{2}/g, "")
+    .slice(0, 120);
+  return `desc:${normalized}`;
+}
+
+/** Garante que a categoria está na taxonomia fina; fallback para Outros. */
+export function sanitizeFineGrainedCategory(category: string | null | undefined): string {
+  const trimmed = category?.trim();
+  if (trimmed && FINE_GRAINED_SET.has(trimmed)) return trimmed;
+  return "Outros";
+}
+
+/** Classifica com regras determinísticas e indica a origem. */
+export function classifyWithRules(
+  pluggyCategory: string | null | undefined,
+  description: string | null | undefined,
+): { category: string | null; source: CategorySource } {
+  const withoutDescription = translateCategory(pluggyCategory, null);
+  const withDescription = translateCategory(pluggyCategory, description);
+  if (withoutDescription !== withDescription) {
+    return { category: withDescription, source: "rules" };
+  }
+  if (hasHighCategoryConfidence(pluggyCategory, withDescription)) {
+    return { category: withDescription, source: "pluggy" };
+  }
+  return { category: withDescription, source: "rules" };
+}

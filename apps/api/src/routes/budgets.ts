@@ -4,7 +4,6 @@ import {
   DASHBOARD_CATEGORY_GROUPS,
   formatPaydayCycleShortLabel,
   getPaydayCycleRange,
-  translateCategory,
   updateBudgetSchema,
   type BudgetItem,
   type BudgetStatus,
@@ -13,6 +12,7 @@ import {
 } from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
+import { effectiveTransactionCategory } from "../services/transactionCategory.js";
 import type { FinancialTransaction } from "../services/finance/types.js";
 import {
   getSpendingByCategory,
@@ -80,7 +80,7 @@ async function loadPeriodTransactions(
             description: tx.description,
             amount: tx.amount,
             currencyCode: tx.currencyCode,
-            category: translateCategory(tx.category, tx.description),
+            category: effectiveTransactionCategory(tx),
             accountId: acc.id,
             accountName: acc.name,
             accountType: acc.type,

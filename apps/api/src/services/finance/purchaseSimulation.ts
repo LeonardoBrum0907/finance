@@ -4,7 +4,6 @@ import {
   getRecentPaydayCycles,
   isCreditAccount,
   paydayCyclesToDateRange,
-  translateCategory,
   type BudgetStatus,
   type SimulationInput,
   type SimulationResultDTO,
@@ -12,6 +11,7 @@ import {
   type SimulatorBaselineDTO,
 } from "@finance/shared";
 import { prisma } from "../../prisma.js";
+import { effectiveTransactionCategory } from "../transactionCategory.js";
 import { computeNextBill } from "./creditBill.js";
 import {
   addMonthsToMonthKey,
@@ -101,7 +101,7 @@ async function loadRecentTransactions(
             description: tx.description,
             amount: tx.amount,
             currencyCode: tx.currencyCode,
-            category: translateCategory(tx.category, tx.description),
+            category: effectiveTransactionCategory(tx),
             accountId: acc.id,
             accountName: acc.name,
             accountType: acc.type,

@@ -5,7 +5,6 @@ import {
   createPlanSchema,
   getRecentPaydayCycles,
   paydayCyclesToDateRange,
-  translateCategory,
   updateGoalSchema,
   updatePlanSchema,
   updateGoalSourcesSchema,
@@ -14,6 +13,7 @@ import {
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
 import type { FinancialTransaction } from "../services/finance/types.js";
+import { effectiveTransactionCategory } from "../services/transactionCategory.js";
 import {
   getRecentMonthKeys,
   monthKeysToDateRange,
@@ -79,7 +79,7 @@ async function loadRecentTransactions(
             description: tx.description,
             amount: tx.amount,
             currencyCode: tx.currencyCode,
-            category: translateCategory(tx.category, tx.description),
+            category: effectiveTransactionCategory(tx),
             accountId: acc.id,
             accountName: acc.name,
             accountType: acc.type,

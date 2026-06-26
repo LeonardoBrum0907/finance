@@ -2,9 +2,11 @@ import type { FastifyInstance } from "fastify";
 import type { TransactionDTO, TransactionTypeFilter } from "@finance/shared";
 import {
   countsTowardCashFlow,
+  FINE_GRAINED_CATEGORIES,
+  groupCategoryForDashboard,
   isTransactionOutflow,
-  resolveDashboardCategoryGroup,
-  translateCategory,
+  sanitizeFineGrainedCategory,
+  updateTransactionCategorySchema,
 } from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
@@ -13,6 +15,9 @@ import {
   monthKeysToDateRange,
   parseDashboardMonths,
 } from "../services/finance/aggregates.js";
+import { toTransactionDtoFields } from "../services/transactionCategory.js";
+import { upsertCategoryMapping } from "../services/categoryMapping.js";
+import { recategorizeUserTransactions } from "../services/categoryPipeline.js";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
@@ -45,7 +50,7 @@ function parseCategoryGroups(value: unknown): string[] | undefined {
 }
 
 function categoryLabel(tx: Pick<TransactionDTO, "category" | "description">): string {
-  return translateCategory(tx.category, tx.description) ?? tx.category ?? "Outros";
+  return tx.category ?? "Outros";
 }
 
 function computeSummary(items: TransactionDTO[]): {
@@ -131,19 +136,7 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
       orderBy: { date: "desc" },
     });
 
-    const allDtos: TransactionDTO[] = transactions.map((tx) => ({
-      id: tx.id,
-      date: tx.date.toISOString(),
-      description: tx.description,
-      amount: tx.amount,
-      currencyCode: tx.currencyCode,
-      category: translateCategory(tx.category, tx.description),
-      accountId: tx.account.id,
-      accountName: tx.account.name,
-      accountType: tx.account.type,
-      personId: tx.account.connection.person.id,
-      personName: tx.account.connection.person.name,
-    }));
+    const allDtos: TransactionDTO[] = transactions.map((tx) => toTransactionDtoFields(tx));
 
     const categories = Array.from(
       new Set(allDtos.map((tx) => categoryLabel(tx))),
@@ -151,10 +144,10 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
 
     const filtered = allDtos.filter((tx) => {
       if (categoryGroups) {
-        const group = resolveDashboardCategoryGroup(tx.category, tx.description);
+        const group = groupCategoryForDashboard(tx.category, tx.description);
         if (!categoryGroups.includes(group)) return false;
       } else if (categoryGroup) {
-        const group = resolveDashboardCategoryGroup(tx.category, tx.description);
+        const group = groupCategoryForDashboard(tx.category, tx.description);
         if (group !== categoryGroup) return false;
       } else if (category && categoryLabel(tx) !== category) {
         return false;
@@ -193,5 +186,52 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
       summary,
       categories,
     });
+  });
+
+  app.patch("/api/transactions/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateTransactionCategorySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: parsed.error.issues[0]?.message ?? "Dados inválidos" });
+    }
+
+    const transaction = await prisma.transaction.findFirst({
+      where: {
+        id,
+        account: { connection: { person: { userId: request.user!.sub } } },
+      },
+    });
+    if (!transaction) {
+      return reply.status(404).send({ error: "Transação não encontrada" });
+    }
+
+    const category = sanitizeFineGrainedCategory(parsed.data.category);
+    await prisma.transaction.update({
+      where: { id },
+      data: {
+        userCategory: category,
+        categorySource: "user",
+        categoryConfidence: 1,
+      },
+    });
+
+    await upsertCategoryMapping(
+      request.user!.sub,
+      transaction.description,
+      category,
+      "user",
+      transaction.merchantName,
+    );
+
+    return reply.send({ ok: true, category });
+  });
+
+  app.post("/api/transactions/recategorize", async (request, reply) => {
+    const result = await recategorizeUserTransactions(request.user!.sub);
+    return reply.send(result);
+  });
+
+  app.get("/api/transactions/category-options", async (_request, reply) => {
+    return reply.send({ categories: FINE_GRAINED_CATEGORIES });
   });
 }

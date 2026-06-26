@@ -1,5 +1,5 @@
 import { useEffect, useState, type Ref, type RefObject } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   Car,
@@ -20,7 +20,7 @@ import type {
   TransactionTypeFilter,
   TransactionsListResponse,
 } from "@finance/shared";
-import { isTransactionOutflow, toSignedDisplayAmount, translateCategory } from "@finance/shared";
+import { FINE_GRAINED_CATEGORIES, isTransactionOutflow, toSignedDisplayAmount } from "@finance/shared";
 import { api } from "../../lib/api";
 import { formatCurrency } from "../../lib/format";
 import { cardLargeClass, fadeUp } from "./motion";
@@ -49,13 +49,13 @@ const CATEGORY_ICONS: Record<string, LucideIcon> = {
   Utilities: Zap,
 };
 
-function categoryIcon(category: string | null, description: string): LucideIcon {
-  const label = translateCategory(category, description) ?? category ?? "Outros";
+function categoryIcon(category: string | null): LucideIcon {
+  const label = category ?? "Outros";
   return CATEGORY_ICONS[label] ?? Layers;
 }
 
-function categoryLabel(category: string | null, description: string): string {
-  return translateCategory(category, description) ?? category ?? "Outros";
+function categoryLabel(category: string | null): string {
+  return category ?? "Outros";
 }
 
 function formatDateShort(iso: string): string {
@@ -124,6 +124,9 @@ export function RecentTransactions({
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState<TransactionTypeFilter>("all");
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const queryClient = useQueryClient();
 
   const debouncedSearch = useDebouncedValue(search, 300);
 
@@ -151,6 +154,16 @@ export function RecentTransactions({
     setTypeFilter("all");
     onClearCategorySelection?.();
   };
+
+  const updateCategoryMutation = useMutation({
+    mutationFn: ({ id, category }: { id: string; category: string }) =>
+      api.patch<{ ok: boolean; category: string }>(`/api/transactions/${id}`, { category }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      setEditingId(null);
+    },
+  });
 
   const query = useQuery({
     queryKey: [
@@ -297,9 +310,10 @@ export function RecentTransactions({
             </thead>
             <tbody className="divide-y divide-slate-100">
               {items.map((tx) => {
-                const label = categoryLabel(tx.category, tx.description);
-                const Icon = categoryIcon(tx.category, tx.description);
+                const label = categoryLabel(tx.category);
+                const Icon = categoryIcon(tx.category);
                 const isOutflow = isTransactionOutflow(tx.amount, tx.accountType);
+                const isEditing = editingId === tx.id;
 
                 return (
                   <tr key={tx.id} className="hover:bg-slate-50/70">
@@ -311,12 +325,39 @@ export function RecentTransactions({
                       <span className="text-[10px] text-slate-400">{tx.accountName}</span>
                     </td>
                     <td className="px-4 py-3.5">
-                      <span className="inline-flex items-center gap-2 text-xs font-medium">
-                        <span className="rounded-md border border-slate-200/50 bg-slate-100 p-1">
-                          <Icon className="h-3.5 w-3.5 text-slate-500" />
-                        </span>
-                        {label}
-                      </span>
+                      {isEditing ? (
+                        <select
+                          autoFocus
+                          defaultValue={label}
+                          disabled={updateCategoryMutation.isPending}
+                          onChange={(e) => {
+                            updateCategoryMutation.mutate({ id: tx.id, category: e.target.value });
+                          }}
+                          onBlur={() => setEditingId(null)}
+                          className="max-w-[12rem] rounded-lg border border-indigo-200 bg-white px-2 py-1 text-xs outline-none"
+                        >
+                          {FINE_GRAINED_CATEGORIES.map((cat) => (
+                            <option key={cat} value={cat}>
+                              {cat}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setEditingId(tx.id)}
+                          className="inline-flex text-start gap-2 text-xs font-medium transition hover:text-indigo-600"
+                          title="Clique para corrigir a categoria"
+                        >
+                          <span className="rounded-md border border-slate-200/50 bg-slate-100 p-1">
+                            <Icon className="h-3.5 w-3.5 text-slate-500" />
+                          </span>
+                          {label}
+                          {tx.categorySource === "user" && (
+                            <span className="text-[9px] text-indigo-500">(editada)</span>
+                          )}
+                        </button>
+                      )}
                     </td>
                     {showPersonColumn && (
                       <td className="px-4 py-3.5 text-xs text-slate-600">{tx.personName}</td>
