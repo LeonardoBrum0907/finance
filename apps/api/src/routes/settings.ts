@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { updateSettingsSchema } from "@finance/shared";
+import { updateSettingsSchema, isPaydayDayConfigured } from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
 import { loadUserSettings } from "../services/userSettings.js";
@@ -22,14 +22,22 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     const { paydayDay, defaultPeriodMode, includeInvestmentsInNetWorth } = parsed.data;
 
     if (defaultPeriodMode === "payday") {
-      const current = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { paydayDay: true },
-      });
-      const effectivePayday = paydayDay !== undefined ? paydayDay : current?.paydayDay;
-      if (effectivePayday === null || effectivePayday === undefined) {
+      const [current, people] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: userId },
+          select: { paydayDay: true },
+        }),
+        prisma.person.findMany({
+          where: { userId },
+          select: { paydayDay: true },
+        }),
+      ]);
+      const effectivePayday =
+        paydayDay !== undefined ? paydayDay : current?.paydayDay;
+      const anyPersonPayday = people.some((p) => isPaydayDayConfigured(p.paydayDay));
+      if (!isPaydayDayConfigured(effectivePayday) && !anyPersonPayday) {
         return reply.code(400).send({
-          error: "Configure o dia de recebimento antes de usar o modo de ciclo",
+          error: "Configure o dia de recebimento de pelo menos uma pessoa antes de usar o modo de ciclo",
         });
       }
     }

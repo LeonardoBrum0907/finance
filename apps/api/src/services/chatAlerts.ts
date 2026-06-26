@@ -7,6 +7,7 @@ import {
   getTopExpenses,
   toLocalMonthKey,
 } from "./finance/aggregates.js";
+import { buildHouseholdArena } from "./finance/householdComparison.js";
 import { flattenTransactions, loadUserFinancialData } from "./finance/queries.js";
 import { prisma } from "../prisma.js";
 
@@ -18,6 +19,33 @@ export async function buildChatAlerts(userId: string): Promise<ChatAlertDTO[]> {
   if (!hasAccounts) return [];
 
   const alerts: ChatAlertDTO[] = [];
+
+  const arena = await buildHouseholdArena(userId);
+  if (arena && arena.personCount >= 2) {
+    for (const h of arena.headToHead.slice(0, 2)) {
+      alerts.push({
+        id: h.id,
+        message: h.message,
+        severity: "info",
+        suggestionMessage: `Analise esta comparação e diga quem precisa ajustar o comportamento: "${h.message}"`,
+        contextKey: `alert:${h.id}`,
+      });
+    }
+
+    for (const r of arena.rankings) {
+      if (r.tone === "roast" || r.net < 0) {
+        alerts.push({
+          id: `arena-person-${r.personId}`,
+          message: r.verdict,
+          severity: "warning",
+          suggestionMessage: `Me dê feedback direto sobre as finanças de ${r.personName} esta semana.`,
+          personId: r.personId,
+          contextKey: `arena:person:${r.personId}`,
+        });
+      }
+    }
+  }
+
   const txs = flattenTransactions(data);
   const now = new Date();
   const currentMonth = toLocalMonthKey(now);
@@ -64,6 +92,7 @@ export async function buildChatAlerts(userId: string): Promise<ChatAlertDTO[]> {
       message: text,
       severity,
       suggestionMessage: `Explique este insight e sugira uma ação prática: "${text}"`,
+      contextKey: `insight:${severity}`,
     });
   }
 
@@ -72,7 +101,9 @@ export async function buildChatAlerts(userId: string): Promise<ChatAlertDTO[]> {
       id: "negative-net",
       message: `Déficit de ${formatCurrency(Math.abs(period.net))} no mês atual.`,
       severity: "warning",
-      suggestionMessage: "Meu saldo está negativo este mês. Onde posso cortar gastos e como recuperar?",
+      suggestionMessage:
+        "Meu saldo está negativo este mês. Onde posso cortar gastos e como recuperar?",
+      contextKey: "alert:negative-net",
     });
   }
 
@@ -92,6 +123,7 @@ export async function buildChatAlerts(userId: string): Promise<ChatAlertDTO[]> {
         message: `Orçamento "${budget.name}" em ${Math.round(ratio * 100)}% do limite.`,
         severity: ratio >= 1 ? "warning" : "info",
         suggestionMessage: `Meu orçamento "${budget.name}" está quase estourando. O que fazer?`,
+        contextKey: `alert:budget-${budget.id}`,
       });
     }
   }
@@ -109,10 +141,12 @@ export async function buildChatAlerts(userId: string): Promise<ChatAlertDTO[]> {
         id: "stale-sync",
         message: "Seus dados bancários podem estar desatualizados.",
         severity: "info",
-        suggestionMessage: "Quais dados financeiros você está usando? Meus dados podem estar desatualizados?",
+        suggestionMessage:
+          "Quais dados financeiros você está usando? Meus dados podem estar desatualizados?",
+        contextKey: "alert:stale-sync",
       });
     }
   }
 
-  return alerts.slice(0, 5);
+  return alerts.slice(0, 6);
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ChatThreadDTO } from "@finance/shared";
 import { api } from "../lib/api";
@@ -9,6 +9,7 @@ export function ChatPage() {
   const queryClient = useQueryClient();
   const [selectedPersonId, setSelectedPersonId] = useState("");
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const initRef = useRef(false);
 
   const threads = useQuery({
     queryKey: ["chat-threads"],
@@ -24,18 +25,19 @@ export function ChatPage() {
   });
 
   useEffect(() => {
-    if (threads.isLoading || activeThreadId) return;
+    if (threads.isLoading || activeThreadId || initRef.current) return;
+
     if (threads.data && threads.data.length > 0) {
+      initRef.current = true;
       setActiveThreadId(threads.data[0]!.id);
-    } else if (
-      threads.data &&
-      threads.data.length === 0 &&
-      !createThread.isPending &&
-      !createThread.isSuccess
-    ) {
+      return;
+    }
+
+    if (threads.data && threads.data.length === 0 && !createThread.isPending) {
+      initRef.current = true;
       createThread.mutate();
     }
-  }, [threads.data, threads.isLoading, activeThreadId, createThread.isPending]);
+  }, [threads.data, threads.isLoading, activeThreadId, createThread.isPending, createThread]);
 
   return (
     <div className="flex h-[calc(100vh-3rem)] flex-col overflow-hidden md:flex-row md:gap-4 lg:h-[calc(100vh-4rem)]">

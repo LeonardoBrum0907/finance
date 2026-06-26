@@ -136,6 +136,8 @@ export function GoalsPage() {
             <AssistantSpotlightButton
               label="Montar plano com IA"
               message={`Monte um plano de poupança para meus objetivos: ${activeGoals.map((g) => g.name).join(", ")}`}
+              contextKey="goals:plan"
+              title="Plano de objetivos"
               contextHint={JSON.stringify({
                 source: "goals_page",
                 goalIds: activeGoals.map((g) => g.id),

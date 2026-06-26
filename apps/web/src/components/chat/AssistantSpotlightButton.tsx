@@ -4,6 +4,8 @@ import { useAssistant } from "../../lib/assistantContext";
 interface Props {
   label?: string;
   message: string;
+  contextKey: string;
+  title?: string;
   contextHint?: string;
   personId?: string;
   className?: string;
@@ -12,6 +14,8 @@ interface Props {
 export function AssistantSpotlightButton({
   label = "Perguntar",
   message,
+  contextKey,
+  title,
   contextHint,
   personId,
   className = "",
@@ -27,6 +31,8 @@ export function AssistantSpotlightButton({
           contextHint,
           personId,
           source: "spotlight",
+          contextKey,
+          title: title ?? label,
         })
       }
       className={`inline-flex cursor-pointer items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50/80 px-2 py-1 text-[10px] font-semibold text-emerald-700 transition hover:bg-emerald-100 ${className}`}

@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type {
-  CategoryChartSelection,
-  DashboardMonths,
-  DashboardSummary,
-  PeriodMode,
-  PersonDTO,
-  UserSettingsDTO,
+   CategoryChartSelection,
+   DashboardMonths,
+   DashboardSummary,
+   PeriodMode,
+   PersonDTO,
+   UserSettingsDTO,
 } from "@finance/shared";
-import { isCreditAccount } from "@finance/shared";
+import { isCreditAccount, isPaydayDayConfigured, parsePaydayCycleAnchor } from "@finance/shared";
 import { api } from "../lib/api";
 import { CreditCardList } from "../components/dashboard/CreditCardList";
 import { CycleProgressCard } from "../components/dashboard/CycleProgressCard";
@@ -21,171 +21,249 @@ import { RecentTransactions } from "../components/dashboard/RecentTransactions";
 import { StatCards } from "../components/dashboard/StatCards";
 import { InvestmentSnapshot } from "../components/dashboard/InvestmentSnapshot";
 import {
-  AssistantAlertBanner,
-  WeeklyRecapCard,
+   AssistantAlertBanner,
+   WeeklyRecapCard,
 } from "../components/chat/AssistantAlertBanner";
+import { HouseholdArenaCard } from "../components/dashboard/HouseholdArenaCard";
+import { useAssistant } from "../lib/assistantContext";
 
 export function DashboardPage() {
-  const [months, setMonths] = useState<DashboardMonths>(1);
-  const [personId, setPersonId] = useState<PersonFilter>("all");
-  const [periodMode, setPeriodMode] = useState<PeriodMode>("calendar");
-  const [categorySelection, setCategorySelection] = useState<CategoryChartSelection | null>(null);
-  const transactionsRef = useRef<HTMLElement>(null);
+   const { setDashboardPersonFilter } = useAssistant();
+   const [months, setMonths] = useState<DashboardMonths>(1);
+   const [personId, setPersonId] = useState<PersonFilter>("all");
+   const [periodMode, setPeriodMode] = useState<PeriodMode>("calendar");
+   const [categorySelection, setCategorySelection] = useState<CategoryChartSelection | null>(null);
+   const [selectedCycleKey, setSelectedCycleKey] = useState<string | null>(null);
+   const transactionsRef = useRef<HTMLElement>(null);
 
-  const settings = useQuery({
-    queryKey: ["settings"],
-    queryFn: () => api.get<UserSettingsDTO>("/api/settings"),
-  });
+   const settings = useQuery({
+      queryKey: ["settings"],
+      queryFn: () => api.get<UserSettingsDTO>("/api/settings"),
+   });
 
-  useEffect(() => {
-    if (settings.data?.paydayConfigured) {
-      setPeriodMode(settings.data.defaultPeriodMode);
-    }
-  }, [settings.data?.defaultPeriodMode, settings.data?.paydayConfigured]);
+   useEffect(() => {
+      if (settings.data?.paydayConfigured) {
+         setPeriodMode(settings.data.defaultPeriodMode);
+      }
+   }, [settings.data?.defaultPeriodMode, settings.data?.paydayConfigured]);
 
-  const effectivePeriodMode =
-    periodMode === "payday" && settings.data?.paydayConfigured ? "payday" : "calendar";
+   const handleCategorySelect = useCallback((selection: CategoryChartSelection) => {
+      setCategorySelection(selection);
+      requestAnimationFrame(() => {
+         transactionsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+   }, []);
 
-  const handleCategorySelect = useCallback((selection: CategoryChartSelection) => {
-    setCategorySelection(selection);
-    requestAnimationFrame(() => {
-      transactionsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }, []);
+   const handleClearCategorySelection = useCallback(() => {
+      setCategorySelection(null);
+   }, []);
 
-  const handleClearCategorySelection = useCallback(() => {
-    setCategorySelection(null);
-  }, []);
+   const people = useQuery({
+      queryKey: ["people"],
+      queryFn: () => api.get<PersonDTO[]>("/api/people"),
+   });
 
-  const people = useQuery({
-    queryKey: ["people"],
-    queryFn: () => api.get<PersonDTO[]>("/api/people"),
-  });
+   const paydayConfigured = useMemo(() => {
+      const list = people.data ?? [];
+      if (personId !== "all") {
+         const person = list.find((p) => p.id === personId);
+         return (
+            isPaydayDayConfigured(person?.paydayDay) ||
+            isPaydayDayConfigured(settings.data?.paydayDay)
+         );
+      }
+      const configured = list.filter((p) => isPaydayDayConfigured(p.paydayDay));
+      if (configured.length === 0) {
+         return isPaydayDayConfigured(settings.data?.paydayDay);
+      }
+      const uniqueDays = new Set(configured.map((p) => p.paydayDay));
+      const uniqueAnchors = new Set(
+         configured.map((p) => parsePaydayCycleAnchor(p.paydayCycleAnchor)),
+      );
+      return uniqueDays.size === 1 && uniqueAnchors.size === 1;
+   }, [people.data, personId, settings.data?.paydayDay]);
 
-  const dashboardParams = new URLSearchParams({ months: String(months) });
-  if (personId !== "all") dashboardParams.set("personId", personId);
-  if (effectivePeriodMode === "payday") dashboardParams.set("periodMode", "payday");
+   const effectivePeriodMode =
+      periodMode === "payday" && paydayConfigured ? "payday" : "calendar";
 
-  const dashboard = useQuery({
-    queryKey: ["dashboard", months, personId, effectivePeriodMode],
-    queryFn: () => api.get<DashboardSummary>(`/api/dashboard?${dashboardParams}`),
-    enabled: settings.isSuccess,
-  });
+   const dashboardParams = new URLSearchParams({ months: String(months) });
+   if (personId !== "all") dashboardParams.set("personId", personId);
+   if (effectivePeriodMode === "payday") dashboardParams.set("periodMode", "payday");
 
-  const data = dashboard.data;
-  const hasCreditCards = data?.accounts.some((acc) => isCreditAccount(acc.type)) ?? false;
-  const showCycleCard =
-    data?.currentCycle && data.paydayDay !== null && effectivePeriodMode === "payday";
+   const dashboard = useQuery({
+      queryKey: ["dashboard", months, personId, effectivePeriodMode],
+      queryFn: () => api.get<DashboardSummary>(`/api/dashboard?${dashboardParams}`),
+      enabled: settings.isSuccess,
+   });
 
-  return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-slate-900">
-            Painel Geral
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Visão consolidada das suas finanças com comparativos por período.
-          </p>
-        </div>
-        {data && (data.accounts.length > 0 || data.investments.positionCount > 0) && (
-          <div className="flex flex-wrap items-center gap-3">
-            <PersonSelector
-              value={personId}
-              people={people.data ?? []}
-              onChange={setPersonId}
-            />
-            <PeriodSelector
-              value={months}
-              onChange={setMonths}
-              periodMode={effectivePeriodMode}
-              onPeriodModeChange={setPeriodMode}
-              paydayConfigured={settings.data?.paydayConfigured ?? false}
-            />
-          </div>
-        )}
-      </div>
+   const data = dashboard.data;
+   const hasCreditCards = data?.accounts.some((acc) => isCreditAccount(acc.type)) ?? false;
+   const showCycleCard =
+      data?.currentCycle && data.paydayDay !== null && effectivePeriodMode === "payday";
 
-      {!settings.data?.paydayConfigured && settings.isSuccess && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Configure o dia que você recebe em{" "}
-          <a href="/configuracoes" className="font-medium underline">
-            Configurações
-          </a>{" "}
-          para usar o modo &quot;Meu ciclo&quot;.
-        </div>
-      )}
+   const cycleOptions = data?.recentCycles ?? (data?.currentCycle ? [data.currentCycle] : []);
 
-      {dashboard.isLoading || settings.isLoading ? (
-        <DashboardSkeleton />
-      ) : dashboard.isError ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-          Não foi possível carregar o painel. Tente novamente em instantes.
-        </div>
-      ) : !data || (data.accounts.length === 0 && data.investments.positionCount === 0) ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
-          <p className="text-sm font-medium text-slate-700">
-            Nenhuma conta conectada ainda
-          </p>
-          <p className="mt-1 text-sm text-slate-500">
-            Cadastre em <strong>Pessoas</strong> e conecte em <strong>Contas</strong>.
-          </p>
-        </div>
-      ) : (
-        <>
-          <AssistantAlertBanner />
+   const activeCycleKey = useMemo(() => {
+      if (selectedCycleKey && cycleOptions.some((c) => c.cycleKey === selectedCycleKey)) {
+         return selectedCycleKey;
+      }
+      return cycleOptions[cycleOptions.length - 1]?.cycleKey ?? null;
+   }, [cycleOptions, selectedCycleKey]);
 
-          {showCycleCard && data.paydayDay !== null && (
-            <CycleProgressCard
-              cycle={data.currentCycle!}
-              currencyCode={data.currencyCode}
-              paydayDay={data.paydayDay}
-            />
-          )}
+   const displayCycle = useMemo(
+      () => cycleOptions.find((c) => c.cycleKey === activeCycleKey) ?? data?.currentCycle,
+      [cycleOptions, activeCycleKey, data?.currentCycle],
+   );
 
-          <StatCards
-            netWorth={data.netWorth}
-            currencyCode={data.currencyCode}
-            period={data.period}
-            previousPeriod={data.previousPeriod}
-            periodMode={effectivePeriodMode}
-          />
+   useEffect(() => {
+      setSelectedCycleKey(null);
+   }, [months, personId, effectivePeriodMode]);
 
-          <InvestmentSnapshot
-            investments={data.investments}
-            currencyCode={data.currencyCode}
-          />
+   useEffect(() => {
+      setDashboardPersonFilter(personId);
+   }, [personId, setDashboardPersonFilter]);
 
-          <GrowthChart
-            data={data.monthlySeries}
-            months={months}
-            currencyCode={data.currencyCode}
-            growthMetrics={data.growthMetrics}
-            categories={data.categories}
-            previousCategories={data.previousCategories}
-            periodLabel={data.period.label}
-            periodMode={effectivePeriodMode}
-            hideIncomeBreakdown={Boolean(showCycleCard)}
-            onCategorySelect={handleCategorySelect}
-          />
+   const effectivePersonId = personId === "all" ? undefined : personId;
 
-          <div className="grid gap-8 lg:grid-cols-2">
-            <InsightsPanel insights={data.insights} />
-            <div className="flex flex-col gap-4">
-              <WeeklyRecapCard />
-              {hasCreditCards && <CreditCardList accounts={data.accounts} />}
+   return (
+      <div className="space-y-8">
+         <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+               <h1 className="font-display text-2xl font-semibold tracking-tight text-slate-900">
+                  Painel Geral
+               </h1>
+               <p className="mt-1 text-sm text-slate-500">
+                  Visão consolidada das suas finanças com comparativos por período.
+               </p>
             </div>
-          </div>
+            {data && (data.accounts.length > 0 || data.investments.positionCount > 0) && (
+               <div className="flex flex-wrap items-center gap-3">
+                  <PersonSelector
+                     value={personId}
+                     people={people.data ?? []}
+                     onChange={setPersonId}
+                  />
+                  <PeriodSelector
+                     value={months}
+                     onChange={setMonths}
+                     periodMode={effectivePeriodMode}
+                     onPeriodModeChange={setPeriodMode}
+                     paydayConfigured={paydayConfigured}
+                  />
+               </div>
+            )}
+         </div>
 
-          <RecentTransactions
-            personId={personId}
-            dashboardMonths={months}
-            categorySelection={categorySelection}
-            onClearCategorySelection={handleClearCategorySelection}
-            sectionRef={transactionsRef}
-          />
-        </>
-      )}
-    </div>
-  );
+         {!paydayConfigured && settings.isSuccess && people.isSuccess && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+               {personId !== "all" ? (
+                  <>
+                     Configure o dia de recebimento desta pessoa em{" "}
+                     <a href="/configuracoes" className="font-medium underline">
+                        Configurações
+                     </a>{" "}
+                     para usar o modo &quot;Meu ciclo&quot;.
+                  </>
+               ) : people.data && people.data.length > 1 ? (
+                  <>
+                     Na visão de todas as pessoas, o modo ciclo só está disponível quando todos têm o
+                     mesmo dia de pagamento e a mesma posição no ciclo. Selecione uma pessoa ou ajuste em{" "}
+                     <a href="/configuracoes" className="font-medium underline">
+                        Configurações
+                     </a>
+                     .
+                  </>
+               ) : (
+                  <>
+                     Configure o dia de recebimento em{" "}
+                     <a href="/configuracoes" className="font-medium underline">
+                        Configurações
+                     </a>{" "}
+                     para usar o modo &quot;Meu ciclo&quot;.
+                  </>
+               )}
+            </div>
+         )}
+
+         {dashboard.isLoading || settings.isLoading ? (
+            <DashboardSkeleton />
+         ) : dashboard.isError ? (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+               Não foi possível carregar o painel. Tente novamente em instantes.
+            </div>
+         ) : !data || (data.accounts.length === 0 && data.investments.positionCount === 0) ? (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
+               <p className="text-sm font-medium text-slate-700">
+                  Nenhuma conta conectada ainda
+               </p>
+               <p className="mt-1 text-sm text-slate-500">
+                  Cadastre em <strong>Pessoas</strong> e conecte em <strong>Contas</strong>.
+               </p>
+            </div>
+         ) : (
+            <>
+               <AssistantAlertBanner />
+
+               {showCycleCard && data.paydayDay !== null && displayCycle && activeCycleKey && (
+                  <CycleProgressCard
+                     cycle={displayCycle}
+                     cycles={cycleOptions}
+                     currencyCode={data.currencyCode}
+                     paydayDay={data.paydayDay}
+                     paydayCycleAnchor={data.paydayCycleAnchor}
+                     selectedCycleKey={activeCycleKey}
+                     onSelectCycle={setSelectedCycleKey}
+                  />
+               )}
+
+               <StatCards
+                  netWorth={data.netWorth}
+                  currencyCode={data.currencyCode}
+                  period={data.period}
+                  previousPeriod={data.previousPeriod}
+                  periodMode={effectivePeriodMode}
+                  personId={effectivePersonId}
+               />
+
+               <InvestmentSnapshot
+                  investments={data.investments}
+                  currencyCode={data.currencyCode}
+               />
+
+               <GrowthChart
+                  data={data.monthlySeries}
+                  months={months}
+                  currencyCode={data.currencyCode}
+                  growthMetrics={data.growthMetrics}
+                  categories={data.categories}
+                  previousCategories={data.previousCategories}
+                  periodLabel={data.period.label}
+                  periodMode={effectivePeriodMode}
+                  hideIncomeBreakdown={Boolean(showCycleCard)}
+                  onCategorySelect={handleCategorySelect}
+                  personId={effectivePersonId}
+               />
+
+               <div className="grid gap-8 lg:grid-cols-2">
+                  <InsightsPanel insights={data.insights} personId={effectivePersonId} />
+                  <div className="flex flex-col gap-4">
+                     <WeeklyRecapCard />
+                     {hasCreditCards && <CreditCardList accounts={data.accounts} />}
+                  </div>
+               </div>
+
+               <HouseholdArenaCard />
+
+
+               <RecentTransactions
+                  personId={personId}
+                  dashboardMonths={months}
+                  categorySelection={categorySelection}
+                  onClearCategorySelection={handleClearCategorySelection}
+                  sectionRef={transactionsRef}
+               />
+            </>
+         )}
+      </div>
+   );
 }

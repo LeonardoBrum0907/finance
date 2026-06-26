@@ -307,20 +307,42 @@ export function GrowthSingleMonthView({
                     </span>
                   </p>
                   <p>
-                    Despesas estimadas:{" "}
+                    Despesas estimadas no ciclo:{" "}
                     <span className="font-semibold text-slate-800">
                       ~{formatCurrency(projection.projectedExpense, currencyCode)}
                     </span>
-                    {projection.pendingSalary != null && projection.pendingSalary > 0 && (
-                      <>
-                        {" · "}
-                        Salário previsto:{" "}
-                        <span className="font-semibold text-teal-600">
-                          ~{formatCurrency(projection.pendingSalary, currencyCode)}
-                        </span>
-                      </>
-                    )}
                   </p>
+                  {((projection.expensesToDate ?? 0) > 0 || (projection.committedExpenses ?? 0) > 0) && (
+                    <p className="text-slate-500">
+                      {(projection.expensesToDate ?? 0) > 0 && (
+                        <>
+                          Já gasto:{" "}
+                          <span className="font-medium text-slate-700">
+                            {formatCurrency(projection.expensesToDate ?? 0, currencyCode)}
+                          </span>
+                        </>
+                      )}
+                      {(projection.expensesToDate ?? 0) > 0 &&
+                        (projection.committedExpenses ?? 0) > 0 &&
+                        " · "}
+                      {(projection.committedExpenses ?? 0) > 0 && (
+                        <>
+                          Parcelas agendadas:{" "}
+                          <span className="font-medium text-slate-700">
+                            {formatCurrency(projection.committedExpenses ?? 0, currencyCode)}
+                          </span>
+                        </>
+                      )}
+                    </p>
+                  )}
+                  {projection.pendingSalary != null && projection.pendingSalary > 0 && (
+                    <p>
+                      Salário previsto:{" "}
+                      <span className="font-semibold text-teal-600">
+                        ~{formatCurrency(projection.pendingSalary, currencyCode)}
+                      </span>
+                    </p>
+                  )}
                   {projection.pendingSalary != null && projection.pendingSalary > 0 ? (
                     <p>
                       Sobra estimada após pagamento:{" "}

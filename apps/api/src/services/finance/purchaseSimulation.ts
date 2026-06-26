@@ -9,6 +9,7 @@ import {
   type SimulationResultDTO,
   type SimulationVerdict,
   type SimulatorBaselineDTO,
+  type PaydayCycleAnchor,
 } from "@finance/shared";
 import { prisma } from "../../prisma.js";
 import { effectiveTransactionCategory } from "../transactionCategory.js";
@@ -31,7 +32,7 @@ import {
   resolveSurplus,
 } from "./projections.js";
 import type { FinancialTransaction } from "./types.js";
-import { loadUserSettings } from "../userSettings.js";
+import { loadUserSettings, resolvePaydayCycle } from "../userSettings.js";
 
 const PROJECTION_HORIZON = 12;
 const DISCLAIMER =
@@ -41,6 +42,8 @@ interface SimulatorContext {
   userId: string;
   personId?: string;
   settings: Awaited<ReturnType<typeof loadUserSettings>>;
+  paydayDay: number | null;
+  paydayCycleAnchor: PaydayCycleAnchor;
   txs: FinancialTransaction[];
   bankBalance: number;
   creditAccounts: {
@@ -60,10 +63,15 @@ async function loadRecentTransactions(
   userId: string,
   paydayDay: number | null,
   personId?: string,
+  paydayCycleAnchor?: PaydayCycleAnchor,
 ): Promise<FinancialTransaction[]> {
   const range =
     paydayDay !== null
-      ? paydayCyclesToDateRange(getRecentPaydayCycles(4, paydayDay, 0), paydayDay)
+      ? paydayCyclesToDateRange(
+          getRecentPaydayCycles(4, paydayDay, 0, paydayCycleAnchor),
+          paydayDay,
+          paydayCycleAnchor,
+        )
       : monthKeysToDateRange(getRecentMonthKeys(3));
 
   const dateFrom = range.from ? new Date(`${range.from}T00:00:00.000Z`) : new Date(0);
@@ -121,7 +129,13 @@ async function loadSimulatorContext(
   personId?: string,
 ): Promise<SimulatorContext> {
   const settings = await loadUserSettings(userId);
-  const txs = await loadRecentTransactions(userId, settings.paydayDay, personId);
+  const { paydayDay, paydayCycleAnchor } = await resolvePaydayCycle(userId, personId);
+  const txs = await loadRecentTransactions(
+    userId,
+    paydayDay,
+    personId,
+    paydayCycleAnchor,
+  );
 
   const people = await prisma.person.findMany({
     where: {
@@ -188,6 +202,8 @@ async function loadSimulatorContext(
     userId,
     personId,
     settings,
+    paydayDay,
+    paydayCycleAnchor,
     txs,
     bankBalance,
     creditAccounts,
@@ -198,11 +214,14 @@ async function loadSimulatorContext(
 function computeAverageIncomeExpenses(
   txs: FinancialTransaction[],
   paydayDay: number | null,
+  paydayCycleAnchor: PaydayCycleAnchor,
 ): { income: number; expenses: number } {
   if (paydayDay !== null) {
-    const cycles = getRecentPaydayCycles(3, paydayDay, 0);
+    const cycles = getRecentPaydayCycles(3, paydayDay, 0, paydayCycleAnchor);
     if (cycles.length === 0) return { income: 0, expenses: 0 };
-    const summaries = cycles.map((start) => getCycleSummary(txs, start, paydayDay));
+    const summaries = cycles.map((start) =>
+      getCycleSummary(txs, start, paydayDay, paydayCycleAnchor),
+    );
     const count = summaries.length;
     return {
       income: summaries.reduce((s, x) => s + x.income, 0) / count,
@@ -223,14 +242,18 @@ function computeAverageIncomeExpenses(
 function computeProjectedNet(
   ctx: SimulatorContext,
 ): number | null {
-  const { settings, txs } = ctx;
-  const paydayDay = settings.paydayDay;
+  const { settings, txs, paydayDay, paydayCycleAnchor: anchor } = ctx;
   const periodMode = settings.defaultPeriodMode;
 
-  const periods = resolvePeriodRanges(1, periodMode, paydayDay);
+  const periods = resolvePeriodRanges(1, periodMode, paydayDay, anchor);
   const currentSummary =
     periodMode === "payday" && paydayDay !== null
-      ? getCycleSummary(txs, getPaydayCycleRange(paydayDay).cycleKey, paydayDay)
+      ? getCycleSummary(
+          txs,
+          getPaydayCycleRange(paydayDay, new Date(), anchor).cycleKey,
+          paydayDay,
+          anchor,
+        )
       : getMonthlySummary(txs, toLocalMonthKey(new Date()));
 
   const growth = buildGrowthMetrics({
@@ -240,6 +263,7 @@ function computeProjectedNet(
     previousRange: periods.previousRange,
     txs,
     paydayDay,
+    paydayCycleAnchor: anchor,
     periodMode,
   });
 
@@ -351,12 +375,12 @@ async function loadBudgetImpact(
   );
   if (!group) return null;
 
-  const settings = await loadUserSettings(userId);
-  const txs = await loadRecentTransactions(userId, settings.paydayDay, personId);
+  const { paydayDay, paydayCycleAnchor } = await resolvePaydayCycle(userId, personId);
+  const txs = await loadRecentTransactions(userId, paydayDay, personId, paydayCycleAnchor);
 
   let range: { from?: string; to?: string };
-  if (settings.paydayDay !== null) {
-    const cycle = getPaydayCycleRange(settings.paydayDay);
+  if (paydayDay !== null) {
+    const cycle = getPaydayCycleRange(paydayDay, new Date(), paydayCycleAnchor);
     range = { from: cycle.from, to: cycle.to };
   } else {
     const month = toLocalMonthKey(new Date());
@@ -386,14 +410,22 @@ export async function fetchSimulatorBaseline(
   personId?: string,
 ): Promise<SimulatorBaselineDTO> {
   const ctx = await loadSimulatorContext(userId, personId);
-  const { surplus, label: surplusLabel } = resolveSurplus(ctx.txs, ctx.settings.paydayDay);
-  const { income, expenses } = computeAverageIncomeExpenses(ctx.txs, ctx.settings.paydayDay);
+  const { surplus, label: surplusLabel } = resolveSurplus(
+    ctx.txs,
+    ctx.paydayDay,
+    ctx.paydayCycleAnchor,
+  );
+  const { income, expenses } = computeAverageIncomeExpenses(
+    ctx.txs,
+    ctx.paydayDay,
+    ctx.paydayCycleAnchor,
+  );
   const goalsSummary = await loadGoalsSummaryForUser(userId);
   const projectedNet = computeProjectedNet(ctx);
 
   let periodLabel: string;
-  if (ctx.settings.paydayDay !== null) {
-    const cycle = getPaydayCycleRange(ctx.settings.paydayDay);
+  if (ctx.paydayDay !== null) {
+    const cycle = getPaydayCycleRange(ctx.paydayDay, new Date(), ctx.paydayCycleAnchor);
     periodLabel = cycle.cycleKey;
   } else {
     periodLabel = toLocalMonthKey(new Date());
@@ -426,8 +458,16 @@ export async function runSimulation(
   input: SimulationInput,
 ): Promise<SimulationResultDTO> {
   const ctx = await loadSimulatorContext(userId, input.personId);
-  const { surplus: baselineSurplus } = resolveSurplus(ctx.txs, ctx.settings.paydayDay);
-  const { income, expenses } = computeAverageIncomeExpenses(ctx.txs, ctx.settings.paydayDay);
+  const { surplus: baselineSurplus } = resolveSurplus(
+    ctx.txs,
+    ctx.paydayDay,
+    ctx.paydayCycleAnchor,
+  );
+  const { income, expenses } = computeAverageIncomeExpenses(
+    ctx.txs,
+    ctx.paydayDay,
+    ctx.paydayCycleAnchor,
+  );
   const goalsSummary = await loadGoalsSummaryForUser(userId);
   const monthlyContribution = resolveMonthlyContribution(
     goalsSummary.plans,

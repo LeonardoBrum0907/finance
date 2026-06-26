@@ -14,6 +14,7 @@ interface UseChatStreamOptions {
 export function useChatStream({ threadId, personId, enabled }: UseChatStreamOptions) {
   const queryClient = useQueryClient();
   const [messages, setMessages] = useState<ChatMessageDTO[]>([]);
+  const [messagesLoaded, setMessagesLoaded] = useState(false);
   const [streaming, setStreaming] = useState(false);
   const [streamingPhase, setStreamingPhase] = useState<StreamingPhase>(null);
   const [toolActivity, setToolActivity] = useState<string | null>(null);
@@ -24,16 +25,24 @@ export function useChatStream({ threadId, personId, enabled }: UseChatStreamOpti
   useEffect(() => {
     if (!threadId || !enabled) {
       setMessages([]);
+      setMessagesLoaded(false);
       return;
     }
+    setMessagesLoaded(false);
     let cancelled = false;
     api
       .get<ChatMessageDTO[]>(`/api/chat/messages?threadId=${encodeURIComponent(threadId)}`)
       .then((data) => {
-        if (!cancelled) setMessages(data);
+        if (!cancelled) {
+          setMessages(data);
+          setMessagesLoaded(true);
+        }
       })
       .catch(() => {
-        if (!cancelled) setMessages([]);
+        if (!cancelled) {
+          setMessages([]);
+          setMessagesLoaded(true);
+        }
       });
     return () => {
       cancelled = true;
@@ -225,6 +234,7 @@ export function useChatStream({ threadId, personId, enabled }: UseChatStreamOpti
 
   return {
     messages,
+    messagesLoaded,
     streaming,
     streamingPhase,
     toolActivity,

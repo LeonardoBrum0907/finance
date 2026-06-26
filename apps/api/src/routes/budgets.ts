@@ -9,6 +9,7 @@ import {
   type BudgetStatus,
   type DashboardCategoryGroup,
   type PeriodMode,
+  type PaydayCycleAnchor,
 } from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
@@ -19,7 +20,7 @@ import {
   monthKeysToDateRange,
   toLocalMonthKey,
 } from "../services/finance/aggregates.js";
-import { loadUserSettings } from "../services/userSettings.js";
+import { resolvePaydayCycle } from "../services/userSettings.js";
 
 function getBudgetStatus(ratio: number, timeRatio: number): BudgetStatus {
   const pace = timeRatio > 0 ? ratio / timeRatio : ratio;
@@ -102,7 +103,10 @@ type BudgetGroupWithMembers = {
   members: { categoryGroup: string }[];
 };
 
-function resolveBudgetPeriod(paydayDay: number | null): {
+function resolveBudgetPeriod(
+  paydayDay: number | null,
+  paydayCycleAnchor: PaydayCycleAnchor,
+): {
   periodMode: PeriodMode;
   range: { from: string; to: string };
   periodLabel: string;
@@ -111,13 +115,13 @@ function resolveBudgetPeriod(paydayDay: number | null): {
   month: string;
 } {
   if (paydayDay !== null) {
-    const cycleMeta = getPaydayCycleRange(paydayDay);
+    const cycleMeta = getPaydayCycleRange(paydayDay, new Date(), paydayCycleAnchor);
     const refKey = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
     const effectiveTo = refKey < cycleMeta.to ? refKey : cycleMeta.to;
     return {
       periodMode: "payday",
       range: { from: cycleMeta.from, to: effectiveTo },
-      periodLabel: formatPaydayCycleShortLabel(cycleMeta.cycleKey, paydayDay),
+      periodLabel: formatPaydayCycleShortLabel(cycleMeta.cycleKey, paydayDay, paydayCycleAnchor),
       cycleDayIndex: cycleMeta.dayIndex,
       cycleTotalDays: cycleMeta.totalDays,
       month: cycleMeta.cycleKey,
@@ -223,8 +227,8 @@ async function countUserAccounts(userId: string, personId?: string) {
 }
 
 async function fetchBudgetsSummary(userId: string, personId?: string) {
-  const settings = await loadUserSettings(userId);
-  const periodInfo = resolveBudgetPeriod(settings.paydayDay);
+  const { paydayDay, paydayCycleAnchor } = await resolvePaydayCycle(userId, personId);
+  const periodInfo = resolveBudgetPeriod(paydayDay, paydayCycleAnchor);
   const [transactions, groups, accountCount] = await Promise.all([
     loadPeriodTransactions(userId, periodInfo.range, personId),
     loadUserBudgetGroups(userId),

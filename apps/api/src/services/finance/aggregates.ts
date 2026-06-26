@@ -1,11 +1,14 @@
 import type { FinancialConnection, FinancialTransaction } from "./types.js";
 import {
   classifyIncome,
+  DEFAULT_PAYDAY_CYCLE_ANCHOR,
   formatPaydayCycleShortLabel,
-  getPaydayCycleStart,
+  getPaydayCycleBounds,
   getPaydayCycleRange,
+  getPaydayCycleRangeByKey,
   getRecentPaydayCycles,
   paydayCyclesToDateRange,
+  type PaydayCycleAnchor,
   type PeriodMode,
 } from "@finance/shared";
 import {
@@ -32,6 +35,12 @@ export function toLocalMonthKey(date: Date): string {
 export function parseDateKey(key: string): Date {
   const [y, m, d] = key.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d));
+}
+
+export function addDaysToDateKey(key: string, days: number): string {
+  const [y, m, d] = key.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d + days));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
 }
 
 export interface DateRange {
@@ -209,6 +218,34 @@ export function summarizeTransactions(
   return { income, expenses, net: income - expenses };
 }
 
+/** Separa gasto já realizado de cobranças futuras agendadas dentro do intervalo. */
+export function summarizeCycleCashFlow(
+  txs: FinancialTransaction[],
+  range: DateRange,
+  asOfKey: string,
+): Omit<PeriodSummary, "months"> & { committedExpenses: number } {
+  const effectiveTo = range.to && range.to < asOfKey ? range.to : asOfKey;
+  const toDate = summarizeTransactions(txs, { from: range.from, to: effectiveTo });
+
+  let committedExpenses = 0;
+  if (range.to && asOfKey < range.to) {
+    const committedFrom = addDaysToDateKey(asOfKey, 1);
+    if (committedFrom <= range.to) {
+      committedExpenses = summarizeTransactions(txs, {
+        from: committedFrom,
+        to: range.to,
+      }).expenses;
+    }
+  }
+
+  return {
+    income: toDate.income,
+    expenses: toDate.expenses,
+    net: toDate.net,
+    committedExpenses,
+  };
+}
+
 export function getMonthlySeries(
   txs: FinancialTransaction[],
   monthKeys: string[],
@@ -332,15 +369,16 @@ export function resolvePeriodRanges(
   months: DashboardMonths,
   periodMode: PeriodMode,
   paydayDay: number | null,
+  paydayCycleAnchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
 ): PeriodRanges {
   if (periodMode === "payday" && paydayDay !== null) {
-    const currentKeys = getRecentPaydayCycles(months, paydayDay, 0);
-    const previousKeys = getRecentPaydayCycles(months, paydayDay, months);
-    const currentRange = paydayCyclesToDateRange(currentKeys, paydayDay);
-    const previousRange = paydayCyclesToDateRange(previousKeys, paydayDay);
+    const currentKeys = getRecentPaydayCycles(months, paydayDay, 0, paydayCycleAnchor);
+    const previousKeys = getRecentPaydayCycles(months, paydayDay, months, paydayCycleAnchor);
+    const currentRange = paydayCyclesToDateRange(currentKeys, paydayDay, paydayCycleAnchor);
+    const previousRange = paydayCyclesToDateRange(previousKeys, paydayDay, paydayCycleAnchor);
     const lastKey = currentKeys[currentKeys.length - 1];
     const currentLabel = lastKey
-      ? formatPaydayCycleShortLabel(lastKey, paydayDay)
+      ? formatPaydayCycleShortLabel(lastKey, paydayDay, paydayCycleAnchor)
       : undefined;
     return {
       currentKeys,
@@ -365,30 +403,34 @@ export function resolvePeriodRanges(
 
 export function getCycleSummary(
   txs: FinancialTransaction[],
-  cycleEndKey: string,
+  cycleKey: string,
   paydayDay: number,
+  paydayCycleAnchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
 ): MonthlySummary {
-  const from = getPaydayCycleStart(cycleEndKey, paydayDay);
-  const range = { from, to: cycleEndKey };
+  const { from, to } = getPaydayCycleBounds(cycleKey, paydayDay, paydayCycleAnchor);
+  const range = { from, to };
   const totals = summarizeTransactions(txs, range);
   return {
-    month: cycleEndKey,
-    label: formatPaydayCycleShortLabel(cycleEndKey, paydayDay),
+    month: cycleKey,
+    label: formatPaydayCycleShortLabel(cycleKey, paydayDay, paydayCycleAnchor),
     ...totals,
   };
 }
 
 export function getPaydayCycleSeries(
   txs: FinancialTransaction[],
-  cycleEndKeys: string[],
+  cycleKeys: string[],
   paydayDay: number,
+  paydayCycleAnchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
 ): MonthlySummary[] {
-  return cycleEndKeys.map((end) => getCycleSummary(txs, end, paydayDay));
+  return cycleKeys.map((key) => getCycleSummary(txs, key, paydayDay, paydayCycleAnchor));
 }
 
-export function buildCurrentCycleSummary(
+export function buildCycleSummary(
   txs: FinancialTransaction[],
   paydayDay: number,
+  cycleKey?: string,
+  paydayCycleAnchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
 ): {
   cycleKey: string;
   from: string;
@@ -399,14 +441,24 @@ export function buildCurrentCycleSummary(
   isComplete: boolean;
   income: number;
   expenses: number;
+  committedExpenses: number;
   net: number;
   salaryIncome: number;
   extraIncome: number;
 } {
-  const meta = getPaydayCycleRange(paydayDay);
+  const meta = cycleKey
+    ? getPaydayCycleRangeByKey(cycleKey, paydayDay, paydayCycleAnchor)
+    : getPaydayCycleRange(paydayDay, new Date(), paydayCycleAnchor);
   const range = { from: meta.from, to: meta.to };
-  const totals = summarizeTransactions(txs, range);
-  const incomeBreakdown = classifyIncome(txs, range, paydayDay);
+  const today = toLocalDateKey(new Date());
+
+  const totals = meta.isComplete
+    ? { ...summarizeTransactions(txs, range), committedExpenses: 0 }
+    : summarizeCycleCashFlow(txs, range, today);
+
+  const incomeRange =
+    meta.isComplete || today > meta.to ? range : { from: meta.from, to: today };
+  const incomeBreakdown = classifyIncome(txs, incomeRange, paydayDay);
 
   return {
     cycleKey: meta.cycleKey,
@@ -418,10 +470,31 @@ export function buildCurrentCycleSummary(
     isComplete: meta.isComplete,
     income: totals.income,
     expenses: totals.expenses,
+    committedExpenses: totals.committedExpenses,
     net: totals.net,
     salaryIncome: incomeBreakdown.salary,
     extraIncome: incomeBreakdown.extra,
   };
+}
+
+export function buildCurrentCycleSummary(
+  txs: FinancialTransaction[],
+  paydayDay: number,
+  paydayCycleAnchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
+) {
+  return buildCycleSummary(txs, paydayDay, undefined, paydayCycleAnchor);
+}
+
+const RECENT_CYCLES_COUNT = 12;
+
+export function buildRecentCycleSummaries(
+  txs: FinancialTransaction[],
+  paydayDay: number,
+  count = RECENT_CYCLES_COUNT,
+  paydayCycleAnchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
+) {
+  const keys = getRecentPaydayCycles(count, paydayDay, 0, paydayCycleAnchor);
+  return keys.map((key) => buildCycleSummary(txs, paydayDay, key, paydayCycleAnchor));
 }
 
 function calcPeriodChange(current: number, previous: number): number | null {
@@ -446,6 +519,8 @@ export interface GrowthMetrics {
   incomeBreakdown: { salary: number; extra: number } | null;
   projection: {
     dailyAvgExpense: number;
+    expensesToDate: number;
+    committedExpenses: number;
     projectedExpense: number;
     projectedIncome: number;
     projectedNet: number;
@@ -457,6 +532,8 @@ export interface GrowthMetrics {
     isPartialPeriod: boolean;
   } | null;
 }
+
+const PACE_MIN_DAYS = 5;
 
 const SALARY_CATEGORY = "Salário";
 
@@ -486,6 +563,7 @@ function estimatePendingCycleSalary(
   previousRange: DateRange,
   paydayDay: number,
   receivedSalary: number,
+  paydayCycleAnchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
 ): number | null {
   if (receivedSalary > 0) return null;
 
@@ -496,9 +574,9 @@ function estimatePendingCycleSalary(
 
   if (estimate <= 0) {
     for (let offset = 2; offset <= 6; offset++) {
-      const keys = getRecentPaydayCycles(1, paydayDay, offset);
+      const keys = getRecentPaydayCycles(1, paydayDay, offset, paydayCycleAnchor);
       if (keys.length === 0) break;
-      const range = paydayCyclesToDateRange(keys, paydayDay);
+      const range = paydayCyclesToDateRange(keys, paydayDay, paydayCycleAnchor);
       estimate = classifyIncome(txs, range, paydayDay).salary;
       if (estimate <= 0) {
         estimate = sumCategoryInflowInRange(txs, range, SALARY_CATEGORY);
@@ -517,9 +595,19 @@ export function buildGrowthMetrics(params: {
   previousRange: DateRange;
   txs: FinancialTransaction[];
   paydayDay: number | null;
+  paydayCycleAnchor: PaydayCycleAnchor;
   periodMode: PeriodMode;
 }): GrowthMetrics {
-  const { period, previousPeriod, currentRange, previousRange, txs, paydayDay, periodMode } = params;
+  const {
+    period,
+    previousPeriod,
+    currentRange,
+    previousRange,
+    txs,
+    paydayDay,
+    paydayCycleAnchor,
+    periodMode,
+  } = params;
   const { income, expenses, net } = period;
 
   const savingsRate = income > 0 ? (net / income) * 100 : null;
@@ -531,14 +619,19 @@ export function buildGrowthMetrics(params: {
     netChange: calcPeriodChange(net, previousPeriod.net),
   };
 
+  const today = toLocalDateKey(new Date());
+
   const incomeBreakdown =
     paydayDay !== null
       ? (() => {
           const range =
             periodMode === "payday"
               ? (() => {
-                  const meta = getPaydayCycleRange(paydayDay);
-                  return { from: meta.from, to: meta.to };
+                  const meta = getPaydayCycleRange(paydayDay, new Date(), paydayCycleAnchor);
+                  if (meta.isComplete || today > meta.to) {
+                    return { from: meta.from, to: meta.to };
+                  }
+                  return { from: meta.from, to: today };
                 })()
               : currentRange;
           const b = classifyIncome(txs, range, paydayDay);
@@ -547,11 +640,11 @@ export function buildGrowthMetrics(params: {
       : null;
 
   let projection: GrowthMetrics["projection"] = null;
-  const today = toLocalDateKey(new Date());
 
   const buildProjection = (
     projectionIncome: number,
-    projectionExpenses: number,
+    expensesToDate: number,
+    committedExpenses: number,
     daysElapsed: number,
     daysTotal: number,
     receivedSalary: number,
@@ -559,8 +652,21 @@ export function buildGrowthMetrics(params: {
     if (daysElapsed <= 0 || daysElapsed >= daysTotal) return null;
 
     const daysRemaining = daysTotal - daysElapsed;
-    const dailyAvgExpense = projectionExpenses / daysElapsed;
-    const projectedExpense = projectionExpenses + dailyAvgExpense * daysRemaining;
+    const dailyAvgExpense = expensesToDate / daysElapsed;
+
+    const previousExpenseTotal = summarizeTransactions(txs, previousRange).expenses;
+    const previousDays =
+      previousRange.from && previousRange.to
+        ? diffDateKeys(previousRange.from, previousRange.to) + 1
+        : daysTotal;
+    const previousDailyAvg = previousDays > 0 ? previousExpenseTotal / previousDays : 0;
+
+    const variableProjection =
+      daysElapsed >= PACE_MIN_DAYS
+        ? dailyAvgExpense * daysRemaining
+        : previousDailyAvg * daysRemaining;
+
+    const projectedExpense = expensesToDate + committedExpenses + variableProjection;
 
     let pendingSalary: number | null = null;
     if (periodMode === "payday" && paydayDay !== null) {
@@ -569,6 +675,7 @@ export function buildGrowthMetrics(params: {
         previousRange,
         paydayDay,
         receivedSalary,
+        paydayCycleAnchor,
       );
     }
 
@@ -581,6 +688,8 @@ export function buildGrowthMetrics(params: {
 
     return {
       dailyAvgExpense,
+      expensesToDate,
+      committedExpenses,
       projectedExpense,
       projectedIncome,
       projectedNet: projectedIncome - projectedExpense,
@@ -594,15 +703,22 @@ export function buildGrowthMetrics(params: {
   };
 
   if (periodMode === "payday" && paydayDay !== null) {
-    const meta = getPaydayCycleRange(paydayDay);
+    const meta = getPaydayCycleRange(paydayDay, new Date(), paydayCycleAnchor);
     if (today >= meta.from && today <= meta.to) {
-      const cycleTotals = summarizeTransactions(txs, { from: meta.from, to: meta.to });
+      const cycleCash = summarizeCycleCashFlow(
+        txs,
+        { from: meta.from, to: meta.to },
+        today,
+      );
+      const incomeRange = { from: meta.from, to: today };
+      const salaryReceived = classifyIncome(txs, incomeRange, paydayDay).salary;
       projection = buildProjection(
-        cycleTotals.income,
-        cycleTotals.expenses,
+        cycleCash.income,
+        cycleCash.expenses,
+        cycleCash.committedExpenses,
         meta.dayIndex,
         meta.totalDays,
-        incomeBreakdown?.salary ?? 0,
+        salaryReceived,
       );
     }
   } else {
@@ -610,7 +726,15 @@ export function buildGrowthMetrics(params: {
     if (from && to && today >= from && today <= to) {
       const daysTotal = diffDateKeys(from, to) + 1;
       const daysElapsed = diffDateKeys(from, today) + 1;
-      projection = buildProjection(income, expenses, daysElapsed, daysTotal, 0);
+      const toDateTotals = summarizeTransactions(txs, { from, to: today });
+      projection = buildProjection(
+        toDateTotals.income,
+        toDateTotals.expenses,
+        0,
+        daysElapsed,
+        daysTotal,
+        0,
+      );
     }
   }
 

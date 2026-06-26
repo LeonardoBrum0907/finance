@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Copy, Check } from "lucide-react";
-import type { ChatContextSummaryDTO, ChatSuggestionDTO, ChatThreadDTO, PersonDTO } from "@finance/shared";
+import type { ChatContextSummaryDTO, ChatSuggestionDTO, PersonDTO } from "@finance/shared";
 import { api } from "../../lib/api";
 import { MarkdownMessage } from "../MarkdownMessage";
 import { ProposalCard } from "./ProposalCard";
@@ -49,7 +49,7 @@ function MessageFooter({
 
 export function ChatConversation({
   activeThreadId,
-  onThreadChange,
+  onThreadChange: _onThreadChange,
   selectedPersonId,
   onPersonChange,
   compact = false,
@@ -59,7 +59,6 @@ export function ChatConversation({
   initialContextHint,
   onPrefillConsumed,
 }: Props) {
-  const queryClient = useQueryClient();
   const confirm = useConfirm();
   const [input, setInput] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -96,23 +95,11 @@ export function ChatConversation({
     enabled: aiConfigured,
   });
 
-  const createThread = useMutation({
-    mutationFn: () => api.post<ChatThreadDTO>("/api/chat/threads"),
-    onSuccess: (thread) => {
-      queryClient.invalidateQueries({ queryKey: ["chat-threads"] });
-      onThreadChange?.(thread.id);
-    },
-  });
-
-  useEffect(() => {
-    if (activeThreadId || createThread.isPending) return;
-    createThread.mutate();
-  }, [activeThreadId, createThread.isPending]);
-
   const selectedPerson = people.data?.find((p) => p.id === selectedPersonId);
 
   const {
     messages,
+    messagesLoaded,
     streaming,
     streamingPhase,
     toolActivity,
@@ -132,14 +119,28 @@ export function ChatConversation({
   }, [messages, streamingPhase, toolActivity]);
 
   useEffect(() => {
-    if (!initialPrefill || prefillHandled.current || !activeThreadId || streaming) return;
+    if (
+      !initialPrefill ||
+      prefillHandled.current ||
+      !activeThreadId ||
+      streaming ||
+      !messagesLoaded
+    ) {
+      return;
+    }
     prefillHandled.current = true;
+    if (messages.length > 0) {
+      onPrefillConsumed?.();
+      return;
+    }
     void sendMessage(initialPrefill, initialContextHint).then(() => onPrefillConsumed?.());
   }, [
     initialPrefill,
     initialContextHint,
     activeThreadId,
     streaming,
+    messagesLoaded,
+    messages.length,
     sendMessage,
     onPrefillConsumed,
   ]);

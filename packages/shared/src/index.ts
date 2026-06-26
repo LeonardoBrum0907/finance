@@ -1,7 +1,8 @@
 import { z } from "zod";
 import type { DashboardCategoryGroup } from "./categoryGroups";
 import type { InvestmentAllocationPoint } from "./investments";
-import type { PeriodMode } from "./payday";
+import type { PeriodMode, PaydayCycleAnchor } from "./payday";
+import { paydayCycleAnchorSchema } from "./payday";
 
 export { translateCategory } from "./categories";
 export {
@@ -32,18 +33,31 @@ export {
 export {
   PERIOD_MODES,
   periodModeSchema,
+  PAYDAY_CYCLE_ANCHORS,
+  paydayCycleAnchorSchema,
+  DEFAULT_PAYDAY_CYCLE_ANCHOR,
   updateSettingsSchema,
   parsePeriodMode,
+  parsePaydayCycleAnchor,
+  isPaydayDayConfigured,
+  describePaydayCycleBounds,
   effectivePaydayInMonth,
   getPaydayCycleStart,
+  getPaydayCycleStartKey,
   getPaydayCycleEnd,
+  getPaydayCycleEndFromStart,
+  getPaydayCycleKey,
+  getPaydayCycleBounds,
   getPaydayCycleRange,
+  getPaydayCycleRangeByKey,
+  getPaydayCycleRangeByEnd,
   getRecentPaydayCycles,
   paydayCyclesToDateRange,
   formatPaydayCycleLabel,
   formatPaydayCycleShortLabel,
   classifyIncome,
   type PeriodMode,
+  type PaydayCycleAnchor,
   type UpdateSettingsInput,
   type UserSettingsDTO,
   type PaydayCycleRange,
@@ -97,6 +111,8 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export const personSchema = z.object({
   name: z.string().min(1, "Informe o nome"),
   relationship: z.string().optional(),
+  paydayDay: z.number().int().min(1).max(31).nullable().optional(),
+  paydayCycleAnchor: paydayCycleAnchorSchema.optional(),
 });
 export type PersonInput = z.infer<typeof personSchema>;
 
@@ -119,6 +135,12 @@ export const createChatThreadSchema = z.object({
   title: z.string().min(1).max(80).optional(),
 });
 export type CreateChatThreadInput = z.infer<typeof createChatThreadSchema>;
+
+export const resolveChatThreadSchema = z.object({
+  contextKey: z.string().min(1).max(80),
+  title: z.string().min(1).max(80).optional(),
+});
+export type ResolveChatThreadInput = z.infer<typeof resolveChatThreadSchema>;
 
 export const updateChatThreadSchema = z.object({
   title: z.string().min(1, "Informe o título").max(80, "Título muito longo"),
@@ -279,6 +301,8 @@ export interface PersonDTO {
   id: string;
   name: string;
   relationship: string | null;
+  paydayDay: number | null;
+  paydayCycleAnchor: PaydayCycleAnchor;
   createdAt: string;
   connections: BankConnectionDTO[];
 }
@@ -372,6 +396,8 @@ export interface DashboardCurrentCycle {
   isComplete: boolean;
   income: number;
   expenses: number;
+  /** Parcelas/agendamentos com data futura dentro do ciclo (só em ciclo em andamento). */
+  committedExpenses: number;
   net: number;
   salaryIncome: number;
   extraIncome: number;
@@ -418,6 +444,10 @@ export interface DashboardGrowthMetrics {
   } | null;
   projection: {
     dailyAvgExpense: number;
+    /** Gasto real até hoje no ciclo/período. */
+    expensesToDate: number;
+    /** Cobranças já agendadas com data futura no ciclo (ex.: parcelas no cartão). */
+    committedExpenses: number;
     projectedExpense: number;
     projectedIncome: number;
     projectedNet: number;
@@ -437,7 +467,11 @@ export interface DashboardSummary {
   currencyCode: string;
   periodMode: PeriodMode;
   paydayDay: number | null;
+  paydayCycleAnchor: PaydayCycleAnchor;
+  paydayConfigured: boolean;
   currentCycle: DashboardCurrentCycle | null;
+  /** Últimos ciclos (mais recente por último), com detalhamento de renda. */
+  recentCycles: DashboardCurrentCycle[] | null;
   perPerson: {
     personId: string;
     personName: string;
@@ -468,6 +502,7 @@ export interface TransactionsListResponse {
 export interface ChatThreadDTO {
   id: string;
   title: string;
+  contextKey?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -617,6 +652,8 @@ export interface ChatAlertDTO {
   message: string;
   severity: "info" | "warning" | "success";
   suggestionMessage: string;
+  personId?: string;
+  contextKey?: string;
 }
 
 export interface ChatContextSummaryDTO {
@@ -632,6 +669,41 @@ export interface ChatRecapDTO {
   preview: string;
   content: string;
   createdAt: string;
+  scope?: "household" | "person";
+  personId?: string;
+  personName?: string;
+}
+
+export type HouseholdArenaTone = "praise" | "roast" | "neutral";
+
+export interface HouseholdArenaRankingDTO {
+  personId: string;
+  personName: string;
+  rank: number;
+  score: number;
+  verdict: string;
+  tone: HouseholdArenaTone;
+  badges: string[];
+  recapThreadId: string;
+  net: number;
+  expenses: number;
+  income: number;
+}
+
+export interface HouseholdHeadToHeadDTO {
+  id: string;
+  message: string;
+  personAId: string;
+  personBId: string;
+  metric: string;
+}
+
+export interface HouseholdArenaDTO {
+  periodLabel: string;
+  householdRecapThreadId: string;
+  personCount: number;
+  rankings: HouseholdArenaRankingDTO[];
+  headToHead: HouseholdHeadToHeadDTO[];
 }
 
 export interface ChatMessageDTO {

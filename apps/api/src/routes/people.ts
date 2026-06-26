@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { personSchema } from "@finance/shared";
+import { personSchema, parsePaydayCycleAnchor } from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
 import { serializeAccount } from "../services/serializeAccount.js";
@@ -8,6 +8,8 @@ function serializePerson(person: {
   id: string;
   name: string;
   relationship: string | null;
+  paydayDay: number | null;
+  paydayCycleAnchor: string;
   createdAt: Date;
   connections: {
     id: string;
@@ -38,6 +40,8 @@ function serializePerson(person: {
     id: person.id,
     name: person.name,
     relationship: person.relationship,
+    paydayDay: person.paydayDay,
+    paydayCycleAnchor: parsePaydayCycleAnchor(person.paydayCycleAnchor),
     createdAt: person.createdAt.toISOString(),
     connections: person.connections.map((c) => ({
       id: c.id,
@@ -72,6 +76,8 @@ export async function peopleRoutes(app: FastifyInstance): Promise<void> {
       data: {
         name: parsed.data.name,
         relationship: parsed.data.relationship ?? null,
+        paydayDay: parsed.data.paydayDay ?? null,
+        paydayCycleAnchor: parsed.data.paydayCycleAnchor ?? "end",
         userId: request.user!.sub,
       },
       include: { connections: { include: { accounts: true } } },
@@ -95,6 +101,10 @@ export async function peopleRoutes(app: FastifyInstance): Promise<void> {
       data: {
         name: parsed.data.name,
         relationship: parsed.data.relationship ?? null,
+        ...(parsed.data.paydayDay !== undefined ? { paydayDay: parsed.data.paydayDay } : {}),
+        ...(parsed.data.paydayCycleAnchor !== undefined
+          ? { paydayCycleAnchor: parsed.data.paydayCycleAnchor }
+          : {}),
       },
       include: { connections: { include: { accounts: true } } },
     });

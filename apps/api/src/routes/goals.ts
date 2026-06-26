@@ -9,6 +9,7 @@ import {
   updatePlanSchema,
   updateGoalSourcesSchema,
   type GoalsSummaryDTO,
+  type PaydayCycleAnchor,
 } from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
@@ -27,7 +28,7 @@ import {
   serializeGoal,
   serializePlan,
 } from "../services/finance/projections.js";
-import { loadUserSettings } from "../services/userSettings.js";
+import { resolvePaydayCycle } from "../services/userSettings.js";
 import {
   applyGoalSources,
   buildAvailableSources,
@@ -42,10 +43,15 @@ import {
 async function loadRecentTransactions(
   userId: string,
   paydayDay: number | null,
+  paydayCycleAnchor: PaydayCycleAnchor,
 ): Promise<FinancialTransaction[]> {
   const range =
     paydayDay !== null
-      ? paydayCyclesToDateRange(getRecentPaydayCycles(4, paydayDay, 0), paydayDay)
+      ? paydayCyclesToDateRange(
+          getRecentPaydayCycles(4, paydayDay, 0, paydayCycleAnchor),
+          paydayDay,
+          paydayCycleAnchor,
+        )
       : monthKeysToDateRange(getRecentMonthKeys(3));
   const dateFrom = range.from ? new Date(`${range.from}T00:00:00.000Z`) : new Date(0);
   const dateTo = range.to ? new Date(`${range.to}T23:59:59.999Z`) : new Date();
@@ -120,9 +126,9 @@ async function loadUserPlans(userId: string) {
 }
 
 async function fetchGoalsSummary(userId: string): Promise<GoalsSummaryDTO> {
-  const settings = await loadUserSettings(userId);
+  const { paydayDay, paydayCycleAnchor } = await resolvePaydayCycle(userId);
   const [transactions, goalRows, planRows, accountCount, balanceContext] = await Promise.all([
-    loadRecentTransactions(userId, settings.paydayDay),
+    loadRecentTransactions(userId, paydayDay, paydayCycleAnchor),
     loadUserGoals(userId),
     loadUserPlans(userId),
     countUserAccounts(userId),
@@ -130,7 +136,7 @@ async function fetchGoalsSummary(userId: string): Promise<GoalsSummaryDTO> {
   ]);
 
   const { surplus: monthlySurplus, periodMode: surplusPeriodMode, label: surplusLabel } =
-    resolveSurplus(transactions, settings.paydayDay);
+    resolveSurplus(transactions, paydayDay, paydayCycleAnchor);
 
   const goals = goalRows.map((goal) => {
     const computedAmount = resolveGoalCurrentAmount(goal, balanceContext);

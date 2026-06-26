@@ -2,7 +2,7 @@ import { motion } from "framer-motion";
 import { CreditCard } from "lucide-react";
 import type { DashboardSummary } from "@finance/shared";
 import { isCreditAccount } from "@finance/shared";
-import { formatCurrency } from "../../lib/format";
+import { formatCurrency, formatDate } from "../../lib/format";
 import { cardLargeClass, creditCardDarkClass, creditCardEcoClass, fadeUp } from "./motion";
 
 type Account = DashboardSummary["accounts"][number];
@@ -42,16 +42,22 @@ export function CreditCardList({ accounts }: Props) {
         <h2 className="font-display text-base font-semibold text-slate-900">
           Cartões de Crédito
         </h2>
-        <p className="text-[11px] text-slate-400">Limite de crédito e status de vencimento</p>
+        <p className="text-[11px] text-slate-400">
+          Fatura, uso do limite e próximo vencimento
+        </p>
       </div>
 
       <div className="flex flex-col gap-4">
         {cards.map((card, index) => {
+          const currentBill = Math.abs(card.balance);
+          const hasLimitData =
+            card.creditLimit != null &&
+            card.creditLimit > 0 &&
+            card.availableCreditLimit != null;
+          const usedFromLimit = hasLimitData
+            ? card.creditLimit! - card.availableCreditLimit!
+            : null;
           const usedPercent = usagePercent(card.creditLimit, card.availableCreditLimit);
-          const usedAmount =
-            card.creditLimit != null && card.availableCreditLimit != null
-              ? card.creditLimit - card.availableCreditLimit
-              : Math.abs(card.balance);
           const isEco = index % 2 === 1;
 
           return (
@@ -72,23 +78,63 @@ export function CreditCardList({ accounts }: Props) {
                 <span className="h-5 w-9 shrink-0 rounded-full bg-emerald-400/80" aria-hidden />
               </div>
 
-              <div className="mt-3.5 flex flex-col gap-1.5">
+              <div className="mt-3.5 space-y-2.5">
                 <div className="flex justify-between text-[11px]">
-                  <span className="opacity-70">Uso do limite</span>
+                  <span className="opacity-70">Fatura atual</span>
                   <span className="font-bold">
-                    {formatCurrency(usedAmount, card.currencyCode)}
-                    {card.creditLimit != null &&
-                      ` / ${formatCurrency(card.creditLimit, card.currencyCode)}`}
+                    {formatCurrency(currentBill, card.currencyCode)}
                   </span>
                 </div>
-                {usedPercent != null && (
-                  <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                    <div
-                      className="h-full rounded-full bg-emerald-400 transition-all"
-                      style={{ width: `${usedPercent}%` }}
-                    />
+
+                {hasLimitData && usedFromLimit != null && (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex justify-between text-[11px]">
+                      <span className="opacity-70">Uso do limite</span>
+                      <span className="font-bold">
+                        {formatCurrency(usedFromLimit, card.currencyCode)}
+                        {` / ${formatCurrency(card.creditLimit!, card.currencyCode)}`}
+                      </span>
+                    </div>
+                    {usedPercent != null && (
+                      <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                        <div
+                          className="h-full rounded-full bg-emerald-400 transition-all"
+                          style={{ width: `${usedPercent}%` }}
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
+
+                {(card.nextBillAmount != null && card.nextBillAmount > 0) ||
+                card.nextBillDueDate ? (
+                  <div className="flex justify-between gap-3 border-t border-white/10 pt-2 text-[11px]">
+                    {card.nextBillAmount != null && card.nextBillAmount > 0 ? (
+                      <span className="opacity-70">
+                        Próxima fatura
+                        {card.nextBillDueDate && (
+                          <span className="opacity-60">
+                            {" "}
+                            · vence {formatDate(card.nextBillDueDate)}
+                          </span>
+                        )}
+                      </span>
+                    ) : card.nextBillDueDate ? (
+                      <span className="opacity-70">Próximo vencimento</span>
+                    ) : null}
+                    {card.nextBillAmount != null && card.nextBillAmount > 0 && (
+                      <span className="shrink-0 font-bold">
+                        {formatCurrency(card.nextBillAmount, card.currencyCode)}
+                      </span>
+                    )}
+                    {(!card.nextBillAmount || card.nextBillAmount <= 0) &&
+                      card.nextBillDueDate && (
+                        <span className="shrink-0 font-bold">
+                          {formatDate(card.nextBillDueDate)}
+                        </span>
+                      )}
+                  </div>
+                ) : null}
               </div>
             </div>
           );

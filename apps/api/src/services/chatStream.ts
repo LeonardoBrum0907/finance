@@ -18,6 +18,10 @@ import { createFinanceTools } from "./finance/tools.js";
 import { touchThread } from "./chatThread.js";
 import { extractProposalFromSteps } from "./chatProposal.js";
 import { buildGoalsContextBlock } from "./finance/goalsContext.js";
+import {
+  buildHouseholdArena,
+  buildHouseholdComparisonContext,
+} from "./finance/householdComparison.js";
 import { buildFollowUpSuggestions } from "./chatFollowUps.js";
 import { extractBlocksFromSteps, extractToolActivityFromSteps } from "./chatBlocks.js";
 import {
@@ -79,7 +83,15 @@ export async function runChatStream({
     ? `\n\n## Contexto da interface\nO usuário veio de uma ação no app. Contexto adicional:\n${contextHint}`
     : "";
 
-  const systemPrompt = `${SYSTEM_PROMPT}\n\n# Dados financeiros do usuário\n${context}${contextBlock}\n\n# ${goalsContext}`;
+  let arenaBlock = "";
+  if (!personId) {
+    const arena = await buildHouseholdArena(userId);
+    if (arena && arena.personCount >= 2) {
+      arenaBlock = `\n\n# Arena financeira da casa\n${buildHouseholdComparisonContext(arena)}`;
+    }
+  }
+
+  const systemPrompt = `${SYSTEM_PROMPT}\n\n# Dados financeiros do usuário\n${context}${arenaBlock}${contextBlock}\n\n# ${goalsContext}`;
   const messages: CoreMessage[] = historyRows.map((m) => ({
     role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
     content: m.content,

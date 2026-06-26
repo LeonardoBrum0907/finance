@@ -3,6 +3,7 @@ import {
   chatMessageSchema,
   createChatThreadSchema,
   regenerateChatSchema,
+  resolveChatThreadSchema,
   updateChatThreadSchema,
 } from "@finance/shared";
 import { prisma } from "../prisma.js";
@@ -12,8 +13,10 @@ import { runChatStream } from "../services/chatStream.js";
 import { applyChatProposal, serializeProposal, computeProposalImpact } from "../services/chatProposal.js";
 import {
   autoTitleFromFirstMessage,
+  findOrCreateThread,
   findUserThread,
   resetThreadTitle,
+  serializeThread,
   touchThread,
 } from "../services/chatThread.js";
 import { buildChatSuggestions, buildChatContextSummary } from "../services/chatSuggestions.js";
@@ -49,8 +52,17 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
     if (!isAiConfigured()) {
       return reply.code(503).send({ error: "IA não configurada no servidor" });
     }
-    const recap = await createWeeklyRecap(request.user!.sub);
-    return reply.send(recap);
+    const body = (request.body ?? {}) as { scope?: string; personId?: string };
+    try {
+      const recap = await createWeeklyRecap(request.user!.sub, {
+        scope: body.scope === "person" ? "person" : "household",
+        personId: body.personId,
+      });
+      return reply.send(recap);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao gerar resumo";
+      return reply.code(400).send({ error: message });
+    }
   });
 
   app.get("/api/chat/threads", async (request, reply) => {
@@ -58,14 +70,19 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       where: { userId: request.user!.sub },
       orderBy: { updatedAt: "desc" },
     });
-    return reply.send(
-      threads.map((t) => ({
-        id: t.id,
-        title: t.title,
-        createdAt: t.createdAt.toISOString(),
-        updatedAt: t.updatedAt.toISOString(),
-      })),
-    );
+    return reply.send(threads.map(serializeThread));
+  });
+
+  app.post("/api/chat/threads/resolve", async (request, reply) => {
+    const parsed = resolveChatThreadSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message });
+    }
+    const thread = await findOrCreateThread(request.user!.sub, {
+      contextKey: parsed.data.contextKey,
+      title: parsed.data.title ?? parsed.data.contextKey,
+    });
+    return reply.send(serializeThread(thread));
   });
 
   app.post("/api/chat/threads", async (request, reply) => {
@@ -79,12 +96,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
         title: parsed.data.title ?? "Nova conversa",
       },
     });
-    return reply.code(201).send({
-      id: thread.id,
-      title: thread.title,
-      createdAt: thread.createdAt.toISOString(),
-      updatedAt: thread.updatedAt.toISOString(),
-    });
+    return reply.code(201).send(serializeThread(thread));
   });
 
   app.patch("/api/chat/threads/:id", async (request, reply) => {
@@ -100,12 +112,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
       where: { id },
       data: { title: parsed.data.title },
     });
-    return reply.send({
-      id: updated.id,
-      title: updated.title,
-      createdAt: updated.createdAt.toISOString(),
-      updatedAt: updated.updatedAt.toISOString(),
-    });
+    return reply.send(serializeThread(updated));
   });
 
   app.delete("/api/chat/threads/:id", async (request, reply) => {

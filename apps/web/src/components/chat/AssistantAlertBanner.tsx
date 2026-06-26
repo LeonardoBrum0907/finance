@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Sparkles, X } from "lucide-react";
 import { useState } from "react";
-import type { ChatAlertDTO, ChatRecapDTO } from "@finance/shared";
+import type { ChatAlertDTO, ChatRecapDTO, HouseholdArenaDTO } from "@finance/shared";
 import { api } from "../../lib/api";
 import { useAssistant } from "../../lib/assistantContext";
 import { MarkdownMessage } from "../MarkdownMessage";
@@ -39,6 +39,9 @@ export function AssistantAlertBanner() {
             openAssistant({
               prefillMessage: top.suggestionMessage,
               source: "alert",
+              contextKey: top.contextKey ?? `alert:${top.id}`,
+              title: "Alerta",
+              personId: top.personId,
             })
           }
           className="mt-1 text-xs font-semibold underline hover:no-underline"
@@ -58,27 +61,90 @@ export function AssistantAlertBanner() {
   );
 }
 
+type RecapTab = "household" | string;
+
 export function WeeklyRecapCard() {
   const { openAssistant } = useAssistant();
+  const [activeTab, setActiveTab] = useState<RecapTab>("household");
 
-  const recap = useQuery({
-    queryKey: ["chat-recap-preview"],
+  const arena = useQuery({
+    queryKey: ["household-arena"],
     queryFn: async () => {
       try {
-        return await api.post<ChatRecapDTO>("/api/chat/recap");
+        return await api.get<HouseholdArenaDTO>("/api/dashboard/arena");
+      } catch {
+        return null;
+      }
+    },
+    staleTime: 30 * 60 * 1000,
+    retry: false,
+  });
+
+  const recap = useQuery({
+    queryKey: ["chat-recap-preview", activeTab],
+    queryFn: async () => {
+      try {
+        const body =
+          activeTab === "household"
+            ? { scope: "household" as const }
+            : { scope: "person" as const, personId: activeTab };
+        return await api.post<ChatRecapDTO>("/api/chat/recap", body);
       } catch {
         return null;
       }
     },
     staleTime: 60 * 60 * 1000,
     retry: false,
+    enabled: arena.isFetched,
   });
 
   if (!recap.data) return null;
 
+  const tabs: { id: RecapTab; label: string }[] = [{ id: "household", label: "Casa" }];
+  if (arena.data && arena.data.personCount >= 2) {
+    for (const r of arena.data.rankings) {
+      tabs.push({ id: r.personId, label: r.personName });
+    }
+  } else if (arena.data?.rankings[0]) {
+    tabs[0] = { id: "household", label: arena.data.rankings[0].personName };
+  }
+
+  const activePerson = arena.data?.rankings.find((r) => r.personId === activeTab);
+  const contextKey =
+    activeTab === "household"
+      ? "recap:weekly:household"
+      : `recap:weekly:person:${activeTab}`;
+  const title =
+    activeTab === "household"
+      ? arena.data && arena.data.personCount > 1
+        ? "Resumo da casa"
+        : "Resumo da semana"
+      : `Semana — ${activePerson?.personName ?? ""}`;
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <h3 className="text-sm font-semibold text-slate-900">Resumo da semana</h3>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-slate-900">Resumo da semana</h3>
+        {tabs.length > 1 && (
+          <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`rounded-md px-2 py-1 text-[10px] font-semibold transition ${
+                  activeTab === tab.id
+                    ? "bg-white text-brand-700 shadow-sm"
+                    : "text-slate-600 hover:text-slate-800"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="relative mt-2 max-h-40 overflow-hidden text-xs text-slate-700">
         <MarkdownMessage content={recap.data.content} />
         <div
@@ -91,6 +157,9 @@ export function WeeklyRecapCard() {
         onClick={() =>
           openAssistant({
             threadId: recap.data!.threadId,
+            contextKey,
+            title,
+            personId: activeTab !== "household" ? activeTab : undefined,
             source: "recap",
           })
         }

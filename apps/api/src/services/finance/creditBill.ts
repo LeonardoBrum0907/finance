@@ -11,9 +11,67 @@ interface TxLike {
   amount: number;
 }
 
+/** Fechamento costuma ocorrer alguns dias antes do vencimento. */
+const CLOSE_DAYS_BEFORE_DUE = 7;
+
+function startOfDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
 /**
- * Próxima fatura = compras no ciclo aberto (após a data de fechamento da fatura atual).
- * Vencimento estimado = vencimento atual + 1 mês.
+ * Resolve a data de fechamento do ciclo aberto.
+ * Usa balanceCloseDate do Pluggy quando disponível; caso contrário estima a partir do vencimento.
+ */
+export function resolveBillingCloseDate(
+  balanceCloseDate: Date | null,
+  balanceDueDate: Date | null,
+  referenceDate: Date = new Date(),
+): Date | null {
+  if (balanceCloseDate) return balanceCloseDate;
+  if (!balanceDueDate) return null;
+
+  const ref = startOfDay(referenceDate);
+  const due = startOfDay(balanceDueDate);
+  let close = new Date(due);
+  close.setDate(close.getDate() - CLOSE_DAYS_BEFORE_DUE);
+
+  while (close > ref) {
+    due.setMonth(due.getMonth() - 1);
+    close = new Date(due);
+    close.setDate(close.getDate() - CLOSE_DAYS_BEFORE_DUE);
+  }
+
+  return close;
+}
+
+/** Próximo vencimento após a data de referência, mantendo o dia do mês. */
+export function resolveNextDueDate(
+  balanceDueDate: Date | null,
+  referenceDate: Date = new Date(),
+): Date | null {
+  if (!balanceDueDate) return null;
+
+  const ref = startOfDay(referenceDate);
+  const due = startOfDay(balanceDueDate);
+
+  while (due <= ref) {
+    due.setMonth(due.getMonth() + 1);
+  }
+
+  return due;
+}
+
+/**
+ * Próxima fatura = compras no ciclo aberto (após o último fechamento).
+ * Vencimento = próxima data de vencimento após hoje.
  */
 export function computeNextBill(
   accountId: string,
@@ -21,13 +79,14 @@ export function computeNextBill(
   balanceCloseDate: Date | null,
   balanceDueDate: Date | null,
   transactions: TxLike[],
+  referenceDate: Date = new Date(),
 ): NextBillSummary {
-  if (!balanceCloseDate) {
+  const closeDate = resolveBillingCloseDate(balanceCloseDate, balanceDueDate, referenceDate);
+  if (!closeDate) {
     return { nextBillAmount: null, nextBillDueDate: null };
   }
 
-  const closeAt = new Date(balanceCloseDate);
-  closeAt.setHours(23, 59, 59, 999);
+  const closeAt = endOfDay(closeDate);
 
   let amount = 0;
   for (const tx of transactions) {
@@ -37,14 +96,8 @@ export function computeNextBill(
     amount += Math.abs(tx.amount);
   }
 
-  let nextBillDueDate: Date | null = null;
-  if (balanceDueDate) {
-    nextBillDueDate = new Date(balanceDueDate);
-    nextBillDueDate.setMonth(nextBillDueDate.getMonth() + 1);
-  }
-
   return {
     nextBillAmount: amount,
-    nextBillDueDate,
+    nextBillDueDate: resolveNextDueDate(balanceDueDate, referenceDate),
   };
 }

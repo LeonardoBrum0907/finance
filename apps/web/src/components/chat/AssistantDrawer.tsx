@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { X, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
-import type { ChatThreadDTO } from "@finance/shared";
-import { api } from "../../lib/api";
 import { useAssistant } from "../../lib/assistantContext";
+import { createFreeChatThread, resolveChatThread } from "../../hooks/useResolveChatThread";
 import { ChatConversation } from "./ChatConversation";
 
 export function AssistantDrawer() {
@@ -16,6 +15,8 @@ export function AssistantDrawer() {
     prefillMessage,
     contextHint,
     pendingThreadId,
+    pendingContextKey,
+    pendingTitle,
     consumePrefill,
   } = useAssistant();
   const queryClient = useQueryClient();
@@ -23,39 +24,42 @@ export function AssistantDrawer() {
   const [prefill, setPrefill] = useState<{ message: string; contextHint: string } | null>(
     null,
   );
+  const [resolving, setResolving] = useState(false);
   const openedRef = useRef(false);
-
-  const threads = useQuery({
-    queryKey: ["chat-threads"],
-    queryFn: () => api.get<ChatThreadDTO[]>("/api/chat/threads"),
-    enabled: isOpen,
-  });
-
-  const createThread = useMutation({
-    mutationFn: () => api.post<ChatThreadDTO>("/api/chat/threads"),
-    onSuccess: (thread) => {
-      queryClient.invalidateQueries({ queryKey: ["chat-threads"] });
-      setActiveThreadId(thread.id);
-    },
-  });
 
   useEffect(() => {
     if (!isOpen) {
       openedRef.current = false;
       setPrefill(null);
+      setActiveThreadId(null);
       return;
     }
 
     if (openedRef.current) return;
     openedRef.current = true;
 
-    if (pendingThreadId) {
-      setActiveThreadId(pendingThreadId);
-    } else if (threads.data && threads.data.length > 0) {
-      setActiveThreadId(threads.data[0]!.id);
-    } else if (threads.data && threads.data.length === 0 && !createThread.isPending) {
-      createThread.mutate();
-    }
+    setResolving(true);
+    void (async () => {
+      try {
+        let threadId: string;
+        if (pendingThreadId) {
+          threadId = pendingThreadId;
+        } else if (pendingContextKey) {
+          const thread = await resolveChatThread(
+            pendingContextKey,
+            pendingTitle ?? undefined,
+          );
+          threadId = thread.id;
+        } else {
+          const thread = await createFreeChatThread();
+          threadId = thread.id;
+        }
+        setActiveThreadId(threadId);
+        queryClient.invalidateQueries({ queryKey: ["chat-threads"] });
+      } finally {
+        setResolving(false);
+      }
+    })();
 
     if (prefillMessage) {
       const consumed = consumePrefill();
@@ -67,11 +71,12 @@ export function AssistantDrawer() {
   }, [
     isOpen,
     pendingThreadId,
-    threads.data,
+    pendingContextKey,
+    pendingTitle,
     prefillMessage,
     contextHint,
     consumePrefill,
-    createThread,
+    queryClient,
   ]);
 
   if (!isOpen) return null;
@@ -114,18 +119,24 @@ export function AssistantDrawer() {
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col p-4">
-          <ChatConversation
-            activeThreadId={activeThreadId}
-            onThreadChange={setActiveThreadId}
-            selectedPersonId={personId}
-            onPersonChange={setPersonId}
-            compact
-            showHeader={false}
-            showPersonFilter
-            initialPrefill={prefill?.message}
-            initialContextHint={prefill?.contextHint}
-            onPrefillConsumed={() => setPrefill(null)}
-          />
+          {resolving || !activeThreadId ? (
+            <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
+              Carregando conversa...
+            </div>
+          ) : (
+            <ChatConversation
+              activeThreadId={activeThreadId}
+              onThreadChange={setActiveThreadId}
+              selectedPersonId={personId}
+              onPersonChange={setPersonId}
+              compact
+              showHeader={false}
+              showPersonFilter
+              initialPrefill={prefill?.message}
+              initialContextHint={prefill?.contextHint}
+              onPrefillConsumed={() => setPrefill(null)}
+            />
+          )}
         </div>
       </aside>
     </>

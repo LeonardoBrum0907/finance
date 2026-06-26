@@ -135,6 +135,8 @@ export function SimulatorPage() {
           <AssistantSpotlightButton
             label="Analisar com IA"
             message="Quero simular uma compra — quanto posso gastar sem comprometer minhas metas?"
+            contextKey="simulator:page"
+            title="Simulador"
             personId={effectivePersonId}
           />
         </div>

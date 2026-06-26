@@ -41,6 +41,7 @@ interface Props {
   hideIncomeBreakdown?: boolean;
   onCategorySelect?: (selection: CategoryChartSelection) => void;
   className?: string;
+  personId?: string;
 }
 
 function LegendDot({ color, label }: { color: string; label: string }) {
@@ -64,6 +65,7 @@ export function GrowthChart({
   hideIncomeBreakdown = false,
   onCategorySelect,
   className,
+  personId,
 }: Props) {
   const [view, setView] = useState<GrowthView>("flow");
   const isSingleMonth = months === 1;
@@ -207,12 +209,15 @@ export function GrowthChart({
           <AssistantSpotlightButton
             label="Analisar período"
             message={`Analise meu desempenho financeiro no período: ${periodLabel ?? "atual"}`}
+            contextKey="growth_chart"
+            title="Painel do período"
             contextHint={JSON.stringify({
               source: "growth_chart",
               periodLabel,
               months,
               view,
             })}
+            personId={personId}
           />
           <ChartViewToggle
             value={view}

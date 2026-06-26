@@ -1,5 +1,5 @@
-import type { GoalDTO, PlanDTO, SavingsPathPoint } from "@finance/shared";
-import { getRecentPaydayCycles } from "@finance/shared";
+import type { GoalDTO, PlanDTO, SavingsPathPoint, PaydayCycleAnchor } from "@finance/shared";
+import { DEFAULT_PAYDAY_CYCLE_ANCHOR, getRecentPaydayCycles } from "@finance/shared";
 import {
   addMonthsToMonthKey,
   getCycleSummary,
@@ -60,11 +60,14 @@ export function computeMonthlySurplus(txs: FinancialTransaction[]): number {
 export function computeCycleSurplus(
   txs: FinancialTransaction[],
   paydayDay: number,
+  paydayCycleAnchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
 ): number {
-  const cycleStarts = getRecentPaydayCycles(SURPLUS_MONTHS, paydayDay, 1);
+  const cycleStarts = getRecentPaydayCycles(SURPLUS_MONTHS, paydayDay, 1, paydayCycleAnchor);
   if (cycleStarts.length === 0) return 0;
 
-  const nets = cycleStarts.map((start) => getCycleSummary(txs, start, paydayDay).net);
+  const nets = cycleStarts.map((start) =>
+    getCycleSummary(txs, start, paydayDay, paydayCycleAnchor).net,
+  );
   const total = nets.reduce((sum, net) => sum + net, 0);
   return total / cycleStarts.length;
 }
@@ -72,10 +75,11 @@ export function computeCycleSurplus(
 export function resolveSurplus(
   txs: FinancialTransaction[],
   paydayDay: number | null,
+  paydayCycleAnchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
 ): { surplus: number; periodMode: "calendar" | "payday"; label: string } {
   if (paydayDay !== null) {
     return {
-      surplus: computeCycleSurplus(txs, paydayDay),
+      surplus: computeCycleSurplus(txs, paydayDay, paydayCycleAnchor),
       periodMode: "payday",
       label: "sobra média por ciclo",
     };

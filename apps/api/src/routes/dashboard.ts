@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { accountNetWorthContribution, getRecentPaydayCycles, paydayCyclesToDateRange, isInvestmentAccount } from "@finance/shared";
+import { accountNetWorthContribution, getRecentPaydayCycles, paydayCyclesToDateRange, isInvestmentAccount, isPaydayDayConfigured } from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
 import type { FinancialTransaction } from "../services/finance/types.js";
@@ -8,6 +8,7 @@ import { serializeAccount } from "../services/serializeAccount.js";
 import { computeNextBill } from "../services/finance/creditBill.js";
 import {
   buildCurrentCycleSummary,
+  buildRecentCycleSummaries,
   buildDashboardInsights,
   buildGrowthMetrics,
   getCategoriesWithPercent,
@@ -22,7 +23,10 @@ import {
   summarizeTransactions,
 } from "../services/finance/aggregates.js";
 import { loadInvestmentData } from "./investments.js";
-import { loadUserSettings, resolvePeriodMode } from "../services/userSettings.js";
+import { loadUserSettings, resolvePaydayCycle, resolvePeriodMode } from "../services/userSettings.js";
+import { buildHouseholdArena } from "../services/finance/householdComparison.js";
+
+const MIN_PAYDAY_CYCLES_FETCH = 12;
 
 export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
@@ -34,15 +38,21 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     const userId = request.user!.sub;
 
     const settings = await loadUserSettings(userId);
-    const periodMode = resolvePeriodMode(query.periodMode, settings);
-    const paydayDay = settings.paydayDay;
+    const { paydayDay, paydayCycleAnchor } = await resolvePaydayCycle(userId, personId);
+    const periodMode = resolvePeriodMode(query.periodMode, settings, paydayDay);
 
-    const periods = resolvePeriodRanges(months, periodMode, paydayDay);
+    const periods = resolvePeriodRanges(months, periodMode, paydayDay, paydayCycleAnchor);
     const fetchRange =
       periodMode === "payday" && paydayDay !== null
         ? paydayCyclesToDateRange(
-            getRecentPaydayCycles(months * 2, paydayDay, 0),
+            getRecentPaydayCycles(
+              Math.max(months * 2, MIN_PAYDAY_CYCLES_FETCH),
+              paydayDay,
+              0,
+              paydayCycleAnchor,
+            ),
             paydayDay,
+            paydayCycleAnchor,
           )
         : monthKeysToDateRange(getRecentMonthKeys(months * 2, 0));
 
@@ -195,7 +205,12 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
 
     const monthlySeries =
       periodMode === "payday" && paydayDay !== null
-        ? getPaydayCycleSeries(financialTransactions, periods.currentKeys, paydayDay)
+        ? getPaydayCycleSeries(
+            financialTransactions,
+            periods.currentKeys,
+            paydayDay,
+            paydayCycleAnchor,
+          )
         : getMonthlySeries(financialTransactions, periods.currentKeys);
 
     const categories = getCategoriesWithPercent(financialTransactions, periods.currentRange);
@@ -220,7 +235,13 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     });
 
     const currentCycle =
-      paydayDay !== null ? buildCurrentCycleSummary(financialTransactions, paydayDay) : null;
+      paydayDay !== null
+        ? buildCurrentCycleSummary(financialTransactions, paydayDay, paydayCycleAnchor)
+        : null;
+    const recentCycles =
+      paydayDay !== null
+        ? buildRecentCycleSummaries(financialTransactions, paydayDay, undefined, paydayCycleAnchor)
+        : null;
 
     const growthMetrics = buildGrowthMetrics({
       period,
@@ -229,6 +250,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       previousRange: periods.previousRange,
       txs: financialTransactions,
       paydayDay,
+      paydayCycleAnchor,
       periodMode: periods.periodMode,
     });
 
@@ -254,7 +276,10 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       currencyCode,
       periodMode: periods.periodMode,
       paydayDay,
+      paydayCycleAnchor,
+      paydayConfigured: isPaydayDayConfigured(paydayDay),
       currentCycle,
+      recentCycles,
       perPerson,
       accounts,
       period,
@@ -265,5 +290,13 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       growthMetrics,
       insights,
     });
+  });
+
+  app.get("/api/dashboard/arena", async (request, reply) => {
+    const arena = await buildHouseholdArena(request.user!.sub);
+    if (!arena) {
+      return reply.code(404).send({ error: "Sem dados financeiros para a arena" });
+    }
+    return reply.send(arena);
   });
 }

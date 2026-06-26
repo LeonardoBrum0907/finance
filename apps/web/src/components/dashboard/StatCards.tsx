@@ -60,6 +60,7 @@ interface CardProps {
   periodMode?: PeriodMode;
   spotlightMessage?: string;
   spotlightContext?: string;
+  spotlightPersonId?: string;
 }
 
 function StatCard({
@@ -79,6 +80,7 @@ function StatCard({
   periodMode = "calendar",
   spotlightMessage,
   spotlightContext,
+  spotlightPersonId,
 }: CardProps) {
   const format = (n: number) => `${prefix}${formatCurrency(n, currencyCode)}`;
 
@@ -117,7 +119,10 @@ function StatCard({
         <div className="mt-2">
           <AssistantSpotlightButton
             message={spotlightMessage}
+            contextKey="stat_card:net"
+            title="Saldo negativo"
             contextHint={spotlightContext}
+            personId={spotlightPersonId}
             label="Analisar"
           />
         </div>
@@ -132,6 +137,7 @@ interface StatCardsProps {
   period: DashboardPeriodSummary;
   previousPeriod: DashboardPeriodSummary;
   periodMode?: PeriodMode;
+  personId?: string;
 }
 
 export function StatCards({
@@ -140,6 +146,7 @@ export function StatCards({
   period,
   previousPeriod,
   periodMode = "calendar",
+  personId,
 }: StatCardsProps) {
   const netPositive = period.net >= 0;
 
@@ -215,6 +222,7 @@ export function StatCards({
             ? JSON.stringify({ source: "stat_card", metric: "net", value: period.net })
             : undefined
         }
+        spotlightPersonId={personId}
       />
     </div>
   );

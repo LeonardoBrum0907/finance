@@ -10,6 +10,7 @@ import { cardLargeClass, fadeUp } from "./motion";
 
 interface Props {
   insights: string[];
+  personId?: string;
 }
 
 type InsightType = "success" | "info" | "warning";
@@ -57,7 +58,7 @@ function resolveType(text: string, index: number): InsightType {
   return index % 3 === 0 ? "success" : index % 3 === 1 ? "info" : "warning";
 }
 
-export function InsightsPanel({ insights }: Props) {
+export function InsightsPanel({ insights, personId }: Props) {
   if (insights.length === 0) return null;
 
   return (
@@ -98,6 +99,9 @@ export function InsightsPanel({ insights }: Props) {
                 <div className="mt-2">
                   <AssistantSpotlightButton
                     message={`Explique este insight e sugira uma ação prática: "${text}"`}
+                    contextKey={`insight:${type}`}
+                    title="Insight"
+                    personId={personId}
                     contextHint={JSON.stringify({ source: "insight", text, type })}
                   />
                 </div>

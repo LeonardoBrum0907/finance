@@ -80,6 +80,8 @@ export function SimulationResults({
           <AssistantSpotlightButton
             label="Continuar no assistente"
             message={buildAssistantMessage(result)}
+            contextKey={`simulator:${result.type}`}
+            title="Simulação"
             contextHint={contextHint}
             personId={personId}
             className="shrink-0 px-3 py-1.5 text-xs"
