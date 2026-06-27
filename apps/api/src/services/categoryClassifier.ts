@@ -5,7 +5,15 @@ import {
   sanitizeFineGrainedCategory,
   type CategorySource,
 } from "@finance/shared";
-import { getModel, isAiConfigured } from "./ai.js";
+import { getAiEnv } from "../env.js";
+import { getModel, isAiConfigured, type AiProvider } from "./ai.js";
+import {
+  aiCallProviderOptions,
+  buildSystemPrompt,
+  extractCachedTokens,
+  getCacheKey,
+  isPromptCacheEnabled,
+} from "./aiPromptCache.js";
 
 const BATCH_SIZE = 20;
 
@@ -50,6 +58,13 @@ Prefira a categoria MAIS ESPECÍFICA da lista. Exemplos:
 Se incerto, use "Outros" com confidence baixa (< 0.5).
 A categoria DEVE ser exatamente um item da lista fornecida.`;
 
+function buildClassifierStaticSystem(): string {
+  return `${CLASSIFIER_PROMPT}
+
+Categorias válidas:
+${FINE_GRAINED_CATEGORIES.join(", ")}`;
+}
+
 function buildFewShotBlock(recentCategories: string[]): string {
   if (recentCategories.length === 0) return "";
   return `\nCategorias recentes deste usuário: ${recentCategories.join(", ")}`;
@@ -92,15 +107,32 @@ async function classifyBatch(
     .join("\n");
 
   try {
-    const { object } = await generateObject({
+    const staticSystem = buildClassifierStaticSystem();
+    const dynamicFewShot = buildFewShotBlock(recentCategories);
+    const system = buildSystemPrompt(staticSystem, dynamicFewShot);
+    const provider = getAiEnv().provider as AiProvider;
+
+    const { object, usage, providerMetadata } = await generateObject({
       model: getModel(),
       schema: batchResultSchema,
-      system: `${CLASSIFIER_PROMPT}${buildFewShotBlock(recentCategories)}
-
-Categorias válidas:
-${FINE_GRAINED_CATEGORIES.join(", ")}`,
+      system,
       prompt: `Classifique cada transação pelo índice:\n${txList}`,
+      ...aiCallProviderOptions({ provider }, "classifier", staticSystem),
     });
+
+    if (isPromptCacheEnabled() && provider === "openai") {
+      const cached = extractCachedTokens(
+        usage,
+        providerMetadata as Record<string, Record<string, unknown> | undefined>,
+      );
+      if (cached > 0) {
+        console.debug("[categoryClassifier] prompt cache hit", {
+          cacheKey: getCacheKey("classifier", staticSystem),
+          inputTokens: usage?.inputTokens,
+          cachedInputTokens: cached,
+        });
+      }
+    }
 
     const byIndex = new Map(object.results.map((r) => [r.index, r]));
 

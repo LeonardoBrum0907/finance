@@ -15,6 +15,14 @@ import {
   type ModelCandidate,
 } from "./ai.js";
 import { wrapToolsWithGuards } from "./aiGuards.js";
+import {
+  aiCallProviderOptions,
+  buildSystemPrompt,
+  extractCachedTokens,
+  getCacheKey,
+  isPromptCacheEnabled,
+  logPromptCacheStats,
+} from "./aiPromptCache.js";
 import { combineAbortSignals, recordAiUsage } from "./aiUsage.js";
 import { InvalidPersonError } from "./finance/queries.js";
 import { createFinanceTools } from "./finance/tools.js";
@@ -47,20 +55,31 @@ export interface RunChatStreamOptions {
 
 async function extractStreamUsage(
   streamResult: Awaited<ReturnType<typeof streamText>>,
-): Promise<{ inputTokens: number; outputTokens: number; totalTokens: number }> {
+): Promise<{
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cachedInputTokens: number;
+  providerMetadata?: Record<string, Record<string, unknown> | undefined>;
+}> {
   try {
     const usage =
       (await streamResult.totalUsage) ??
       (await streamResult.usage);
+    const providerMetadata = (await streamResult.providerMetadata) as
+      | Record<string, Record<string, unknown> | undefined>
+      | undefined;
     const inputTokens = usage?.inputTokens ?? 0;
     const outputTokens = usage?.outputTokens ?? 0;
     return {
       inputTokens,
       outputTokens,
       totalTokens: usage?.totalTokens ?? inputTokens + outputTokens,
+      cachedInputTokens: extractCachedTokens(usage, providerMetadata),
+      providerMetadata,
     };
   } catch {
-    return { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    return { inputTokens: 0, outputTokens: 0, totalTokens: 0, cachedInputTokens: 0 };
   }
 }
 
@@ -118,7 +137,9 @@ export async function runChatStream({
     }
   }
 
-  const systemPrompt = `${SYSTEM_PROMPT}\n\n# Dados financeiros do usuário\n${context}${arenaBlock}${contextBlock}\n\n# ${goalsContext}`;
+  const dynamicContext = `# Dados financeiros do usuário\n${context}${arenaBlock}${contextBlock}\n\n# ${goalsContext}`;
+  const systemPrompt = buildSystemPrompt(SYSTEM_PROMPT, dynamicContext);
+  const chatCacheKey = isPromptCacheEnabled() ? getCacheKey("chat", SYSTEM_PROMPT) : undefined;
   const messages: CoreMessage[] = historyRows.map((m) => ({
     role: m.role === "assistant" ? ("assistant" as const) : ("user" as const),
     content: m.content,
@@ -167,6 +188,7 @@ export async function runChatStream({
         maxRetries: AI_MAX_RETRIES,
         stopWhen: stepCountIs(maxSteps),
         abortSignal: streamAbortSignal,
+        ...aiCallProviderOptions(candidate, "chat", SYSTEM_PROMPT),
         onStepFinish: () => {
           stepCount += 1;
         },
@@ -238,12 +260,23 @@ export async function runChatStream({
 
         const usage = await extractStreamUsage(streamResult!);
         if (usedCandidate) {
+          logPromptCacheStats(
+            log,
+            "chat",
+            usedCandidate.provider === "openai" ? chatCacheKey : undefined,
+            usage.inputTokens,
+            usage.cachedInputTokens,
+          );
+
           metadata.ai = {
             provider: usedCandidate.provider,
             modelId: usedCandidate.modelId,
             inputTokens: usage.inputTokens,
             outputTokens: usage.outputTokens,
             totalTokens: usage.totalTokens,
+            cachedInputTokens: usage.cachedInputTokens || undefined,
+            promptCacheKey:
+              usedCandidate.provider === "openai" ? chatCacheKey : undefined,
             usedFallback: primaryCandidate
               ? `${usedCandidate.provider}:${usedCandidate.modelId}` !==
                 `${primaryCandidate.provider}:${primaryCandidate.modelId}`

@@ -1,6 +1,15 @@
 import { generateText } from "ai";
 import { prisma } from "../prisma.js";
-import { buildFinancialContext, getModel, SYSTEM_PROMPT } from "./ai.js";
+import { getAiEnv } from "../env.js";
+import { buildFinancialContext, getModel, SYSTEM_PROMPT, type AiProvider } from "./ai.js";
+import {
+  aiCallProviderOptions,
+  buildSystemPrompt,
+  extractCachedTokens,
+  getCacheKey,
+  isPromptCacheEnabled,
+  type PromptCacheScope,
+} from "./aiPromptCache.js";
 import { buildGoalsContextBlock } from "./finance/goalsContext.js";
 import {
   buildHouseholdArena,
@@ -64,6 +73,39 @@ function recapFromMessage(
   };
 }
 
+async function generateRecapText(
+  staticSystem: string,
+  dynamicContext: string,
+  scope: PromptCacheScope,
+): Promise<string> {
+  const provider = getAiEnv().provider as AiProvider;
+  const system = buildSystemPrompt(staticSystem, dynamicContext);
+
+  const { text, usage, providerMetadata } = await generateText({
+    model: getModel(),
+    system,
+    prompt: "Gere o resumo semanal com base no contexto fornecido.",
+    ...aiCallProviderOptions({ provider }, scope, staticSystem),
+  });
+
+  if (isPromptCacheEnabled() && provider === "openai") {
+    const cached = extractCachedTokens(
+      usage,
+      providerMetadata as Record<string, Record<string, unknown> | undefined>,
+    );
+    if (cached > 0) {
+      console.debug("[chatRecap] prompt cache hit", {
+        scope,
+        cacheKey: getCacheKey(scope, staticSystem),
+        inputTokens: usage?.inputTokens,
+        cachedInputTokens: cached,
+      });
+    }
+  }
+
+  return text;
+}
+
 export async function createWeeklyRecap(
   userId: string,
   options: CreateWeeklyRecapOptions = {},
@@ -107,12 +149,10 @@ export async function createWeeklyRecap(
       buildGoalsContextBlock(userId),
     ]);
     const arenaBlock = buildHouseholdComparisonContext(arena);
+    const staticSystem = `${SYSTEM_PROMPT}\n\n${PERSON_RECAP_PROMPT}`;
+    const dynamicContext = `# Dados financeiros (${ranking.personName})\n${context}\n\n# ${goalsContext}\n\n${arenaBlock}`;
 
-    const { text } = await generateText({
-      model: getModel(),
-      system: `${SYSTEM_PROMPT}\n\n${PERSON_RECAP_PROMPT}`,
-      prompt: `# Dados financeiros (${ranking.personName})\n${context}\n\n# ${goalsContext}\n\n${arenaBlock}`,
-    });
+    const text = await generateRecapText(staticSystem, dynamicContext, "recap-person");
 
     const message = await prisma.chatMessage.create({
       data: {
@@ -147,21 +187,24 @@ export async function createWeeklyRecap(
     });
   }
 
-  const promptExtra =
-    arena.personCount > 1
-      ? `${HOUSEHOLD_RECAP_PROMPT}\n\n${buildHouseholdComparisonContext(arena)}`
-      : SINGLE_PERSON_RECAP_PROMPT;
+  const recapScope: PromptCacheScope =
+    arena.personCount > 1 ? "recap-household" : "recap-single";
+  const staticSystem = `${SYSTEM_PROMPT}\n\n${
+    arena.personCount > 1 ? HOUSEHOLD_RECAP_PROMPT : SINGLE_PERSON_RECAP_PROMPT
+  }`;
 
   const [context, goalsContext] = await Promise.all([
     buildFinancialContext(userId),
     buildGoalsContextBlock(userId),
   ]);
 
-  const { text } = await generateText({
-    model: getModel(),
-    system: `${SYSTEM_PROMPT}\n\n${promptExtra}`,
-    prompt: `# Dados financeiros\n${context}\n\n# ${goalsContext}`,
-  });
+  const dynamicParts = [`# Dados financeiros\n${context}`, `# ${goalsContext}`];
+  if (arena.personCount > 1) {
+    dynamicParts.push(buildHouseholdComparisonContext(arena));
+  }
+  const dynamicContext = dynamicParts.join("\n\n");
+
+  const text = await generateRecapText(staticSystem, dynamicContext, recapScope);
 
   const message = await prisma.chatMessage.create({
     data: {

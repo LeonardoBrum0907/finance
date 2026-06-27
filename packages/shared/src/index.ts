@@ -413,7 +413,12 @@ export interface DashboardPeriodSummary {
   months: number;
   income: number;
   expenses: number;
+  /** Saldo realizado: receitas − despesas já ocorridas no período/ciclo. */
   net: number;
+  /** Compromissos futuros no ciclo (só em modo payday, ciclo em andamento). */
+  committedExpenses?: number;
+  /** Saldo disponível: net − committedExpenses. */
+  availableNet?: number;
   periodMode?: PeriodMode;
   from?: string;
   to?: string;
@@ -446,7 +451,10 @@ export interface DashboardCurrentCycle {
   committedExpensesManual?: number;
   /** Parcelas de cartão/banco com data futura no ciclo. */
   committedExpensesBank?: number;
+  /** Saldo realizado: receitas − despesas já ocorridas. */
   net: number;
+  /** Saldo disponível: net − committedExpenses. */
+  availableNet: number;
   salaryIncome: number;
   extraIncome: number;
 }
@@ -701,6 +709,8 @@ export interface ChatMessageMetadata {
     inputTokens?: number;
     outputTokens?: number;
     totalTokens?: number;
+    cachedInputTokens?: number;
+    promptCacheKey?: string;
     usedFallback?: boolean;
     steps?: number;
   };
