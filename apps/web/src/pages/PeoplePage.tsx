@@ -112,11 +112,11 @@ export function PeoplePage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-800">Pessoas</h1>
-        <p className="text-sm text-slate-500">
+        <h1 className="text-2xl font-semibold text-foreground">Pessoas</h1>
+        <p className="text-sm text-muted-foreground-dark">
           Cadastre quem faz parte do seu orçamento familiar (você, cônjuge, filhos, etc.).
           As contas bancárias são conectadas na página{" "}
-          <Link to="/contas" className="font-medium text-brand-600 hover:underline">
+          <Link to="/contas" className="font-medium text-brand hover:underline">
             Contas
           </Link>
           .
@@ -125,32 +125,32 @@ export function PeoplePage() {
 
       <form
         onSubmit={handleSubmit}
-        className="flex flex-wrap items-end gap-3 rounded-lg border border-slate-200 bg-white p-4"
+        className="flex flex-wrap items-end gap-3 rounded-lg border border-app-border bg-app-surface p-4"
       >
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Nome</label>
+          <label className="mb-1 block text-sm font-medium text-foreground/90">Nome</label>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Ex: Maria"
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+            className="rounded-md border border-app-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
+          <label className="mb-1 block text-sm font-medium text-foreground/90">
             Relação (opcional)
           </label>
           <input
             value={relationship}
             onChange={(e) => setRelationship(e.target.value)}
             placeholder="Ex: Esposa"
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+            className="rounded-md border border-app-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
           />
         </div>
         <button
           type="submit"
           disabled={createMutation.isPending}
-          className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+          className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand/90 disabled:opacity-60"
         >
           Adicionar
         </button>
@@ -160,40 +160,40 @@ export function PeoplePage() {
         {people.data?.map((person) => (
           <div
             key={person.id}
-            className="rounded-lg border border-slate-200 bg-white p-4"
+            className="rounded-lg border border-app-border bg-app-surface p-4"
           >
             {editingId === person.id ? (
               <form onSubmit={handleEditSubmit} className="flex flex-wrap items-end gap-3">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Nome</label>
+                  <label className="mb-1 block text-sm font-medium text-foreground/90">Nome</label>
                   <input
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
-                    className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+                    className="rounded-md border border-app-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">
+                  <label className="mb-1 block text-sm font-medium text-foreground/90">
                     Relação (opcional)
                   </label>
                   <input
                     value={editRelationship}
                     onChange={(e) => setEditRelationship(e.target.value)}
-                    className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+                    className="rounded-md border border-app-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
                   />
                 </div>
                 <div className="flex gap-2">
                   <button
                     type="submit"
                     disabled={updateMutation.isPending}
-                    className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+                    className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand/90 disabled:opacity-60"
                   >
                     Salvar
                   </button>
                   <button
                     type="button"
                     onClick={cancelEditing}
-                    className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                    className="rounded-md border border-app-border px-4 py-2 text-sm text-muted-foreground-dark hover:bg-app-bg"
                   >
                     Cancelar
                   </button>
@@ -202,13 +202,13 @@ export function PeoplePage() {
             ) : (
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="font-medium text-slate-800">{person.name}</p>
+                  <p className="font-medium text-foreground">{person.name}</p>
                   {person.relationship && (
-                    <p className="text-xs text-slate-500">{person.relationship}</p>
+                    <p className="text-xs text-muted-foreground-dark">{person.relationship}</p>
                   )}
                   <Link
                     to="/contas"
-                    className="mt-2 inline-block text-xs text-brand-600 hover:underline"
+                    className="mt-2 inline-block text-xs text-brand hover:underline"
                   >
                     {formatConnectionsBadge(person)}
                   </Link>
@@ -217,7 +217,7 @@ export function PeoplePage() {
                   <button
                     type="button"
                     onClick={() => startEditing(person)}
-                    className="text-brand-600 hover:underline"
+                    className="text-brand hover:underline"
                   >
                     Editar
                   </button>
@@ -225,7 +225,7 @@ export function PeoplePage() {
                     type="button"
                     onClick={() => handleDelete(person)}
                     disabled={deleteMutation.isPending}
-                    className="text-red-600 hover:underline disabled:opacity-60"
+                    className="text-danger hover:underline disabled:opacity-60"
                   >
                     Remover
                   </button>
@@ -235,7 +235,7 @@ export function PeoplePage() {
           </div>
         ))}
         {people.data?.length === 0 && (
-          <p className="text-sm text-slate-500">Nenhuma pessoa cadastrada ainda.</p>
+          <p className="text-sm text-muted-foreground-dark">Nenhuma pessoa cadastrada ainda.</p>
         )}
       </div>
     </div>

@@ -37,7 +37,7 @@ export function PeriodSelector({
     <div className="flex flex-wrap items-center gap-2">
       {showModeToggle && paydayConfigured && onPeriodModeChange && (
         <div
-          className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1"
+          className="inline-flex rounded-lg border border-app-border bg-app-bg p-1"
           role="group"
           aria-label="Tipo de período"
         >
@@ -46,8 +46,8 @@ export function PeriodSelector({
             onClick={() => onPeriodModeChange("calendar")}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
               periodMode === "calendar"
-                ? "bg-white text-brand-700 shadow-sm"
-                : "text-slate-600 hover:text-slate-800"
+                ? "bg-app-surface text-brand shadow-sm"
+                : "text-muted-foreground-dark hover:text-foreground"
             }`}
           >
             Calendário
@@ -57,8 +57,8 @@ export function PeriodSelector({
             onClick={() => onPeriodModeChange("payday")}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
               periodMode === "payday"
-                ? "bg-white text-brand-700 shadow-sm"
-                : "text-slate-600 hover:text-slate-800"
+                ? "bg-app-surface text-brand shadow-sm"
+                : "text-muted-foreground-dark hover:text-foreground"
             }`}
           >
             Meu ciclo
@@ -67,7 +67,7 @@ export function PeriodSelector({
       )}
 
       <div
-        className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1"
+        className="inline-flex rounded-lg border border-app-border bg-app-bg p-1"
         role="group"
         aria-label="Período do painel"
       >
@@ -78,8 +78,8 @@ export function PeriodSelector({
             onClick={() => onChange(opt.value)}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
               value === opt.value
-                ? "bg-white text-brand-700 shadow-sm"
-                : "text-slate-600 hover:text-slate-800"
+                ? "bg-app-surface text-brand shadow-sm"
+                : "text-muted-foreground-dark hover:text-foreground"
             }`}
           >
             {opt.label}

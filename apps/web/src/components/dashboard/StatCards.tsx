@@ -17,19 +17,18 @@ function calcChange(current: number, previous: number): number | null {
 
 function ChangeBadge({
   change,
-  tone = "emerald",
+  tone = "positive",
   periodMode = "calendar",
 }: {
   change: number | null;
-  tone?: "emerald" | "teal" | "rose";
+  tone?: "positive" | "negative";
   periodMode?: PeriodMode;
 }) {
   if (change === null || Math.abs(change) < 0.5) return null;
 
   const colors = {
-    emerald: "bg-emerald-500/10 text-emerald-600",
-    teal: "bg-teal-500/10 text-teal-600",
-    rose: "bg-rose-500/10 text-rose-600",
+    positive: "bg-positive/10 text-positive",
+    negative: "bg-negative/10 text-negative",
   };
 
   const compareLabel = periodMode === "payday" ? "vs ciclo anterior" : "vs último mês";
@@ -55,7 +54,7 @@ interface CardProps {
   icon: LucideIcon;
   iconClassName: string;
   iconBoxClassName: string;
-  badgeTone?: "emerald" | "teal" | "rose";
+  badgeTone?: "positive" | "negative";
   subtitle?: string;
   periodMode?: PeriodMode;
   spotlightMessage?: string;
@@ -70,12 +69,12 @@ function StatCard({
   change,
   index,
   variant = "default",
-  valueClassName = "text-slate-900",
+  valueClassName = "text-foreground",
   prefix = "",
   icon: Icon,
   iconClassName,
   iconBoxClassName,
-  badgeTone = "emerald",
+  badgeTone = "positive",
   subtitle,
   periodMode = "calendar",
   spotlightMessage,
@@ -93,7 +92,7 @@ function StatCard({
       className={variant === "highlight" ? cardHighlightClass : cardClass}
     >
       <div className="mb-2.5 flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
           {label}
         </span>
         <div
@@ -106,7 +105,7 @@ function StatCard({
         <AnimatedValue value={value} format={format} />
       </p>
       {subtitle && (
-        <p className="mt-2 text-[11px] leading-relaxed text-slate-400" title={subtitle}>
+        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground" title={subtitle}>
           {subtitle}
         </p>
       )}
@@ -163,8 +162,8 @@ export function StatCards({
         index={0}
         variant="highlight"
         icon={ArrowUpRight}
-        iconClassName="text-emerald-600"
-        iconBoxClassName="border border-emerald-500/10 bg-emerald-500/10"
+        iconClassName="text-positive"
+        iconBoxClassName="border border-positive/10 bg-positive/10"
         subtitle={netWorthBreakdown}
       />
       <StatCard
@@ -174,11 +173,11 @@ export function StatCards({
         change={calcChange(period.income, previousPeriod.income)}
         index={1}
         prefix="+"
-        valueClassName="text-teal-600"
+        valueClassName="text-positive"
         icon={ArrowUpRight}
-        iconClassName="text-teal-600"
-        iconBoxClassName="border border-teal-500/10 bg-teal-500/10"
-        badgeTone="teal"
+        iconClassName="text-positive"
+        iconBoxClassName="border border-positive/10 bg-positive/10"
+        badgeTone="positive"
         periodMode={periodMode}
       />
       <StatCard
@@ -188,11 +187,11 @@ export function StatCards({
         change={calcChange(period.expenses, previousPeriod.expenses)}
         index={2}
         prefix="-"
-        valueClassName="text-rose-600"
+        valueClassName="text-negative"
         icon={ArrowDownRight}
-        iconClassName="text-rose-600"
-        iconBoxClassName="border border-rose-500/10 bg-rose-500/10"
-        badgeTone="rose"
+        iconClassName="text-negative"
+        iconBoxClassName="border border-negative/10 bg-negative/10"
+        badgeTone="negative"
         periodMode={periodMode}
       />
       <StatCard
@@ -202,15 +201,15 @@ export function StatCards({
         change={calcChange(period.net, previousPeriod.net)}
         index={3}
         prefix={period.net > 0 ? "+" : ""}
-        valueClassName={netPositive ? "text-emerald-600" : "text-rose-600"}
+        valueClassName={netPositive ? "text-positive" : "text-negative"}
         icon={netPositive ? ArrowUpRight : ArrowDownRight}
-        iconClassName={netPositive ? "text-emerald-600" : "text-rose-600"}
+        iconClassName={netPositive ? "text-positive" : "text-negative"}
         iconBoxClassName={
           netPositive
-            ? "border border-emerald-500/10 bg-emerald-500/10"
-            : "border border-rose-500/10 bg-rose-500/10"
+            ? "border border-positive/10 bg-positive/10"
+            : "border border-negative/10 bg-negative/10"
         }
-        badgeTone={netPositive ? "emerald" : "rose"}
+        badgeTone={netPositive ? "positive" : "negative"}
         periodMode={periodMode}
         spotlightMessage={
           !netPositive

@@ -47,7 +47,7 @@ function ProgressRing({ progress }: { progress: number }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-mono text-sm font-bold text-slate-800">{progress.toFixed(0)}%</span>
+        <span className="font-mono text-sm font-bold text-foreground">{progress.toFixed(0)}%</span>
       </div>
     </div>
   );
@@ -60,28 +60,28 @@ export function GoalCard({ goal, currencyCode, onEdit, onAddFunds }: Props) {
   const hasStaleSource = goal.sources.some((s) => s.isStale);
 
   return (
-    <div className="flex flex-col justify-between rounded-2xl border border-slate-200/60 bg-white p-6 transition-all duration-200 hover:shadow-md">
+    <div className="flex flex-col justify-between rounded-2xl border border-app-border/60 bg-app-surface p-6 transition-all duration-200 hover:shadow-md">
       <div className="flex gap-4">
         <ProgressRing progress={goal.progress} />
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex items-start justify-between gap-2">
             <div>
-              <span className="block font-sans text-xs font-bold uppercase tracking-wide text-slate-800">
+              <span className="block font-sans text-xs font-bold uppercase tracking-wide text-foreground">
                 {goal.name}
               </span>
-              <span className="text-[11px] text-slate-400">{TYPE_LABELS[goal.type]}</span>
+              <span className="text-[11px] text-muted-foreground">{TYPE_LABELS[goal.type]}</span>
             </div>
-            <Target className="h-4 w-4 shrink-0 text-emerald-500" />
+            <Target className="h-4 w-4 shrink-0 text-positive" />
           </div>
 
           <div className="mt-2 flex flex-wrap gap-1.5">
             {isLinked ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+              <span className="inline-flex items-center gap-1 rounded-full bg-positive/10 px-2 py-0.5 text-[10px] font-semibold text-positive">
                 <Link2 className="h-3 w-3" />
                 Automático
               </span>
             ) : (
-              <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+              <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
                 Manual
               </span>
             )}
@@ -93,10 +93,10 @@ export function GoalCard({ goal, currencyCode, onEdit, onAddFunds }: Props) {
           </div>
 
           <div className="mt-3 space-y-1">
-            <p className="font-mono text-lg font-bold text-slate-900">
+            <p className="font-mono text-lg font-bold text-foreground">
               {formatCurrency(displayAmount, currencyCode)}
             </p>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               de {formatCurrency(goal.targetAmount, currencyCode)} · faltam{" "}
               {formatCurrency(remaining, currencyCode)}
             </p>
@@ -105,7 +105,7 @@ export function GoalCard({ goal, currencyCode, onEdit, onAddFunds }: Props) {
           {isLinked && goal.sources.length > 0 && (
             <ul className="mt-3 space-y-1">
               {goal.sources.map((src) => (
-                <li key={src.id} className="text-[10px] text-slate-500">
+                <li key={src.id} className="text-[10px] text-muted-foreground">
                   {src.name} · {src.allocationPercent.toFixed(0)}% ·{" "}
                   {formatCurrency(src.allocatedAmount, currencyCode)}
                 </li>
@@ -114,7 +114,7 @@ export function GoalCard({ goal, currencyCode, onEdit, onAddFunds }: Props) {
           )}
 
           {goal.targetDate && (
-            <p className="mt-2 text-[11px] text-slate-400">
+            <p className="mt-2 text-[11px] text-muted-foreground">
               Meta: {formatDate(goal.targetDate)}
             </p>
           )}
@@ -123,8 +123,8 @@ export function GoalCard({ goal, currencyCode, onEdit, onAddFunds }: Props) {
             <div className="mt-3 flex items-center gap-1.5">
               {goal.onTrack ? (
                 <>
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                  <span className="text-[10px] font-bold uppercase text-emerald-600">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-positive" />
+                  <span className="text-[10px] font-bold uppercase text-positive">
                     No caminho certo
                   </span>
                 </>
@@ -146,7 +146,7 @@ export function GoalCard({ goal, currencyCode, onEdit, onAddFunds }: Props) {
           <button
             type="button"
             onClick={() => onAddFunds(goal)}
-            className="inline-flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+            className="inline-flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-positive/20 bg-positive/10 px-3 py-2 text-xs font-semibold text-positive hover:bg-positive/15"
           >
             <Plus className="h-3.5 w-3.5" />
             Adicionar fundos
@@ -155,7 +155,7 @@ export function GoalCard({ goal, currencyCode, onEdit, onAddFunds }: Props) {
         <button
           type="button"
           onClick={() => onEdit(goal)}
-          className={`inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 ${isLinked ? "flex-1" : ""}`}
+          className={`inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-app-border px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-app-bg ${isLinked ? "flex-1" : ""}`}
         >
           <Pencil className="h-3.5 w-3.5" />
           Editar
@@ -163,9 +163,9 @@ export function GoalCard({ goal, currencyCode, onEdit, onAddFunds }: Props) {
       </div>
 
       {goal.status === "completed" && (
-        <div className="mt-3 flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2">
-          <PiggyBank className="h-3.5 w-3.5 text-emerald-600" />
-          <span className="text-[11px] font-medium text-emerald-700">Objetivo concluído!</span>
+        <div className="mt-3 flex items-center gap-1.5 rounded-lg bg-positive/10 px-3 py-2">
+          <PiggyBank className="h-3.5 w-3.5 text-positive" />
+          <span className="text-[11px] font-medium text-positive">Objetivo concluído!</span>
         </div>
       )}
     </div>

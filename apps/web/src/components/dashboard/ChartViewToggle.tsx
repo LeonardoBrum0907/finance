@@ -18,7 +18,7 @@ export function ChartViewToggle<T extends string>({
 }: Props<T>) {
   return (
     <div
-      className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5"
+      className="inline-flex rounded-lg border border-app-border bg-app-bg p-0.5"
       role="group"
       aria-label={ariaLabel}
     >
@@ -29,8 +29,8 @@ export function ChartViewToggle<T extends string>({
           onClick={() => onChange(opt.value)}
           className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${
             value === opt.value
-              ? "bg-white text-brand-700 shadow-sm"
-              : "text-slate-500 hover:text-slate-700"
+              ? "bg-app-surface text-brand shadow-sm"
+              : "text-muted-foreground-dark hover:text-foreground/90"
           }`}
         >
           {opt.label}

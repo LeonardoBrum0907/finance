@@ -15,10 +15,12 @@ import { createAreaGradient, ensureChartJsRegistered } from "../../lib/chart";
 import {
   baseChartOptions,
   baseScaleOptions,
-  CHART_COLORS,
+  chartColorWithAlpha,
+  getChartColors,
   flowTooltipFooter,
   flowTooltipLabel,
 } from "../../lib/chartTheme";
+import { useTheme } from "../../lib/theme/useTheme";
 import { CategoryBreakdown } from "./CategoryBreakdown";
 import { ChartViewToggle } from "./ChartViewToggle";
 import { GrowthSingleMonthView } from "./GrowthSingleMonthView";
@@ -48,7 +50,7 @@ function LegendDot({ color, label }: { color: string; label: string }) {
   return (
     <div className="flex items-center gap-1.5">
       <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
-      <span className="text-slate-500">{label}</span>
+      <span className="text-muted-foreground">{label}</span>
     </div>
   );
 }
@@ -69,6 +71,8 @@ export function GrowthChart({
 }: Props) {
   const [view, setView] = useState<GrowthView>("flow");
   const isSingleMonth = months === 1;
+  const { theme } = useTheme();
+  const chartColors = useMemo(() => getChartColors(), [theme]);
 
   const labels = useMemo(
     () => data.map((point) => formatSeriesLabel(point)),
@@ -82,11 +86,11 @@ export function GrowthChart({
         {
           label: "Receitas",
           data: data.map((p) => p.income),
-          borderColor: CHART_COLORS.income,
+          borderColor: chartColors.income,
           backgroundColor: (context: { chart: ChartJS }) => {
             const { ctx, chartArea } = context.chart;
-            if (!chartArea) return "rgba(16, 185, 129, 0.15)";
-            return createAreaGradient(ctx, chartArea, CHART_COLORS.income, 0.25);
+            if (!chartArea) return chartColorWithAlpha(chartColors.income, 0.15);
+            return createAreaGradient(ctx, chartArea, chartColors.income, 0.25);
           },
           fill: true,
           tension: 0.4,
@@ -97,11 +101,11 @@ export function GrowthChart({
         {
           label: "Despesas",
           data: data.map((p) => p.expenses),
-          borderColor: CHART_COLORS.expense,
+          borderColor: chartColors.expense,
           backgroundColor: (context: { chart: ChartJS }) => {
             const { ctx, chartArea } = context.chart;
-            if (!chartArea) return "rgba(244, 63, 94, 0.1)";
-            return createAreaGradient(ctx, chartArea, CHART_COLORS.expense, 0.15);
+            if (!chartArea) return chartColorWithAlpha(chartColors.expense, 0.1);
+            return createAreaGradient(ctx, chartArea, chartColors.expense, 0.15);
           },
           fill: true,
           tension: 0.4,
@@ -111,7 +115,7 @@ export function GrowthChart({
         },
       ],
     }),
-    [data, labels],
+    [data, labels, chartColors],
   );
 
   const balanceLineData = useMemo(
@@ -121,11 +125,11 @@ export function GrowthChart({
         {
           label: "Saldo",
           data: data.map((p) => p.net),
-          borderColor: CHART_COLORS.net,
+          borderColor: chartColors.net,
           backgroundColor: (context: { chart: ChartJS }) => {
             const { ctx, chartArea } = context.chart;
-            if (!chartArea) return "rgba(14, 165, 233, 0.12)";
-            return createAreaGradient(ctx, chartArea, CHART_COLORS.net, 0.2);
+            if (!chartArea) return chartColorWithAlpha(chartColors.net, 0.12);
+            return createAreaGradient(ctx, chartArea, chartColors.net, 0.2);
           },
           fill: true,
           tension: 0.4,
@@ -136,14 +140,14 @@ export function GrowthChart({
             borderColor: (ctx: { p0: { parsed: { y: number } }; p1: { parsed: { y: number } } }) => {
               const y0 = ctx.p0.parsed.y;
               const y1 = ctx.p1.parsed.y;
-              if (y0 < 0 || y1 < 0) return CHART_COLORS.expense;
-              return CHART_COLORS.net;
+              if (y0 < 0 || y1 < 0) return chartColors.expense;
+              return chartColors.net;
             },
           },
         },
       ],
     }),
-    [data, labels],
+    [data, labels, chartColors],
   );
 
   const chartData = view === "balance" ? balanceLineData : flowLineData;
@@ -171,9 +175,9 @@ export function GrowthChart({
           },
         },
       },
-      scales: baseScaleOptions(currencyCode),
+      scales: baseScaleOptions(currencyCode, chartColors),
     }),
-    [currencyCode, data, view],
+    [chartColors, currencyCode, data, view],
   );
 
   const subtitle =
@@ -197,10 +201,10 @@ export function GrowthChart({
     >
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="font-display text-base font-semibold text-slate-900">
+          <h2 className="font-display text-base font-semibold text-foreground">
             Painel do Período
           </h2>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-muted-foreground">
             {periodLabel ? `${periodLabel} · ` : ""}
             {subtitle}
           </p>
@@ -230,13 +234,13 @@ export function GrowthChart({
           />
           {!isSingleMonth && view === "flow" && (
             <div className="flex gap-4 text-xs font-medium">
-              <LegendDot color={CHART_COLORS.income} label="Receitas" />
-              <LegendDot color={CHART_COLORS.expense} label="Despesas" />
+              <LegendDot color={chartColors.income} label="Receitas" />
+              <LegendDot color={chartColors.expense} label="Despesas" />
             </div>
           )}
           {!isSingleMonth && view === "balance" && (
             <div className="flex gap-4 text-xs font-medium">
-              <LegendDot color={CHART_COLORS.net} label="Saldo" />
+              <LegendDot color={chartColors.net} label="Saldo" />
             </div>
           )}
         </div>
@@ -244,7 +248,7 @@ export function GrowthChart({
 
       <div className="min-w-0">
         {!hasGrowthData ? (
-          <p className="py-12 text-center text-sm text-slate-500">
+          <p className="py-12 text-center text-sm text-muted-foreground">
             Sem transações no período selecionado.
           </p>
         ) : isSingleMonth ? (
@@ -263,7 +267,7 @@ export function GrowthChart({
         )}
       </div>
 
-      <div className="mt-8 border-t border-slate-100 pt-8">
+      <div className="mt-8 border-t border-app-border/60 pt-8">
         <CategoryBreakdown
           data={categories}
           previousCategories={previousCategories}

@@ -39,8 +39,8 @@ export function CycleProgressCard({
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2">
-            <Calendar className="h-4 w-4 shrink-0 text-brand-600" />
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <Calendar className="h-4 w-4 shrink-0 text-brand" />
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
               {isCurrentCycle ? "Ciclo atual" : "Ciclo"}
             </span>
             {sortedCycles.length > 1 && (
@@ -48,7 +48,7 @@ export function CycleProgressCard({
                 <select
                   value={selectedCycleKey}
                   onChange={(e) => onSelectCycle(e.target.value)}
-                  className="appearance-none rounded-lg border border-slate-200 bg-white py-1 pl-2.5 pr-7 text-xs font-medium text-slate-700 shadow-sm transition hover:border-slate-300 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
+                  className="appearance-none rounded-lg border border-app-border bg-app-surface py-1 pl-2.5 pr-7 text-xs font-medium text-foreground/90 shadow-sm transition hover:border-app-border focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-100"
                   aria-label="Selecionar ciclo"
                 >
                   {sortedCycles.map((c) => (
@@ -58,12 +58,12 @@ export function CycleProgressCard({
                     </option>
                   ))}
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               </div>
             )}
           </div>
-          <p className="font-display text-lg font-semibold text-slate-900">{periodLabel}</p>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="font-display text-lg font-semibold text-foreground">{periodLabel}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
             {cycle.isComplete ? (
               <>Ciclo encerrado · {cycle.totalDays} dias</>
             ) : (
@@ -83,12 +83,12 @@ export function CycleProgressCard({
           </p>
         </div>
         <div className="text-right">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Saldo do ciclo
           </p>
           <p
             className={`font-display text-2xl font-bold ${
-              cycle.net >= 0 ? "text-emerald-600" : "text-rose-600"
+              cycle.net >= 0 ? "text-positive" : "text-negative"
             }`}
           >
             {cycle.net >= 0 ? "+" : ""}
@@ -98,14 +98,14 @@ export function CycleProgressCard({
       </div>
 
       <div className="mb-4">
-        <div className="mb-1.5 flex justify-between text-xs text-slate-500">
+        <div className="mb-1.5 flex justify-between text-xs text-muted-foreground">
           <span>{cycle.isComplete ? "Ciclo concluído" : "Progresso do ciclo"}</span>
           <span>{progressPercent.toFixed(0)}%</span>
         </div>
         <div className="h-2 overflow-hidden rounded-full bg-slate-100">
           <div
             className={`h-full rounded-full transition-all duration-500 ${
-              cycle.isComplete ? "bg-slate-400" : "bg-brand-500"
+              cycle.isComplete ? "bg-slate-400" : "bg-brand"
             }`}
             style={{ width: `${progressPercent}%` }}
           />
@@ -113,35 +113,47 @@ export function CycleProgressCard({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+        <div className="rounded-lg border border-app-border/60 bg-app-bg/80 px-3 py-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             Salário
           </p>
-          <p className="mt-0.5 text-sm font-semibold text-teal-600">
+          <p className="mt-0.5 text-sm font-semibold text-positive">
             +{formatCurrency(cycle.salaryIncome, currencyCode)}
           </p>
         </div>
-        <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2.5">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+        <div className="rounded-lg border border-app-border/60 bg-app-bg/80 px-3 py-2.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             Renda extra
           </p>
-          <p className="mt-0.5 text-sm font-semibold text-emerald-600">
+          <p className="mt-0.5 text-sm font-semibold text-positive">
             +{formatCurrency(cycle.extraIncome, currencyCode)}
           </p>
         </div>
-        <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2.5">
+        <div className="rounded-lg border border-app-border/60 bg-app-bg/80 px-3 py-2.5">
           <div className="flex items-center gap-1">
-            <Wallet className="h-3 w-3 text-slate-400" />
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <Wallet className="h-3 w-3 text-muted-foreground" />
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               Saídas
             </p>
           </div>
-          <p className="mt-0.5 text-sm font-semibold text-rose-600">
+          <p className="mt-0.5 text-sm font-semibold text-negative">
             -{formatCurrency(cycle.expenses, currencyCode)}
           </p>
           {!cycle.isComplete && (cycle.committedExpenses ?? 0) > 0 && (
-            <p className="mt-1 text-[10px] text-slate-500">
-              +{formatCurrency(cycle.committedExpenses, currencyCode)} em parcelas agendadas
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              +{formatCurrency(cycle.committedExpenses, currencyCode)} comprometido
+              {(cycle.committedExpensesManual ?? 0) > 0 &&
+              (cycle.committedExpensesBank ?? 0) > 0 ? (
+                <>
+                  {" "}
+                  ({formatCurrency(cycle.committedExpensesBank ?? 0, currencyCode)} cartão ·{" "}
+                  {formatCurrency(cycle.committedExpensesManual ?? 0, currencyCode)} manual)
+                </>
+              ) : (cycle.committedExpensesManual ?? 0) > 0 ? (
+                <> ({formatCurrency(cycle.committedExpensesManual ?? 0, currencyCode)} manual)</>
+              ) : (
+                <> em parcelas agendadas</>
+              )}
             </p>
           )}
         </div>

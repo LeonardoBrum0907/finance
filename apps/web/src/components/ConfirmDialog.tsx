@@ -40,13 +40,13 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         aria-describedby="confirm-dialog-message"
-        className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl"
+        className="w-full max-w-sm rounded-3xl border border-app-border bg-app-surface p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-start gap-3">
           <div
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-              isDanger ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-600"
+              isDanger ? "bg-negative/10 text-negative" : "bg-slate-100 text-muted-foreground"
             }`}
           >
             <AlertTriangle className="h-5 w-5" />
@@ -54,11 +54,11 @@ export function ConfirmDialog({
           <div className="min-w-0 pt-0.5">
             <h3
               id="confirm-dialog-title"
-              className="font-display text-base font-bold text-slate-900"
+              className="font-display text-base font-bold text-foreground"
             >
               {title}
             </h3>
-            <p id="confirm-dialog-message" className="mt-1 text-sm text-slate-500">
+            <p id="confirm-dialog-message" className="mt-1 text-sm text-muted-foreground">
               {message}
             </p>
           </div>
@@ -69,7 +69,7 @@ export function ConfirmDialog({
             type="button"
             onClick={onCancel}
             disabled={loading}
-            className="flex-1 cursor-pointer rounded-xl border border-slate-200 bg-white py-2.5 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex-1 cursor-pointer rounded-xl border border-app-border bg-app-surface py-2.5 text-xs font-bold text-foreground/90 transition hover:bg-app-bg disabled:cursor-not-allowed disabled:opacity-60"
           >
             {cancelLabel}
           </button>
@@ -79,7 +79,7 @@ export function ConfirmDialog({
             disabled={loading}
             className={`flex-1 cursor-pointer rounded-xl py-2.5 text-xs font-bold text-white shadow-md transition disabled:cursor-not-allowed disabled:opacity-60 ${
               isDanger
-                ? "bg-rose-600 hover:bg-rose-700"
+                ? "bg-danger hover:bg-danger/90"
                 : "bg-slate-900 hover:bg-slate-800"
             }`}
           >

@@ -123,10 +123,10 @@ export function GoalsPage() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-slate-900">
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
             Objetivos e Planos
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-muted-foreground-dark">
             Acompanhe suas metas financeiras e veja como a{" "}
             {data?.surplusLabel ?? "sobra média"} impacta cada objetivo.
           </p>
@@ -157,7 +157,7 @@ export function GoalsPage() {
             type="button"
             onClick={() => setCreatePlanOpen(true)}
             disabled={(activeGoals.length ?? 0) === 0}
-            className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-60"
+            className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-app-border bg-app-surface px-4 py-2.5 text-sm font-semibold text-foreground/90 shadow-sm hover:bg-app-bg disabled:opacity-60"
           >
             <Target className="h-4 w-4" />
             Novo plano
@@ -166,11 +166,11 @@ export function GoalsPage() {
       </div>
 
       {goalsQuery.isLoading ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
+        <div className="rounded-xl border border-app-border bg-app-surface p-10 text-center text-sm text-muted-foreground-dark">
           Carregando objetivos...
         </div>
       ) : goalsQuery.isError ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+        <div className="rounded-xl border border-danger-border bg-danger-muted p-6 text-sm text-danger">
           Não foi possível carregar os objetivos. Tente novamente em instantes.
         </div>
       ) : (
@@ -197,13 +197,13 @@ export function GoalsPage() {
           )}
 
           <section>
-            <h2 className="mb-4 font-display text-lg font-semibold text-slate-900">
+            <h2 className="mb-4 font-display text-lg font-semibold text-foreground">
               Seus objetivos
             </h2>
             {activeGoals.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
-                <p className="text-sm font-medium text-slate-700">Nenhum objetivo criado</p>
-                <p className="mt-1 text-sm text-slate-500">
+              <div className="rounded-xl border border-dashed border-app-border bg-app-surface p-10 text-center">
+                <p className="text-sm font-medium text-foreground/90">Nenhum objetivo criado</p>
+                <p className="mt-1 text-sm text-muted-foreground-dark">
                   Crie sua primeira meta ou peça ajuda ao assistente no chat.
                 </p>
               </div>
@@ -224,7 +224,7 @@ export function GoalsPage() {
 
           {(data?.plans.length ?? 0) > 0 && (
             <section>
-              <h2 className="mb-4 font-display text-lg font-semibold text-slate-900">
+              <h2 className="mb-4 font-display text-lg font-semibold text-foreground">
                 Planos de poupança
               </h2>
               <div className="grid grid-cols-1 gap-6 md:grid-cols-2">

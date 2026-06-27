@@ -8,7 +8,8 @@ import {
 import type { CategoryChartSelection, DashboardCategoryGroup, DashboardCategoryPoint } from "@finance/shared";
 import { formatCurrency, formatPercent } from "../../lib/format";
 import { ensureChartJsRegistered } from "../../lib/chart";
-import { baseChartOptions, calcCategoryChange, categoryColor, categoryDoughnutTooltip } from "../../lib/chartTheme";
+import { baseChartOptions, calcCategoryChange, categoryColor, categoryDoughnutTooltip, getChartColors } from "../../lib/chartTheme";
+import { useTheme } from "../../lib/theme/useTheme";
 
 ensureChartJsRegistered();
 
@@ -58,10 +59,12 @@ export function CategoryBreakdown({
   layout = "stack",
 }: Props) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const { theme } = useTheme();
+  const chartColors = useMemo(() => getChartColors(), [theme]);
   const withPercent = useMemo(() => buildChartRows(data), [data]);
   const total = withPercent.reduce((sum, c) => sum + c.total, 0);
   const prevMap = useMemo(() => new Map(previousCategories.map((c) => [c.category, c.total])), [previousCategories]);
-  const colors = withPercent.map((_, i) => categoryColor(i));
+  const colors = withPercent.map((_, i) => categoryColor(i, chartColors));
 
   const doughnutData = useMemo(() => ({
     labels: withPercent.map((c) => c.category),
@@ -85,7 +88,7 @@ export function CategoryBreakdown({
   }, [withPercent, onCategorySelect]);
 
   if (withPercent.length === 0) {
-    return <p className="py-8 text-center text-sm text-slate-500">Nenhuma despesa categorizada no período.</p>;
+    return <p className="py-8 text-center text-sm text-muted-foreground">Nenhuma despesa categorizada no período.</p>;
   }
 
   const isRow = layout === "row";
@@ -108,20 +111,20 @@ export function CategoryBreakdown({
               onClick={() => handleCategoryClick(i)}
               onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleCategoryClick(i); } }}
               onMouseEnter={() => setActiveIndex(i)} onMouseLeave={() => setActiveIndex(null)}
-              className={`cursor-pointer rounded-xl border px-3 py-2 transition ${isActive ? "border-slate-200 bg-white shadow-sm" : "border-slate-100 bg-slate-50"}`}>
+              className={`cursor-pointer rounded-xl border px-3 py-2 transition ${isActive ? "border-app-border bg-app-surface shadow-sm" : "border-app-border/60 bg-app-bg"}`}>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-slate-200/50 bg-white">
+                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-app-border/50 bg-app-surface">
                     <Icon className="h-3 w-3" style={{ color }} />
                   </div>
-                  <span className="truncate text-xs font-semibold text-slate-800">{cat.category}</span>
+                  <span className="truncate text-xs font-semibold text-foreground">{cat.category}</span>
                 </div>
                 <div className="shrink-0 text-right">
-                  <span className="block text-xs font-bold text-slate-800">{formatCurrency(cat.total, currencyCode)}</span>
+                  <span className="block text-xs font-bold text-foreground">{formatCurrency(cat.total, currencyCode)}</span>
                   <div className="flex items-center justify-end gap-1.5">
-                    <span className="font-mono text-[10px] text-slate-400">{cat.percent.toFixed(1)}%</span>
+                    <span className="font-mono text-[10px] text-muted-foreground">{cat.percent.toFixed(1)}%</span>
                     {change !== null && Math.abs(change) >= 1 && (
-                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${change > 0 ? "bg-rose-500/10 text-rose-600" : "bg-emerald-500/10 text-emerald-600"}`}>{formatPercent(change)}</span>
+                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${change > 0 ? "bg-negative/10 text-negative" : "bg-positive/10 text-positive"}`}>{formatPercent(change)}</span>
                     )}
                   </div>
                 </div>
@@ -145,10 +148,10 @@ export function CategoryBreakdown({
         }}
       />
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
           Total Gasto
         </span>
-        <span className="font-display text-sm font-bold text-slate-900">
+        <span className="font-display text-sm font-bold text-foreground">
           {formatCurrency(total, currencyCode)}
         </span>
       </div>
@@ -158,8 +161,8 @@ export function CategoryBreakdown({
   return (
     <div className="flex h-full flex-col">
       <div className={isRow ? "mb-4" : "mb-1"}>
-        <h3 className="font-display text-sm font-semibold text-slate-900">Despesas por Categoria</h3>
-        <p className="text-[11px] text-slate-400">Clique para filtrar transações</p>
+        <h3 className="font-display text-sm font-semibold text-foreground">Despesas por Categoria</h3>
+        <p className="text-[11px] text-muted-foreground">Clique para filtrar transações</p>
       </div>
 
       {isRow ? (

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { TransactionCommitmentSummary } from "./commitments";
 import type { DashboardCategoryGroup } from "./categoryGroups";
 import type { InvestmentAllocationPoint } from "./investments";
 import type { PeriodMode, PaydayCycleAnchor } from "./payday";
@@ -29,16 +30,35 @@ export {
   toSignedDisplayAmount,
   accountNetWorthContribution,
   countsTowardCashFlow,
+  isSamePersonTransfer,
+  descriptionMatchesPersonName,
 } from "./transactions";
+export {
+  COMMITMENT_STATUSES,
+  INSTALLMENT_STATUSES,
+  createCommitmentSchema,
+  updateCommitmentSchema,
+  type CommitmentStatus,
+  type InstallmentStatus,
+  type TransactionCommitmentSummary,
+  type PaymentInstallmentDTO,
+  type PaymentCommitmentDTO,
+  type TransactionDetailDTO,
+  type CreateCommitmentInput,
+  type UpdateCommitmentInput,
+} from "./commitments";
 export {
   PERIOD_MODES,
   periodModeSchema,
   PAYDAY_CYCLE_ANCHORS,
   paydayCycleAnchorSchema,
   DEFAULT_PAYDAY_CYCLE_ANCHOR,
+  APP_THEMES,
+  DEFAULT_APP_THEME,
   updateSettingsSchema,
   parsePeriodMode,
   parsePaydayCycleAnchor,
+  parseAppTheme,
   isPaydayDayConfigured,
   describePaydayCycleBounds,
   effectivePaydayInMonth,
@@ -58,6 +78,7 @@ export {
   classifyIncome,
   type PeriodMode,
   type PaydayCycleAnchor,
+  type AppTheme,
   type UpdateSettingsInput,
   type UserSettingsDTO,
   type PaydayCycleRange,
@@ -146,6 +167,11 @@ export const updateChatThreadSchema = z.object({
   title: z.string().min(1, "Informe o título").max(80, "Título muito longo"),
 });
 export type UpdateChatThreadInput = z.infer<typeof updateChatThreadSchema>;
+
+export const bulkDeleteChatThreadsSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1, "Selecione ao menos uma conversa"),
+});
+export type BulkDeleteChatThreadsInput = z.infer<typeof bulkDeleteChatThreadsSchema>;
 
 export const regenerateChatSchema = z.object({
   threadId: z.string().min(1, "Informe a conversa"),
@@ -352,6 +378,7 @@ export interface TransactionDTO {
   accountType: string | null;
   personId: string;
   personName: string;
+  commitmentSummary?: TransactionCommitmentSummary | null;
 }
 
 export const updateTransactionCategorySchema = z.object({
@@ -398,6 +425,10 @@ export interface DashboardCurrentCycle {
   expenses: number;
   /** Parcelas/agendamentos com data futura dentro do ciclo (só em ciclo em andamento). */
   committedExpenses: number;
+  /** Parcelas de compromissos manuais pendentes no ciclo. */
+  committedExpensesManual?: number;
+  /** Parcelas de cartão/banco com data futura no ciclo. */
+  committedExpensesBank?: number;
   net: number;
   salaryIncome: number;
   extraIncome: number;
@@ -448,6 +479,8 @@ export interface DashboardGrowthMetrics {
     expensesToDate: number;
     /** Cobranças já agendadas com data futura no ciclo (ex.: parcelas no cartão). */
     committedExpenses: number;
+    committedExpensesManual?: number;
+    committedExpensesBank?: number;
     projectedExpense: number;
     projectedIncome: number;
     projectedNet: number;

@@ -4,6 +4,86 @@
 @tailwind components;
 @tailwind utilities;
 
+:root,
+[data-theme="default"] {
+  --app-bg: 248 250 252;
+  --app-surface: 255 255 255;
+  --app-border: 226 232 240;
+  --sidebar-bg: 18 28 39;
+  --sidebar-border: 30 41 59;
+  --sidebar-hover: 30 41 59;
+  --sidebar-active: 30 41 59;
+  --positive: 5 150 105;
+  --positive-muted: 16 185 129;
+  --negative: 225 29 72;
+  --negative-muted: 244 63 94;
+  --brand: 5 150 105;
+  --brand-muted: 16 185 129;
+  --foreground: 15 23 42;
+  --muted-foreground: 100 116 139;
+  --danger: 220 38 38;
+  --danger-muted: 254 226 226;
+  --danger-border: 254 202 202;
+  --accent: 52 211 153;
+  --chart-income: 16 185 129;
+  --chart-expense: 244 63 94;
+  --chart-net: 14 165 233;
+  --chart-projection: 16 185 129;
+  --chart-target: 148 163 184;
+  --chart-grid: 241 245 249;
+  --chart-tick: 148 163 184;
+  --chart-tick-muted: 203 213 225;
+  --chart-cat-1: 16 185 129;
+  --chart-cat-2: 245 158 11;
+  --chart-cat-3: 14 165 233;
+  --chart-cat-4: 99 102 241;
+  --chart-cat-5: 148 163 184;
+  --radius-card: 1rem;
+  --radius-card-lg: 1.5rem;
+  --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --scrollbar: 148 163 184;
+}
+
+[data-theme="comfy"] {
+  --app-bg: 250 249 246;
+  --app-surface: 255 254 249;
+  --app-border: 231 226 218;
+  --sidebar-bg: 58 90 64;
+  --sidebar-border: 47 74 53;
+  --sidebar-hover: 69 104 76;
+  --sidebar-active: 79 118 86;
+  --positive: 106 171 138;
+  --positive-muted: 167 215 197;
+  --negative: 148 163 184;
+  --negative-muted: 203 213 225;
+  --brand: 124 158 178;
+  --brand-muted: 183 203 216;
+  --foreground: 41 37 36;
+  --muted-foreground-dark: 120 113 108;
+  --muted-foreground-light: 250 249 246;
+  --danger: 180 83 83;
+  --danger-muted: 254 235 235;
+  --danger-border: 245 208 208;
+  --accent: 106 171 138;
+  --chart-income: 106 171 138;
+  --chart-expense: 148 163 184;
+  --chart-net: 124 158 178;
+  --chart-projection: 58 90 64;
+  --chart-target: 124 158 178;
+  --chart-grid: 212 200 168;
+  --chart-tick: 120 113 108;
+  --chart-tick-muted: 146 140 128;
+  --chart-cat-1: 167 215 197;
+  --chart-cat-2: 232 196 176;
+  --chart-cat-3: 183 203 216;
+  --chart-cat-4: 216 180 203;
+  --chart-cat-5: 196 186 168;
+  --radius-card: 1.25rem;
+  --radius-card-lg: 1.75rem;
+  --shadow-card: 0 1px 3px 0 rgb(41 37 36 / 0.04);
+  --scrollbar: 168 162 158;
+}
+
 html,
 body,
 #root {
@@ -13,12 +93,12 @@ body,
 html {
   scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.22) transparent;
+  scrollbar-color: rgb(var(--scrollbar) / 0.22) transparent;
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.22) transparent;
+  scrollbar-color: rgb(var(--scrollbar) / 0.22) transparent;
 }
 
 *::-webkit-scrollbar {
@@ -31,14 +111,28 @@ html {
 }
 
 *::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.22);
+  background: rgb(var(--scrollbar) / 0.22);
   border-radius: 9999px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.38);
+  background: rgb(var(--scrollbar) / 0.38);
 }
 
 body {
-  @apply bg-slate-50 text-slate-800 antialiased;
+  @apply bg-app-bg text-foreground antialiased;
+}
+
+@layer utilities {
+  .rounded-card {
+    border-radius: var(--radius-card);
+  }
+
+  .rounded-card-lg {
+    border-radius: var(--radius-card-lg);
+  }
+
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
 }

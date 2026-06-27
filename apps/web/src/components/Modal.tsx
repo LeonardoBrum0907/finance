@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 const defaultPanelClassName =
-  "relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl";
+  "relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-app-border bg-app-surface p-6 shadow-2xl";
 
 interface ModalProps {
   onClose: () => void;

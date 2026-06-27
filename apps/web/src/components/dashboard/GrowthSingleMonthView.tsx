@@ -8,7 +8,8 @@ import type {
 } from "@finance/shared";
 import { formatCurrency, formatPercent } from "../../lib/format";
 import { ensureChartJsRegistered } from "../../lib/chart";
-import { baseChartOptions, CHART_COLORS } from "../../lib/chartTheme";
+import { baseChartOptions, getChartColors } from "../../lib/chartTheme";
+import { useTheme } from "../../lib/theme/useTheme";
 
 ensureChartJsRegistered();
 
@@ -38,7 +39,7 @@ function ChangeChip({
   return (
     <span
       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-        good ? "bg-emerald-500/10 text-emerald-600" : "bg-rose-500/10 text-rose-600"
+        good ? "bg-positive/10 text-positive" : "bg-negative/10 text-negative"
       }`}
     >
       {formatPercent(change)} {label}
@@ -63,8 +64,8 @@ function HorizontalBar({
   return (
     <div>
       <div className="mb-1 flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-slate-600">{label}</span>
-        <span className="text-xs font-bold text-slate-800">
+        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+        <span className="text-xs font-bold text-foreground">
           {formatCurrency(value, currencyCode)}
         </span>
       </div>
@@ -86,6 +87,8 @@ export function GrowthSingleMonthView({
   periodMode = "calendar",
   hideIncomeBreakdown = false,
 }: Props) {
+  const { theme } = useTheme();
+  const chartColors = useMemo(() => getChartColors(), [theme]);
   const { income, expenses, net } = point;
   const { savingsRate, expenseRatio, vsPrevious, incomeBreakdown, projection } = growthMetrics;
   const maxFlow = Math.max(income, expenses, 1);
@@ -97,13 +100,13 @@ export function GrowthSingleMonthView({
       datasets: [
         {
           data: [income, expenses],
-          backgroundColor: [CHART_COLORS.income, CHART_COLORS.expense],
+          backgroundColor: [chartColors.income, chartColors.expense],
           borderWidth: 0,
           hoverOffset: 4,
         },
       ],
     }),
-    [income, expenses],
+    [income, expenses, chartColors],
   );
 
   const balanceDoughnutData = useMemo(() => {
@@ -113,7 +116,7 @@ export function GrowthSingleMonthView({
         datasets: [
           {
             data: [net, Math.max(0, expenses)],
-            backgroundColor: [CHART_COLORS.income, CHART_COLORS.expense],
+            backgroundColor: [chartColors.income, chartColors.expense],
             borderWidth: 0,
             hoverOffset: 4,
           },
@@ -125,13 +128,13 @@ export function GrowthSingleMonthView({
       datasets: [
         {
           data: [Math.abs(net)],
-          backgroundColor: [CHART_COLORS.expense],
+          backgroundColor: [chartColors.expense],
           borderWidth: 0,
           hoverOffset: 4,
         },
       ],
     };
-  }, [net, expenses]);
+  }, [net, expenses, chartColors]);
 
   const doughnutOptions = useMemo(
     () => ({
@@ -171,31 +174,31 @@ export function GrowthSingleMonthView({
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-2 text-center">
             {view === "flow" ? (
               <>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                   Saldo
                 </span>
                 <span
                   className={`font-display text-sm font-bold ${
-                    net >= 0 ? "text-emerald-600" : "text-rose-600"
+                    net >= 0 ? "text-positive" : "text-negative"
                   }`}
                 >
                   {net >= 0 ? "+" : ""}
                   {formatCurrency(net, currencyCode)}
                 </span>
                 {savingsRate !== null && (
-                  <span className="mt-0.5 text-[10px] font-semibold text-slate-500">
+                  <span className="mt-0.5 text-[10px] font-semibold text-muted-foreground">
                     {savingsRate.toFixed(0)}% poupança
                   </span>
                 )}
               </>
             ) : (
               <>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                   Saldo líquido
                 </span>
                 <span
                   className={`font-display text-sm font-bold ${
-                    net >= 0 ? "text-emerald-600" : "text-rose-600"
+                    net >= 0 ? "text-positive" : "text-negative"
                   }`}
                 >
                   {net >= 0 ? "+" : ""}
@@ -213,14 +216,14 @@ export function GrowthSingleMonthView({
                 label="Receitas"
                 value={income}
                 max={maxFlow}
-                color={CHART_COLORS.income}
+                color={chartColors.income}
                 currencyCode={currencyCode}
               />
               <HorizontalBar
                 label="Despesas"
                 value={expenses}
                 max={maxFlow}
-                color={CHART_COLORS.expense}
+                color={chartColors.expense}
                 currencyCode={currencyCode}
               />
             </>
@@ -230,14 +233,14 @@ export function GrowthSingleMonthView({
                 label="Receitas"
                 value={income}
                 max={Math.max(income, Math.abs(net), 1)}
-                color={CHART_COLORS.income}
+                color={chartColors.income}
                 currencyCode={currencyCode}
               />
               <HorizontalBar
                 label={net >= 0 ? "Sobra" : "Déficit"}
                 value={Math.abs(net)}
                 max={Math.max(income, Math.abs(net), 1)}
-                color={net >= 0 ? CHART_COLORS.net : CHART_COLORS.expense}
+                color={net >= 0 ? chartColors.net : chartColors.expense}
                 currencyCode={currencyCode}
               />
             </>
@@ -250,30 +253,30 @@ export function GrowthSingleMonthView({
       >
         {showBreakdown && (
           <>
-            <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <div className="rounded-lg border border-app-border/60 bg-app-bg/80 px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Salário
               </p>
-              <p className="mt-0.5 text-sm font-semibold text-teal-600">
+              <p className="mt-0.5 text-sm font-semibold text-positive">
                 +{formatCurrency(incomeBreakdown.salary, currencyCode)}
               </p>
             </div>
-            <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2.5">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+            <div className="rounded-lg border border-app-border/60 bg-app-bg/80 px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Renda extra
               </p>
-              <p className="mt-0.5 text-sm font-semibold text-emerald-600">
+              <p className="mt-0.5 text-sm font-semibold text-positive">
                 +{formatCurrency(incomeBreakdown.extra, currencyCode)}
               </p>
             </div>
           </>
         )}
         {expenseRatio !== null && (
-          <div className="rounded-lg border border-slate-100 bg-slate-50/80 px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+          <div className="rounded-lg border border-app-border/60 bg-app-bg/80 px-3 py-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               Taxa de gasto
             </p>
-            <p className="mt-0.5 text-sm font-semibold text-slate-800">
+            <p className="mt-0.5 text-sm font-semibold text-foreground">
               {expenseRatio.toFixed(0)}% da renda
             </p>
           </div>
@@ -281,10 +284,10 @@ export function GrowthSingleMonthView({
       </div>
 
       {(hasVsPrevious || projection?.isPartialPeriod) && (
-        <div className="space-y-2 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5">
+        <div className="space-y-2 rounded-xl border border-app-border/60 bg-app-bg/60 px-3 py-2.5">
           {hasVsPrevious && (
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 {compareLabel}
               </span>
               <ChangeChip label="receitas" change={vsPrevious.incomeChange} />
@@ -293,14 +296,14 @@ export function GrowthSingleMonthView({
             </div>
           )}
           {projection?.isPartialPeriod && (
-            <div className="space-y-1 text-xs text-slate-600">
+            <div className="space-y-1 text-xs text-muted-foreground">
               {periodMode === "payday" ? (
                 <>
                   <p>
-                    <span className="font-semibold text-slate-700">
+                    <span className="font-semibold text-foreground/90">
                       Fechamento do ciclo
                     </span>{" "}
-                    <span className="text-slate-400">
+                    <span className="text-muted-foreground">
                       (faltam {projection.daysRemaining}{" "}
                       {projection.daysRemaining === 1 ? "dia" : "dias"} ·{" "}
                       {projection.daysElapsed}/{projection.daysTotal})
@@ -308,16 +311,16 @@ export function GrowthSingleMonthView({
                   </p>
                   <p>
                     Despesas estimadas no ciclo:{" "}
-                    <span className="font-semibold text-slate-800">
+                    <span className="font-semibold text-foreground">
                       ~{formatCurrency(projection.projectedExpense, currencyCode)}
                     </span>
                   </p>
                   {((projection.expensesToDate ?? 0) > 0 || (projection.committedExpenses ?? 0) > 0) && (
-                    <p className="text-slate-500">
+                    <p className="text-muted-foreground">
                       {(projection.expensesToDate ?? 0) > 0 && (
                         <>
                           Já gasto:{" "}
-                          <span className="font-medium text-slate-700">
+                          <span className="font-medium text-foreground/90">
                             {formatCurrency(projection.expensesToDate ?? 0, currencyCode)}
                           </span>
                         </>
@@ -327,10 +330,24 @@ export function GrowthSingleMonthView({
                         " · "}
                       {(projection.committedExpenses ?? 0) > 0 && (
                         <>
-                          Parcelas agendadas:{" "}
-                          <span className="font-medium text-slate-700">
+                          Comprometido:{" "}
+                          <span className="font-medium text-foreground/90">
                             {formatCurrency(projection.committedExpenses ?? 0, currencyCode)}
                           </span>
+                          {(projection.committedExpensesManual ?? 0) > 0 &&
+                            (projection.committedExpensesBank ?? 0) > 0 && (
+                              <span className="text-muted-foreground">
+                                {" "}
+                                (cartão{" "}
+                                {formatCurrency(projection.committedExpensesBank ?? 0, currencyCode)}{" "}
+                                · manual{" "}
+                                {formatCurrency(
+                                  projection.committedExpensesManual ?? 0,
+                                  currencyCode,
+                                )}
+                                )
+                              </span>
+                            )}
                         </>
                       )}
                     </p>
@@ -338,7 +355,7 @@ export function GrowthSingleMonthView({
                   {projection.pendingSalary != null && projection.pendingSalary > 0 && (
                     <p>
                       Salário previsto:{" "}
-                      <span className="font-semibold text-teal-600">
+                      <span className="font-semibold text-positive">
                         ~{formatCurrency(projection.pendingSalary, currencyCode)}
                       </span>
                     </p>
@@ -348,7 +365,7 @@ export function GrowthSingleMonthView({
                       Sobra estimada após pagamento:{" "}
                       <span
                         className={`font-semibold ${
-                          projection.projectedNet >= 0 ? "text-emerald-600" : "text-rose-600"
+                          projection.projectedNet >= 0 ? "text-positive" : "text-negative"
                         }`}
                       >
                         {projection.projectedNet >= 0 ? "+" : ""}
@@ -366,7 +383,7 @@ export function GrowthSingleMonthView({
                       Sobra estimada:{" "}
                       <span
                         className={`font-semibold ${
-                          projection.projectedNet >= 0 ? "text-emerald-600" : "text-rose-600"
+                          projection.projectedNet >= 0 ? "text-positive" : "text-negative"
                         }`}
                       >
                         {projection.projectedNet >= 0 ? "+" : ""}
@@ -378,20 +395,20 @@ export function GrowthSingleMonthView({
               ) : (
                 <p>
                   Projeção até fim do período:{" "}
-                  <span className="font-semibold text-slate-800">
+                  <span className="font-semibold text-foreground">
                     ~{formatCurrency(projection.projectedExpense, currencyCode)} em despesas
                   </span>
                   {" · "}
                   saldo estimado{" "}
                   <span
                     className={`font-semibold ${
-                      projection.projectedNet >= 0 ? "text-emerald-600" : "text-rose-600"
+                      projection.projectedNet >= 0 ? "text-positive" : "text-negative"
                     }`}
                   >
                     {projection.projectedNet >= 0 ? "+" : ""}
                     {formatCurrency(projection.projectedNet, currencyCode)}
                   </span>{" "}
-                  <span className="text-slate-400">
+                  <span className="text-muted-foreground">
                     (dia {projection.daysElapsed}/{projection.daysTotal})
                   </span>
                 </p>

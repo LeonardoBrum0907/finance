@@ -72,20 +72,20 @@ export function CreatePlanModal({ open, goals, currencyCode, saving, onClose, on
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 cursor-pointer rounded-lg p-1 text-slate-400 hover:text-slate-600"
+          className="absolute top-4 right-4 cursor-pointer rounded-lg p-1 text-muted-foreground-dark hover:text-muted-foreground-dark"
           aria-label="Fechar"
         >
           <X className="h-4.5 w-4.5" />
         </button>
 
-        <h3 className="mb-1 font-display text-lg font-bold text-slate-900">Novo Plano</h3>
-        <p className="mb-6 font-sans text-xs text-slate-400">
+        <h3 className="mb-1 font-display text-lg font-bold text-foreground">Novo Plano</h3>
+        <p className="mb-6 font-sans text-xs text-muted-foreground-dark">
           Agrupe objetivos com um aporte mensal para gerar o caminho de poupança.
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="plan-name" className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <label htmlFor="plan-name" className="text-[10px] font-bold tracking-wider text-muted-foreground-dark uppercase">
               Nome do plano
             </label>
             <input
@@ -93,13 +93,13 @@ export function CreatePlanModal({ open, goals, currencyCode, saving, onClose, on
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800"
+              className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground"
               required
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="plan-contribution" className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <label htmlFor="plan-contribution" className="text-[10px] font-bold tracking-wider text-muted-foreground-dark uppercase">
               Aporte mensal total (R$)
             </label>
             <input
@@ -109,34 +109,34 @@ export function CreatePlanModal({ open, goals, currencyCode, saving, onClose, on
               min="0"
               value={monthlyContribution}
               onChange={(e) => setMonthlyContribution(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800"
+              className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground"
               required
             />
           </div>
 
           <div className="flex flex-col gap-2">
-            <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <span className="text-[10px] font-bold tracking-wider text-muted-foreground-dark uppercase">
               Objetivos e alocação mensal
             </span>
             {activeGoals.length === 0 ? (
-              <p className="text-xs text-slate-500">Crie ao menos um objetivo ativo primeiro.</p>
+              <p className="text-xs text-muted-foreground-dark">Crie ao menos um objetivo ativo primeiro.</p>
             ) : (
               activeGoals.map((goal) => {
                 const selected = goal.id in selectedGoals;
                 return (
                   <div
                     key={goal.id}
-                    className={`rounded-xl border p-3 ${selected ? "border-indigo-200 bg-indigo-50/40" : "border-slate-200"}`}
+                    className={`rounded-xl border p-3 ${selected ? "border-indigo-200 bg-indigo-50/40" : "border-app-border"}`}
                   >
                     <label className="flex cursor-pointer items-center gap-2">
                       <input
                         type="checkbox"
                         checked={selected}
                         onChange={() => toggleGoal(goal.id)}
-                        className="rounded border-slate-300"
+                        className="rounded border-app-border"
                       />
-                      <span className="text-xs font-medium text-slate-700">{goal.name}</span>
-                      <span className="ml-auto font-mono text-[10px] text-slate-400">
+                      <span className="text-xs font-medium text-foreground/90">{goal.name}</span>
+                      <span className="ml-auto font-mono text-[10px] text-muted-foreground-dark">
                         meta {formatCurrency(goal.targetAmount, currencyCode)}
                       </span>
                     </label>
@@ -150,7 +150,7 @@ export function CreatePlanModal({ open, goals, currencyCode, saving, onClose, on
                         onChange={(e) =>
                           setSelectedGoals((prev) => ({ ...prev, [goal.id]: e.target.value }))
                         }
-                        className="mt-2 w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs"
+                        className="mt-2 w-full rounded-lg border border-app-border px-2 py-1.5 text-xs"
                       />
                     )}
                   </div>

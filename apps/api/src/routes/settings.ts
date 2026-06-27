@@ -19,7 +19,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const userId = request.user!.sub;
-    const { paydayDay, defaultPeriodMode, includeInvestmentsInNetWorth } = parsed.data;
+    const { paydayDay, defaultPeriodMode, includeInvestmentsInNetWorth, theme } = parsed.data;
 
     if (defaultPeriodMode === "payday") {
       const [current, people] = await Promise.all([
@@ -50,6 +50,7 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         ...(includeInvestmentsInNetWorth !== undefined
           ? { includeInvestmentsInNetWorth }
           : {}),
+        ...(theme !== undefined ? { theme } : {}),
       },
     });
 

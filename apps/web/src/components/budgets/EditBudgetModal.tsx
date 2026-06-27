@@ -85,16 +85,16 @@ export function EditBudgetModal({
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 cursor-pointer rounded-lg p-1 text-slate-400 hover:text-slate-600"
+          className="absolute top-4 right-4 cursor-pointer rounded-lg p-1 text-muted-foreground hover:text-muted-foreground"
           aria-label="Fechar"
         >
           <X className="h-4.5 w-4.5" />
         </button>
 
-        <h3 className="mb-1 font-display text-lg font-bold text-slate-900">
+        <h3 className="mb-1 font-display text-lg font-bold text-foreground">
           Editar Orçamento
         </h3>
-        <p className="mb-6 font-sans text-xs text-slate-400">
+        <p className="mb-6 font-sans text-xs text-muted-foreground">
           Ajuste o nome, limite ou categorias vinculadas.
         </p>
 
@@ -102,7 +102,7 @@ export function EditBudgetModal({
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="edit-budget-name"
-              className="text-[10px] font-bold tracking-wider text-slate-400 uppercase"
+              className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase"
             >
               Nome do orçamento
             </label>
@@ -111,7 +111,7 @@ export function EditBudgetModal({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-emerald-400 focus:border-emerald-400 focus:bg-white"
+              className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground outline-brand focus:border-brand focus:bg-app-surface"
               required
             />
           </div>
@@ -119,7 +119,7 @@ export function EditBudgetModal({
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="edit-budget-limit"
-              className="text-[10px] font-bold tracking-wider text-slate-400 uppercase"
+              className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase"
             >
               Limite mensal (R$)
             </label>
@@ -130,13 +130,13 @@ export function EditBudgetModal({
               min="0.01"
               value={limit}
               onChange={(e) => setLimit(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-emerald-400 focus:border-emerald-400 focus:bg-white"
+              className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground outline-brand focus:border-brand focus:bg-app-surface"
               required
             />
           </div>
 
           <div className="flex flex-col gap-2">
-            <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
               Categorias incluídas
             </span>
             <div className="flex flex-wrap gap-2">
@@ -149,8 +149,8 @@ export function EditBudgetModal({
                     onClick={() => toggleCategory(category)}
                     className={`cursor-pointer rounded-full border px-3 py-1 text-[11px] font-medium transition ${
                       active
-                        ? "border-emerald-400 bg-emerald-50 text-emerald-700"
-                        : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"
+                        ? "border-positive/40 bg-positive/10 text-positive"
+                        : "border-app-border bg-app-bg text-muted-foreground hover:border-app-border"
                     }`}
                   >
                     {category}
@@ -172,7 +172,7 @@ export function EditBudgetModal({
             type="button"
             onClick={handleDelete}
             disabled={deleting}
-            className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-rose-200 bg-rose-50 py-3 text-xs font-bold text-rose-600 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-negative/20 bg-negative/10 py-3 text-xs font-bold text-negative transition hover:bg-negative/15 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Trash2 className="h-3.5 w-3.5" />
             {deleting ? "Excluindo..." : "Excluir orçamento"}

@@ -12,7 +12,7 @@ export function FollowUpChips({ suggestions, onSelect, disabled }: Props) {
 
   return (
     <div className="mt-2">
-      <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">
+      <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground-dark">
         Continue com
       </p>
       <ChatSuggestionChips

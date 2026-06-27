@@ -49,14 +49,81 @@ const SAME_PERSON_TRANSFER_PREFIXES = [
   "Same person transfer",
 ] as const;
 
+const TRANSFER_DESCRIPTION_MARKERS = [
+  "transferência recebida",
+  "transferencia recebida",
+  "transferência enviada",
+  "transferencia enviada",
+  "same person transfer",
+  "mesma titularidade",
+  "pix enviado",
+  "pix recebido",
+] as const;
+
 const CREDIT_CARD_PAYMENT_PREFIXES = [
   "Pagamento de cartão de crédito",
   "Credit card payment",
 ] as const;
 
-function isSamePersonTransfer(category: string | null | undefined): boolean {
-  if (!category) return false;
-  return SAME_PERSON_TRANSFER_PREFIXES.some((prefix) => category.startsWith(prefix));
+function normalizeForNameMatch(text: string): string {
+  return text
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function nameMatchTokens(personName: string): string[] {
+  return normalizeForNameMatch(personName)
+    .split(" ")
+    .filter((token) => token.length >= 3);
+}
+
+function descriptionIndicatesTransfer(description: string): boolean {
+  const lower = description.toLowerCase();
+  return TRANSFER_DESCRIPTION_MARKERS.some((marker) => lower.includes(marker));
+}
+
+export function descriptionMatchesPersonName(description: string, personName: string): boolean {
+  const normalizedDescription = normalizeForNameMatch(description);
+  const normalizedPerson = normalizeForNameMatch(personName);
+  if (!normalizedPerson) return false;
+
+  if (normalizedPerson.length >= 6 && normalizedDescription.includes(normalizedPerson)) {
+    return true;
+  }
+
+  const tokens = nameMatchTokens(personName);
+  if (tokens.length === 0) return false;
+
+  if (tokens.length === 1) {
+    return normalizedDescription.includes(tokens[0]!);
+  }
+
+  const first = tokens[0]!;
+  const last = tokens[tokens.length - 1]!;
+  return normalizedDescription.includes(first) && normalizedDescription.includes(last);
+}
+
+/**
+ * Indica transferência entre contas da mesma titularidade.
+ * Usa categoria Pluggy e, quando disponível, o nome da pessoa na descrição
+ * (ex.: Nubank registra "Transferência Recebida|DEBORA BRUM..." sem a categoria correta).
+ */
+export function isSamePersonTransfer(
+  category: string | null | undefined,
+  description?: string | null,
+  personName?: string | null,
+): boolean {
+  if (category && SAME_PERSON_TRANSFER_PREFIXES.some((prefix) => category.startsWith(prefix))) {
+    return true;
+  }
+
+  if (!personName || !description) return false;
+  if (!descriptionIndicatesTransfer(description)) return false;
+  return descriptionMatchesPersonName(description, personName);
 }
 
 function isCreditCardBillPayment(
@@ -84,6 +151,7 @@ export function countsTowardCashFlow(
   accountType: string | null | undefined,
   category: string | null | undefined,
   description?: string | null,
+  personName?: string | null,
 ): boolean {
   if (amount === 0) return false;
 
@@ -92,7 +160,7 @@ export function countsTowardCashFlow(
     return amount > 0;
   }
 
-  if (isSamePersonTransfer(category)) return false;
+  if (isSamePersonTransfer(category, description, personName)) return false;
   if (isCreditCardBillPayment(category, description)) return false;
 
   return true;

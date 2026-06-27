@@ -2,6 +2,7 @@ import type { PaydayCycleAnchor, PeriodMode, UserSettingsDTO } from "@finance/sh
 import {
   DEFAULT_PAYDAY_CYCLE_ANCHOR,
   isPaydayDayConfigured,
+  parseAppTheme,
   parsePaydayCycleAnchor,
   parsePeriodMode,
 } from "@finance/shared";
@@ -20,6 +21,7 @@ export async function loadUserSettings(userId: string): Promise<UserSettingsDTO>
         paydayDay: true,
         defaultPeriodMode: true,
         includeInvestmentsInNetWorth: true,
+        theme: true,
       },
     }),
     prisma.person.findMany({
@@ -39,6 +41,7 @@ export async function loadUserSettings(userId: string): Promise<UserSettingsDTO>
     defaultPeriodMode,
     paydayConfigured,
     includeInvestmentsInNetWorth: user.includeInvestmentsInNetWorth,
+    theme: parseAppTheme(user.theme),
   };
 }
 

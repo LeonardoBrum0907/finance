@@ -26,6 +26,7 @@ import { formatCurrency } from "../../lib/format";
 import { cardLargeClass, fadeUp } from "./motion";
 import { PeriodSelector } from "./PeriodSelector";
 import type { PersonFilter } from "./PersonSelector";
+import { TransactionDetailModal } from "./TransactionDetailModal";
 
 interface Props {
   personId: PersonFilter;
@@ -125,6 +126,7 @@ export function RecentTransactions({
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState<TransactionTypeFilter>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [detailTxId, setDetailTxId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -208,13 +210,13 @@ export function RecentTransactions({
         animate="visible"
         className={`${cardLargeClass} overflow-hidden p-0`}
       >
-      <div className="flex flex-col gap-4 border-b border-slate-100 p-6">
+      <div className="flex flex-col gap-4 border-b border-app-border/60 p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="font-display text-base font-semibold text-slate-900">
+            <h2 className="font-display text-base font-semibold text-foreground">
               Transações Recentes
             </h2>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-muted-foreground">
               Histórico de saídas de débito e créditos recebidos
               {syncedWithDashboard && (
                 <span className="ml-1.5 text-slate-300">· Mesmo período do painel</span>
@@ -241,8 +243,8 @@ export function RecentTransactions({
         </div>
 
         <div className="flex flex-wrap gap-2.5">
-          <div className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1">
-            <Search className="h-3.5 w-3.5 text-slate-400" />
+          <div className="flex items-center gap-1.5 rounded-xl border border-app-border bg-app-bg px-2.5 py-1">
+            <Search className="h-3.5 w-3.5 text-muted-foreground" />
             <input
               type="text"
               placeholder="Buscar descrição..."
@@ -251,13 +253,13 @@ export function RecentTransactions({
               className="w-32 bg-transparent text-[11px] outline-none sm:w-40"
             />
           </div>
-          <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1">
-            <Filter className="h-3.5 w-3.5 text-slate-400" />
+          <div className="flex items-center gap-1 rounded-xl border border-app-border bg-app-bg px-2.5 py-1">
+            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
               disabled={hasChartCategoryFilter}
-              className="bg-transparent text-[11px] font-medium text-slate-600 outline-none disabled:cursor-not-allowed disabled:opacity-50"
+              className="bg-transparent text-[11px] font-medium text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50"
             >
               <option value="all">Todas Categorias</option>
               {categories.map((cat) => (
@@ -267,11 +269,11 @@ export function RecentTransactions({
               ))}
             </select>
           </div>
-          <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-1">
+          <div className="flex items-center rounded-xl border border-app-border bg-app-bg px-2.5 py-1">
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value as TransactionTypeFilter)}
-              className="bg-transparent text-[11px] font-medium text-slate-600 outline-none"
+              className="bg-transparent text-[11px] font-medium text-muted-foreground outline-none"
             >
               <option value="all">Todos Tipos</option>
               <option value="outflow">Saída</option>
@@ -288,18 +290,18 @@ export function RecentTransactions({
           ))}
         </div>
       ) : query.isError ? (
-        <p className="px-6 py-8 text-center text-sm text-red-600">
+        <p className="px-6 py-8 text-center text-sm text-danger">
           Não foi possível carregar as transações. Tente novamente.
         </p>
       ) : items.length === 0 ? (
-        <p className="px-6 py-8 text-center text-sm text-slate-500">
+        <p className="px-6 py-8 text-center text-sm text-muted-foreground">
           Nenhuma transação encontrada com os filtros selecionados.
         </p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead>
-              <tr className="bg-slate-50/50 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              <tr className="bg-app-bg/50 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                 <th className="px-4 py-3">Data</th>
                 <th className="px-4 py-3">Descrição</th>
                 <th className="px-4 py-3">Categoria</th>
@@ -316,15 +318,25 @@ export function RecentTransactions({
                 const isEditing = editingId === tx.id;
 
                 return (
-                  <tr key={tx.id} className="hover:bg-slate-50/70">
-                    <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs font-medium text-slate-500">
+                  <tr
+                    key={tx.id}
+                    className="cursor-pointer hover:bg-app-bg/70"
+                    onClick={() => setDetailTxId(tx.id)}
+                  >
+                    <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs font-medium text-muted-foreground">
                       {formatDateShort(tx.date)}
                     </td>
                     <td className="px-4 py-3.5">
-                      <span className="block font-bold text-slate-900">{tx.description}</span>
-                      <span className="text-[10px] text-slate-400">{tx.accountName}</span>
+                      <span className="block font-bold text-foreground">{tx.description}</span>
+                      <span className="text-[10px] text-muted-foreground">{tx.accountName}</span>
+                      {tx.commitmentSummary && (
+                        <span className="mt-1 inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
+                          {tx.commitmentSummary.title} · {tx.commitmentSummary.sequence}/
+                          {tx.commitmentSummary.totalInstallments}
+                        </span>
+                      )}
                     </td>
-                    <td className="px-4 py-3.5">
+                    <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
                       {isEditing ? (
                         <select
                           autoFocus
@@ -334,7 +346,7 @@ export function RecentTransactions({
                             updateCategoryMutation.mutate({ id: tx.id, category: e.target.value });
                           }}
                           onBlur={() => setEditingId(null)}
-                          className="max-w-[12rem] rounded-lg border border-indigo-200 bg-white px-2 py-1 text-xs outline-none"
+                          className="max-w-[12rem] rounded-lg border border-indigo-200 bg-app-surface px-2 py-1 text-xs outline-none"
                         >
                           {FINE_GRAINED_CATEGORIES.map((cat) => (
                             <option key={cat} value={cat}>
@@ -349,8 +361,8 @@ export function RecentTransactions({
                           className="inline-flex text-start gap-2 text-xs font-medium transition hover:text-indigo-600"
                           title="Clique para corrigir a categoria"
                         >
-                          <span className="rounded-md border border-slate-200/50 bg-slate-100 p-1">
-                            <Icon className="h-3.5 w-3.5 text-slate-500" />
+                          <span className="rounded-md border border-app-border/50 bg-slate-100 p-1">
+                            <Icon className="h-3.5 w-3.5 text-muted-foreground" />
                           </span>
                           {label}
                           {tx.categorySource === "user" && (
@@ -360,11 +372,11 @@ export function RecentTransactions({
                       )}
                     </td>
                     {showPersonColumn && (
-                      <td className="px-4 py-3.5 text-xs text-slate-600">{tx.personName}</td>
+                      <td className="px-4 py-3.5 text-xs text-muted-foreground">{tx.personName}</td>
                     )}
                     <td
                       className={`whitespace-nowrap px-4 py-3.5 text-right text-sm font-bold ${
-                        isOutflow ? "text-slate-800" : "text-emerald-600"
+                        isOutflow ? "text-foreground" : "text-positive"
                       }`}
                     >
                       {formatCurrency(
@@ -376,8 +388,8 @@ export function RecentTransactions({
                       <span
                         className={`inline-block rounded-full px-3 py-1 text-[10px] font-bold leading-none ${
                           isOutflow
-                            ? "border border-slate-200 bg-slate-50 text-slate-600"
-                            : "border border-emerald-200/50 bg-emerald-50 text-emerald-600"
+                            ? "border border-app-border bg-app-bg text-muted-foreground"
+                            : "border border-positive/20 bg-positive/10 text-positive"
                         }`}
                       >
                         {isOutflow ? "Saída" : "Entrada"}
@@ -391,27 +403,27 @@ export function RecentTransactions({
         </div>
       )}
 
-      <div className="flex flex-col gap-4 border-t border-slate-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 border-t border-app-border/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
         {data && (
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
             <span>
               {total} transação{total !== 1 ? "ões" : ""}
             </span>
             <span>
               Entradas:{" "}
-              <strong className="text-emerald-600">
+              <strong className="text-positive">
                 {formatCurrency(data.summary.income, currencyCode)}
               </strong>
             </span>
             <span>
               Saídas:{" "}
-              <strong className="text-slate-700">
+              <strong className="text-foreground/90">
                 {formatCurrency(data.summary.expenses, currencyCode)}
               </strong>
             </span>
             <span>
               Líquido:{" "}
-              <strong className={data.summary.net >= 0 ? "text-emerald-600" : "text-red-600"}>
+              <strong className={data.summary.net >= 0 ? "text-positive" : "text-negative"}>
                 {formatCurrency(data.summary.net, currencyCode)}
               </strong>
             </span>
@@ -419,12 +431,12 @@ export function RecentTransactions({
         )}
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <span>Por página</span>
             <select
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
-              className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 outline-none"
+              className="rounded-lg border border-app-border bg-app-surface px-2 py-1 text-[11px] font-medium text-foreground/90 outline-none"
             >
               {PAGE_SIZE_OPTIONS.map((size) => (
                 <option key={size} value={size}>
@@ -439,19 +451,19 @@ export function RecentTransactions({
               type="button"
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page <= 1 || query.isLoading}
-              className="rounded-lg border border-slate-200 p-1.5 text-slate-600 transition hover:bg-slate-50 disabled:opacity-40"
+              className="rounded-lg border border-app-border p-1.5 text-muted-foreground transition hover:bg-app-bg disabled:opacity-40"
               aria-label="Página anterior"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="min-w-[4.5rem] text-center text-[11px] font-medium text-slate-600">
+            <span className="min-w-[4.5rem] text-center text-[11px] font-medium text-muted-foreground">
               {page} / {totalPages}
             </span>
             <button
               type="button"
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages || query.isLoading}
-              className="rounded-lg border border-slate-200 p-1.5 text-slate-600 transition hover:bg-slate-50 disabled:opacity-40"
+              className="rounded-lg border border-app-border p-1.5 text-muted-foreground transition hover:bg-app-bg disabled:opacity-40"
               aria-label="Próxima página"
             >
               <ChevronRight className="h-4 w-4" />
@@ -460,6 +472,11 @@ export function RecentTransactions({
         </div>
       </div>
       </motion.section>
+
+      <TransactionDetailModal
+        transactionId={detailTxId}
+        onClose={() => setDetailTxId(null)}
+      />
     </section>
   );
 }

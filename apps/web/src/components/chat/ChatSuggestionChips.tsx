@@ -15,7 +15,7 @@ export function ChatSuggestionChips({ suggestions, onSelect, disabled }: Props) 
           type="button"
           disabled={disabled}
           onClick={() => onSelect(text)}
-          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700 disabled:opacity-60"
+          className="rounded-full border border-app-border bg-app-surface px-3 py-1 text-xs text-muted-foreground-dark hover:border-brand-300 hover:bg-brand/10 hover:text-brand disabled:opacity-60"
         >
           {text}
         </button>

@@ -29,14 +29,14 @@ export function InvestmentStatCards({
         className={cardHighlightClass}
       >
         <div className="mb-2.5 flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground-dark">
             Carteira total
           </span>
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-500/10 bg-emerald-500/10">
-            <Briefcase className="h-4 w-4 text-emerald-600" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-positive/10 bg-positive/10">
+            <Briefcase className="h-4 w-4 text-positive" />
           </div>
         </div>
-        <p className="font-display text-2xl font-bold text-slate-900 md:text-3xl">
+        <p className="font-display text-2xl font-bold text-foreground md:text-3xl">
           <AnimatedValue
             value={totalBalance}
             format={(n) => formatCurrency(n, currencyCode)}
@@ -52,26 +52,26 @@ export function InvestmentStatCards({
         className={cardClass}
       >
         <div className="mb-2.5 flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground-dark">
             Lucro acumulado
           </span>
           <div
             className={`flex h-8 w-8 items-center justify-center rounded-lg border ${
               profitPositive
-                ? "border-emerald-500/10 bg-emerald-500/10"
-                : "border-rose-500/10 bg-rose-500/10"
+                ? "border-positive/10 bg-positive/10"
+                : "border-negative/10 bg-negative/10"
             }`}
           >
             {profitPositive ? (
-              <TrendingUp className="h-4 w-4 text-emerald-600" />
+              <TrendingUp className="h-4 w-4 text-positive" />
             ) : (
-              <TrendingDown className="h-4 w-4 text-rose-600" />
+              <TrendingDown className="h-4 w-4 text-negative" />
             )}
           </div>
         </div>
         <p
           className={`font-display text-2xl font-bold md:text-3xl ${
-            profitPositive ? "text-emerald-600" : "text-rose-600"
+            profitPositive ? "text-positive" : "text-negative"
           }`}
         >
           <AnimatedValue
@@ -89,14 +89,14 @@ export function InvestmentStatCards({
         className={cardClass}
       >
         <div className="mb-2.5 flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground-dark">
             Posições ativas
           </span>
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50">
-            <Layers className="h-4 w-4 text-slate-600" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-app-border bg-app-bg">
+            <Layers className="h-4 w-4 text-muted-foreground-dark" />
           </div>
         </div>
-        <p className="font-display text-2xl font-bold text-slate-900 md:text-3xl">
+        <p className="font-display text-2xl font-bold text-foreground md:text-3xl">
           <AnimatedValue value={positionCount} format={(n) => String(n)} />
         </p>
       </motion.div>

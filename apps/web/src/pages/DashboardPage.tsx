@@ -129,10 +129,10 @@ export function DashboardPage() {
       <div className="space-y-8">
          <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-               <h1 className="font-display text-2xl font-semibold tracking-tight text-slate-900">
+               <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
                   Painel Geral
                </h1>
-               <p className="mt-1 text-sm text-slate-500">
+               <p className="mt-1 text-sm text-muted-foreground-dark">
                   Visão consolidada das suas finanças com comparativos por período.
                </p>
             </div>
@@ -188,15 +188,15 @@ export function DashboardPage() {
          {dashboard.isLoading || settings.isLoading ? (
             <DashboardSkeleton />
          ) : dashboard.isError ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+            <div className="rounded-xl border border-danger-border bg-danger-muted p-6 text-sm text-danger">
                Não foi possível carregar o painel. Tente novamente em instantes.
             </div>
          ) : !data || (data.accounts.length === 0 && data.investments.positionCount === 0) ? (
-            <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
-               <p className="text-sm font-medium text-slate-700">
+            <div className="rounded-xl border border-dashed border-app-border bg-app-surface p-10 text-center">
+               <p className="text-sm font-medium text-foreground/90">
                   Nenhuma conta conectada ainda
                </p>
-               <p className="mt-1 text-sm text-slate-500">
+               <p className="mt-1 text-sm text-muted-foreground-dark">
                   Cadastre em <strong>Pessoas</strong> e conecte em <strong>Contas</strong>.
                </p>
             </div>

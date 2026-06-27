@@ -26,7 +26,7 @@ export function DashboardSkeleton() {
         <SkeletonBar className="h-5 w-48" />
         <SkeletonBar className="mt-2 h-4 w-56" />
         <SkeletonBar className="mt-6 h-52 w-full" />
-        <div className="mt-8 border-t border-slate-100 pt-8">
+        <div className="mt-8 border-t border-app-border/60 pt-8">
           <SkeletonBar className="h-4 w-44" />
           <div className="mt-4 grid gap-6 sm:grid-cols-[auto_1fr]">
             <SkeletonBar className="h-44 w-[180px]" />
@@ -55,7 +55,7 @@ export function DashboardSkeleton() {
       </div>
 
       <div className={`${cardLargeClass} overflow-hidden p-0`}>
-        <div className="border-b border-slate-100 p-6">
+        <div className="border-b border-app-border/60 p-6">
           <SkeletonBar className="h-5 w-44" />
           <SkeletonBar className="mt-2 h-4 w-64" />
         </div>

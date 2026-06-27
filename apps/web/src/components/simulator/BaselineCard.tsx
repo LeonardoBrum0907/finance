@@ -42,10 +42,10 @@ export function BaselineCard({ baseline }: Props) {
 
   return (
     <section className={cardClass}>
-      <h2 className="font-display text-sm font-semibold text-slate-800">
+      <h2 className="font-display text-sm font-semibold text-foreground">
         Sua saúde financeira hoje
       </h2>
-      <p className="mt-1 text-xs text-slate-500">
+      <p className="mt-1 text-xs text-muted-foreground-dark">
         Baseado nos últimos 3 {baseline.periodMode === "payday" ? "ciclos" : "meses"} ·{" "}
         {baseline.periodLabel}
       </p>
@@ -60,35 +60,35 @@ export function BaselineCard({ baseline }: Props) {
         {metrics.map((metric) => (
           <div
             key={metric.label}
-            className="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3"
+            className="rounded-xl border border-app-border/60 bg-app-bg/60 px-4 py-3"
           >
-            <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <p className="text-[10px] font-bold tracking-wider text-muted-foreground-dark uppercase">
               {metric.label}
             </p>
-            <p className="mt-1 font-display text-lg font-semibold text-slate-900">
+            <p className="mt-1 font-display text-lg font-semibold text-foreground">
               {metric.value}
             </p>
-            {metric.hint && <p className="mt-0.5 text-[10px] text-slate-400">{metric.hint}</p>}
+            {metric.hint && <p className="mt-0.5 text-[10px] text-muted-foreground-dark">{metric.hint}</p>}
           </div>
         ))}
       </div>
 
       {baseline.creditAccounts.length > 0 && (
-        <div className="mt-4 border-t border-slate-100 pt-4">
-          <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+        <div className="mt-4 border-t border-app-border/60 pt-4">
+          <p className="text-[10px] font-bold tracking-wider text-muted-foreground-dark uppercase">
             Cartões de crédito
           </p>
           <ul className="mt-2 space-y-2">
             {baseline.creditAccounts.map((acc) => (
               <li
                 key={acc.id}
-                className="flex items-center justify-between text-xs text-slate-600"
+                className="flex items-center justify-between text-xs text-muted-foreground-dark"
               >
                 <span>
                   {acc.name}
-                  <span className="ml-1 text-slate-400">({acc.personName})</span>
+                  <span className="ml-1 text-muted-foreground-dark">({acc.personName})</span>
                 </span>
-                <span className="font-medium text-slate-800">
+                <span className="font-medium text-foreground">
                   {acc.nextBillAmount != null
                     ? formatCurrency(acc.nextBillAmount, baseline.currencyCode)
                     : "—"}

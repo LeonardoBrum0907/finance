@@ -35,7 +35,7 @@ export function AssistantSpotlightButton({
           title: title ?? label,
         })
       }
-      className={`inline-flex cursor-pointer items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50/80 px-2 py-1 text-[10px] font-semibold text-emerald-700 transition hover:bg-emerald-100 ${className}`}
+      className={`inline-flex cursor-pointer items-center gap-1 rounded-lg border border-positive/20 bg-positive/10 px-2 py-1 text-[10px] font-semibold text-positive transition hover:bg-positive/15 ${className}`}
     >
       <Sparkles className="h-3 w-3" />
       {label}

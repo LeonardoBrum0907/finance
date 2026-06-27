@@ -8,7 +8,7 @@ import { MarkdownMessage } from "../MarkdownMessage";
 
 const severityStyles: Record<ChatAlertDTO["severity"], string> = {
   warning: "border-amber-200 bg-amber-50 text-amber-900",
-  success: "border-emerald-200 bg-emerald-50 text-emerald-900",
+  success: "border-positive/20 bg-positive/10 text-positive",
   info: "border-sky-200 bg-sky-50 text-sky-900",
 };
 
@@ -122,11 +122,11 @@ export function WeeklyRecapCard() {
       : `Semana — ${activePerson?.personName ?? ""}`;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-xl border border-app-border bg-app-surface p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-slate-900">Resumo da semana</h3>
+        <h3 className="text-sm font-semibold text-foreground">Resumo da semana</h3>
         {tabs.length > 1 && (
-          <div className="flex flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+          <div className="flex flex-wrap gap-1 rounded-lg border border-app-border bg-app-bg p-0.5">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -134,8 +134,8 @@ export function WeeklyRecapCard() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`rounded-md px-2 py-1 text-[10px] font-semibold transition ${
                   activeTab === tab.id
-                    ? "bg-white text-brand-700 shadow-sm"
-                    : "text-slate-600 hover:text-slate-800"
+                    ? "bg-app-surface text-brand shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {tab.label}
@@ -145,7 +145,7 @@ export function WeeklyRecapCard() {
         )}
       </div>
 
-      <div className="relative mt-2 max-h-40 overflow-hidden text-xs text-slate-700">
+      <div className="relative mt-2 max-h-40 overflow-hidden text-xs text-foreground/90">
         <MarkdownMessage content={recap.data.content} />
         <div
           className="pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-white to-transparent"
@@ -163,7 +163,7 @@ export function WeeklyRecapCard() {
             source: "recap",
           })
         }
-        className="mt-2 text-xs font-semibold text-brand-600 hover:underline"
+        className="mt-2 text-xs font-semibold text-brand hover:underline"
       >
         Ver conversa completa
       </button>

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import {
+  bulkDeleteChatThreadsSchema,
   chatMessageSchema,
   createChatThreadSchema,
   regenerateChatSchema,
@@ -122,6 +123,30 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
 
     await prisma.chatThread.delete({ where: { id } });
     return reply.code(204).send();
+  });
+
+  app.post("/api/chat/threads/bulk-delete", async (request, reply) => {
+    const parsed = bulkDeleteChatThreadsSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message });
+    }
+
+    const userId = request.user!.sub;
+    const ids = [...new Set(parsed.data.ids)];
+
+    const owned = await prisma.chatThread.findMany({
+      where: { userId, id: { in: ids } },
+      select: { id: true },
+    });
+    if (owned.length !== ids.length) {
+      return reply.code(404).send({ error: "Uma ou mais conversas não foram encontradas" });
+    }
+
+    await prisma.chatThread.deleteMany({
+      where: { userId, id: { in: ids } },
+    });
+
+    return reply.send({ deletedCount: ids.length });
   });
 
   app.delete("/api/chat/threads/:threadId/messages", async (request, reply) => {

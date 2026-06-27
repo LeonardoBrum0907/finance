@@ -13,7 +13,7 @@ export function PersonSelector({ value, people, onChange }: Props) {
 
   return (
     <div
-      className="inline-flex max-w-full flex-wrap rounded-lg border border-slate-200 bg-slate-50 p-1"
+      className="inline-flex max-w-full flex-wrap rounded-lg border border-app-border bg-app-bg p-1"
       role="group"
       aria-label="Filtrar por pessoa"
     >
@@ -22,8 +22,8 @@ export function PersonSelector({ value, people, onChange }: Props) {
         onClick={() => onChange("all")}
         className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
           value === "all"
-            ? "bg-white text-brand-700 shadow-sm"
-            : "text-slate-600 hover:text-slate-800"
+            ? "bg-app-surface text-brand shadow-sm"
+            : "text-muted-foreground-dark hover:text-foreground"
         }`}
       >
         Todos
@@ -35,8 +35,8 @@ export function PersonSelector({ value, people, onChange }: Props) {
           onClick={() => onChange(person.id)}
           className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
             value === person.id
-              ? "bg-white text-brand-700 shadow-sm"
-              : "text-slate-600 hover:text-slate-800"
+              ? "bg-app-surface text-brand shadow-sm"
+              : "text-muted-foreground-dark hover:text-foreground"
           }`}
         >
           {person.name}

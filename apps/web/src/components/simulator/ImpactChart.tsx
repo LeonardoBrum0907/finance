@@ -3,7 +3,8 @@ import { Line } from "react-chartjs-2";
 import type { SimulationMonthlyPoint } from "@finance/shared";
 import { formatCurrency, formatSeriesLabel } from "../../lib/format";
 import { ensureChartJsRegistered } from "../../lib/chart";
-import { baseScaleOptions, CHART_COLORS } from "../../lib/chartTheme";
+import { baseScaleOptions, chartColorWithAlpha, getChartColors } from "../../lib/chartTheme";
+import { useTheme } from "../../lib/theme/useTheme";
 
 ensureChartJsRegistered();
 
@@ -13,6 +14,9 @@ interface Props {
 }
 
 export function ImpactChart({ data, currencyCode }: Props) {
+  const { theme } = useTheme();
+  const chartColors = useMemo(() => getChartColors(), [theme]);
+
   const chartData = useMemo(
     () => ({
       labels: data.map((p) => p.label ?? formatSeriesLabel(p)),
@@ -20,8 +24,8 @@ export function ImpactChart({ data, currencyCode }: Props) {
         {
           label: "Sem cenário",
           data: data.map((p) => p.baselineSurplus),
-          borderColor: CHART_COLORS.net,
-          backgroundColor: "rgba(14, 165, 233, 0.08)",
+          borderColor: chartColors.net,
+          backgroundColor: chartColorWithAlpha(chartColors.net, 0.08),
           fill: false,
           tension: 0.3,
           pointRadius: 2,
@@ -31,8 +35,8 @@ export function ImpactChart({ data, currencyCode }: Props) {
         {
           label: "Com cenário",
           data: data.map((p) => p.scenarioSurplus),
-          borderColor: CHART_COLORS.income,
-          backgroundColor: "rgba(16, 185, 129, 0.12)",
+          borderColor: chartColors.income,
+          backgroundColor: chartColorWithAlpha(chartColors.income, 0.12),
           fill: true,
           tension: 0.3,
           pointRadius: 3,
@@ -40,7 +44,7 @@ export function ImpactChart({ data, currencyCode }: Props) {
         },
       ],
     }),
-    [data],
+    [chartColors, data],
   );
 
   const options = useMemo(
@@ -64,9 +68,9 @@ export function ImpactChart({ data, currencyCode }: Props) {
           },
         },
       },
-      scales: baseScaleOptions(currencyCode),
+      scales: baseScaleOptions(currencyCode, chartColors),
     }),
-    [currencyCode],
+    [chartColors, currencyCode],
   );
 
   if (data.length === 0) return null;

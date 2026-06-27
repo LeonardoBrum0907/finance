@@ -7,6 +7,7 @@ import { peopleRoutes } from "./routes/people.js";
 import { connectionRoutes } from "./routes/connections.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
 import { transactionRoutes } from "./routes/transactions.js";
+import { commitmentRoutes } from "./routes/commitments.js";
 import { chatRoutes } from "./routes/chat.js";
 import { budgetRoutes } from "./routes/budgets.js";
 import { goalRoutes } from "./routes/goals.js";
@@ -37,6 +38,7 @@ async function main() {
   await app.register(connectionRoutes);
   await app.register(dashboardRoutes);
   await app.register(transactionRoutes);
+  await app.register(commitmentRoutes);
   await app.register(chatRoutes);
   await app.register(budgetRoutes);
   await app.register(goalRoutes);

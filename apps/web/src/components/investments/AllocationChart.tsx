@@ -4,7 +4,8 @@ import { Doughnut } from "react-chartjs-2";
 import type { InvestmentAllocationPoint } from "@finance/shared";
 import { formatCurrency, formatPercent } from "../../lib/format";
 import { ensureChartJsRegistered } from "../../lib/chart";
-import { baseChartOptions, categoryColor, categoryDoughnutTooltip } from "../../lib/chartTheme";
+import { baseChartOptions, categoryColor, categoryDoughnutTooltip, getChartColors } from "../../lib/chartTheme";
+import { useTheme } from "../../lib/theme/useTheme";
 import { cardLargeClass, fadeUp } from "../dashboard/motion";
 
 ensureChartJsRegistered();
@@ -16,6 +17,9 @@ interface Props {
 }
 
 export function AllocationChart({ allocation, currencyCode, className }: Props) {
+  const { theme } = useTheme();
+  const chartColors = useMemo(() => getChartColors(), [theme]);
+
   const chartData = useMemo(() => {
     const labels = allocation.map((a) => a.label);
     const values = allocation.map((a) => a.total);
@@ -24,13 +28,13 @@ export function AllocationChart({ allocation, currencyCode, className }: Props) 
       datasets: [
         {
           data: values,
-          backgroundColor: labels.map((_, i) => categoryColor(i)),
+          backgroundColor: labels.map((_, i) => categoryColor(i, chartColors)),
           borderWidth: 0,
           hoverOffset: 6,
         },
       ],
     };
-  }, [allocation]);
+  }, [allocation, chartColors]);
 
   const options = useMemo(
     () => ({
@@ -59,8 +63,8 @@ export function AllocationChart({ allocation, currencyCode, className }: Props) 
   if (allocation.length === 0) {
     return (
       <div className={`${cardLargeClass} ${className ?? ""}`}>
-        <h2 className="text-sm font-semibold text-slate-900">Alocação por tipo</h2>
-        <p className="mt-4 text-sm text-slate-500">Nenhuma posição ativa.</p>
+        <h2 className="text-sm font-semibold text-foreground">Alocação por tipo</h2>
+        <p className="mt-4 text-sm text-muted-foreground">Nenhuma posição ativa.</p>
       </div>
     );
   }
@@ -73,7 +77,7 @@ export function AllocationChart({ allocation, currencyCode, className }: Props) 
       animate="visible"
       className={`${cardLargeClass} ${className ?? ""}`}
     >
-      <h2 className="mb-4 text-sm font-semibold text-slate-900">Alocação por tipo</h2>
+      <h2 className="mb-4 text-sm font-semibold text-foreground">Alocação por tipo</h2>
       <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
         <div className="mx-auto h-44 w-44 shrink-0 sm:mx-0">
           <Doughnut data={chartData} options={options} />
@@ -86,13 +90,13 @@ export function AllocationChart({ allocation, currencyCode, className }: Props) 
                   className="h-2.5 w-2.5 shrink-0 rounded-full"
                   style={{ backgroundColor: categoryColor(i) }}
                 />
-                <span className="truncate text-slate-700">{item.label}</span>
+                <span className="truncate text-foreground/90">{item.label}</span>
               </span>
               <span className="shrink-0 text-right">
-                <span className="font-medium text-slate-900">
+                <span className="font-medium text-foreground">
                   {formatCurrency(item.total, currencyCode)}
                 </span>
-                <span className="ml-2 text-xs text-slate-400">
+                <span className="ml-2 text-xs text-muted-foreground">
                   {formatPercent(item.percent, 1)}
                 </span>
               </span>

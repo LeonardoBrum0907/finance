@@ -117,23 +117,23 @@ export function ConnectAccount({ people }: Props) {
 
   if (people.length === 0) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm text-slate-600">
+      <div className="rounded-lg border border-app-border bg-app-surface p-4 text-sm text-muted-foreground-dark">
         Cadastre uma pessoa na aba <strong>Pessoas</strong> antes de conectar uma conta.
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
+    <div className="rounded-lg border border-app-border bg-app-surface p-4">
       <div className="flex flex-wrap items-end gap-3">
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">
+          <label className="mb-1 block text-sm font-medium text-foreground/90">
             Conectar conta de
           </label>
           <select
             value={personId}
             onChange={(e) => setPersonId(e.target.value)}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none"
+            className="rounded-md border border-app-border px-3 py-2 text-sm focus:border-brand focus:outline-none"
           >
             {people.map((p) => (
               <option key={p.id} value={p.id}>
@@ -145,13 +145,13 @@ export function ConnectAccount({ people }: Props) {
         <button
           onClick={() => startMutation.mutate()}
           disabled={startMutation.isPending || !personId}
-          className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+          className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand/90 disabled:opacity-60"
         >
           {startMutation.isPending ? "Abrindo..." : "Conectar conta bancária"}
         </button>
       </div>
 
-      {message && <p className="mt-3 text-sm text-slate-600">{message}</p>}
+      {message && <p className="mt-3 text-sm text-muted-foreground-dark">{message}</p>}
 
       {token && (
         <PluggyConnect

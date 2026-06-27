@@ -102,20 +102,20 @@ export function CreateGoalModal({
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 cursor-pointer rounded-lg p-1 text-slate-400 hover:text-slate-600"
+          className="absolute top-4 right-4 cursor-pointer rounded-lg p-1 text-muted-foreground hover:text-muted-foreground"
           aria-label="Fechar"
         >
           <X className="h-4.5 w-4.5" />
         </button>
 
-        <h3 className="mb-1 font-display text-lg font-bold text-slate-900">Novo Objetivo</h3>
-        <p className="mb-6 font-sans text-xs text-slate-400">
+        <h3 className="mb-1 font-display text-lg font-bold text-foreground">Novo Objetivo</h3>
+        <p className="mb-6 font-sans text-xs text-muted-foreground">
           Defina a meta e, se quiser, vincule contas ou investimentos para acompanhar automaticamente.
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="goal-name" className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <label htmlFor="goal-name" className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
               Nome
             </label>
             <input
@@ -124,21 +124,21 @@ export function CreateGoalModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex.: Viagem para Europa"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-emerald-400 focus:border-emerald-400 focus:bg-white"
+              className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground outline-brand focus:border-brand focus:bg-app-surface"
               required
               autoFocus
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="goal-type" className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <label htmlFor="goal-type" className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
               Tipo
             </label>
             <select
               id="goal-type"
               value={type}
               onChange={(e) => setType(e.target.value as GoalType)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800"
+              className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground"
             >
               {GOAL_TYPES.map((item) => (
                 <option key={item.value} value={item.value}>
@@ -149,7 +149,7 @@ export function CreateGoalModal({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="goal-amount" className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <label htmlFor="goal-amount" className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
               Valor alvo (R$)
             </label>
             <input
@@ -159,13 +159,13 @@ export function CreateGoalModal({
               min="0.01"
               value={targetAmount}
               onChange={(e) => setTargetAmount(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800"
+              className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground"
               required
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="goal-date" className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <label htmlFor="goal-date" className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
               Prazo (opcional)
             </label>
             <input
@@ -173,12 +173,12 @@ export function CreateGoalModal({
               type="date"
               value={targetDate}
               onChange={(e) => setTargetDate(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800"
+              className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="goal-desc" className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <label htmlFor="goal-desc" className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
               Descrição (opcional)
             </label>
             <textarea
@@ -186,12 +186,12 @@ export function CreateGoalModal({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800"
+              className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground"
             />
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-3">
-            <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-700">
+          <div className="rounded-xl border border-app-border bg-app-bg/40 p-3">
+            <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-foreground/90">
               <input
                 type="checkbox"
                 checked={useAuto}
@@ -207,7 +207,7 @@ export function CreateGoalModal({
                   onChange={handleSourcesChange}
                 />
                 {sources.length > 0 && (
-                  <p className="mt-2 text-xs text-emerald-700">
+                  <p className="mt-2 text-xs text-positive">
                     Progresso inicial estimado:{" "}
                     <strong>{formatCurrency(previewTotal, currencyCode)}</strong>
                   </p>

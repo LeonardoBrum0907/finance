@@ -13,18 +13,18 @@ export function BudgetToolbar({ search, sort, onSearchChange, onSortChange }: Pr
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="relative max-w-md flex-1">
-        <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
           type="search"
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Buscar orçamentos ou categorias..."
-          className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pr-3 pl-9 text-sm text-slate-800 outline-emerald-400 placeholder:text-slate-400 focus:border-emerald-400"
+          className="w-full rounded-xl border border-app-border bg-app-surface py-2.5 pr-3 pl-9 text-sm text-foreground outline-brand placeholder:text-muted-foreground focus:border-brand"
         />
       </div>
 
       <div
-        className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1"
+        className="inline-flex rounded-lg border border-app-border bg-app-bg p-1"
         role="group"
         aria-label="Ordenar orçamentos"
       >
@@ -33,8 +33,8 @@ export function BudgetToolbar({ search, sort, onSearchChange, onSortChange }: Pr
           onClick={() => onSortChange("alphabetical")}
           className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${
             sort === "alphabetical"
-              ? "bg-white text-slate-900 shadow-sm"
-              : "text-slate-600 hover:text-slate-800"
+              ? "bg-app-surface text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <ArrowDownAZ className="h-4 w-4" />
@@ -45,8 +45,8 @@ export function BudgetToolbar({ search, sort, onSearchChange, onSortChange }: Pr
           onClick={() => onSortChange("highest_spending")}
           className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition ${
             sort === "highest_spending"
-              ? "bg-white text-slate-900 shadow-sm"
-              : "text-slate-600 hover:text-slate-800"
+              ? "bg-app-surface text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           <TrendingDown className="h-4 w-4" />

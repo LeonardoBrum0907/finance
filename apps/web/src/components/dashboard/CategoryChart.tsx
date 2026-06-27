@@ -25,8 +25,9 @@ import {
   calcCategoryChange,
   categoryColor,
   categoryDoughnutTooltip,
-  CHART_COLORS,
+  getChartColors,
 } from "../../lib/chartTheme";
+import { useTheme } from "../../lib/theme/useTheme";
 import { ChartViewToggle } from "./ChartViewToggle";
 import { cardLargeClass, fadeUp } from "./motion";
 
@@ -113,6 +114,8 @@ export function CategoryChart({
 }: Props) {
   const [view, setView] = useState<CategoryView>("doughnut");
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const { theme } = useTheme();
+  const chartColors = useMemo(() => getChartColors(), [theme]);
 
   const withPercent = useMemo(() => buildChartRows(data), [data]);
   const total = withPercent.reduce((sum, c) => sum + c.total, 0);
@@ -122,7 +125,7 @@ export function CategoryChart({
     [previousCategories],
   );
 
-  const colors = withPercent.map((_, i) => categoryColor(i));
+  const colors = withPercent.map((_, i) => categoryColor(i, chartColors));
 
   const doughnutData = useMemo(
     () => ({
@@ -173,7 +176,7 @@ export function CategoryChart({
         },
       },
     }),
-    [currencyCode, withPercent],
+    [chartColors, currencyCode, withPercent],
   );
 
   const barOptions = useMemo(
@@ -206,10 +209,10 @@ export function CategoryChart({
       },
       scales: {
         x: {
-          grid: { color: CHART_COLORS.grid },
+          grid: { color: chartColors.grid },
           border: { display: false },
           ticks: {
-            color: CHART_COLORS.tickMuted,
+            color: chartColors.tickMuted,
             font: { size: 10 },
             callback: (value: string | number) =>
               formatCurrency(Number(value), currencyCode),
@@ -219,13 +222,13 @@ export function CategoryChart({
           grid: { display: false },
           border: { display: false },
           ticks: {
-            color: CHART_COLORS.tick,
+            color: chartColors.tick,
             font: { size: 11, weight: 600 as const },
           },
         },
       },
     }),
-    [currencyCode, withPercent],
+    [chartColors, currencyCode, withPercent],
   );
 
   const handleCategoryClick = useCallback(
@@ -282,10 +285,10 @@ export function CategoryChart({
     >
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="font-display text-base font-semibold text-slate-900">
+          <h2 className="font-display text-base font-semibold text-foreground">
             Despesas por Categoria
           </h2>
-          <p className="text-[11px] text-slate-400">
+          <p className="text-[11px] text-muted-foreground">
             Distribuição de despesas no período selecionado
           </p>
         </div>
@@ -301,7 +304,7 @@ export function CategoryChart({
       </div>
 
       {withPercent.length === 0 ? (
-        <p className="py-12 text-center text-sm text-slate-500">
+        <p className="py-12 text-center text-sm text-muted-foreground">
           Nenhuma despesa categorizada no período.
         </p>
       ) : (
@@ -316,10 +319,10 @@ export function CategoryChart({
                 }}
               />
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
                   Total Gasto
                 </span>
-                <span className="font-display text-sm font-bold text-slate-900">
+                <span className="font-display text-sm font-bold text-foreground">
                   {formatCurrency(total, currencyCode)}
                 </span>
               </div>
@@ -363,33 +366,33 @@ export function CategoryChart({
                   onMouseLeave={() => handleListHover(null)}
                   className={`cursor-pointer rounded-xl border px-3 py-2 transition ${
                     isActive
-                      ? "border-slate-200 bg-white shadow-sm"
-                      : "border-slate-100 bg-slate-50"
+                      ? "border-app-border bg-app-surface shadow-sm"
+                      : "border-app-border/60 bg-app-bg"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-slate-200/50 bg-white">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-app-border/50 bg-app-surface">
                         <Icon className="h-3.5 w-3.5" style={{ color }} />
                       </div>
-                      <span className="truncate text-xs font-semibold text-slate-800">
+                      <span className="truncate text-xs font-semibold text-foreground">
                         {cat.category}
                       </span>
                     </div>
                     <div className="shrink-0 text-right">
-                      <span className="block text-xs font-bold text-slate-800">
+                      <span className="block text-xs font-bold text-foreground">
                         {formatCurrency(cat.total, currencyCode)}
                       </span>
                       <div className="flex items-center justify-end gap-1.5">
-                        <span className="font-mono text-[10px] text-slate-400">
+                        <span className="font-mono text-[10px] text-muted-foreground">
                           {cat.percent.toFixed(1)}%
                         </span>
                         {change !== null && Math.abs(change) >= 1 && (
                           <span
                             className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
                               change > 0
-                                ? "bg-rose-500/10 text-rose-600"
-                                : "bg-emerald-500/10 text-emerald-600"
+                                ? "bg-negative/10 text-negative"
+                                : "bg-positive/10 text-positive"
                             }`}
                           >
                             {formatPercent(change)}

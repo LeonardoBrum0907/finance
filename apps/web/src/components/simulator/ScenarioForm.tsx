@@ -136,8 +136,8 @@ export function ScenarioForm({ baseline, loading, hasResult = false, onSubmit, o
 
   return (
     <section className={cardClass}>
-      <h2 className="font-display text-sm font-semibold text-slate-800">Monte seu cenário</h2>
-      <p className="mt-1 text-xs text-slate-500">
+      <h2 className="font-display text-sm font-semibold text-foreground">Monte seu cenário</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
         Simule o impacto antes de comprometer seu orçamento
       </p>
 
@@ -149,12 +149,12 @@ export function ScenarioForm({ baseline, loading, hasResult = false, onSubmit, o
             onClick={() => setType(item.value)}
             className={`cursor-pointer rounded-xl border px-3 py-3 text-left transition ${
               type === item.value
-                ? "border-emerald-400 bg-emerald-50/80 ring-1 ring-emerald-200"
-                : "border-slate-200 bg-white hover:border-slate-300"
+                ? "border-positive/40 bg-positive/10 ring-1 ring-positive/20"
+                : "border-app-border bg-app-surface hover:border-app-border"
             }`}
           >
-            <p className="text-xs font-semibold text-slate-800">{item.label}</p>
-            <p className="mt-0.5 text-[10px] text-slate-500">{item.description}</p>
+            <p className="text-xs font-semibold text-foreground">{item.label}</p>
+            <p className="mt-0.5 text-[10px] text-muted-foreground">{item.description}</p>
           </button>
         ))}
       </div>
@@ -198,7 +198,7 @@ export function ScenarioForm({ baseline, loading, hasResult = false, onSubmit, o
               key={preset}
               type="button"
               onClick={() => setAmount(String(preset))}
-              className="cursor-pointer rounded-lg border border-slate-200 px-2.5 py-1 text-[10px] font-semibold text-slate-600 hover:border-emerald-300 hover:text-emerald-700"
+              className="cursor-pointer rounded-lg border border-app-border px-2.5 py-1 text-[10px] font-semibold text-muted-foreground hover:border-positive/30 hover:text-positive"
             >
               R$ {preset.toLocaleString("pt-BR")}
             </button>
@@ -307,7 +307,7 @@ export function ScenarioForm({ baseline, loading, hasResult = false, onSubmit, o
           <button
             type="submit"
             disabled={loading}
-            className="cursor-pointer rounded-xl bg-emerald-600 py-3 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 sm:px-8"
+            className="cursor-pointer rounded-xl bg-brand py-3 text-sm font-bold text-white shadow-sm hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-60 sm:px-8"
           >
             {loading ? "Simulando..." : "Simular impacto"}
           </button>
@@ -315,7 +315,7 @@ export function ScenarioForm({ baseline, loading, hasResult = false, onSubmit, o
             type="button"
             onClick={handleClear}
             disabled={loading || (!hasValues && !hasResult)}
-            className="cursor-pointer rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-600 hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="cursor-pointer rounded-xl border border-app-border bg-app-surface px-6 py-3 text-sm font-semibold text-muted-foreground hover:border-app-border hover:bg-app-bg disabled:cursor-not-allowed disabled:opacity-50"
           >
             Limpar
           </button>
@@ -328,7 +328,7 @@ export function ScenarioForm({ baseline, loading, hasResult = false, onSubmit, o
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+      <label className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
         {label}
       </label>
       {children}
@@ -337,4 +337,4 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const inputClass =
-  "w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-emerald-400 focus:border-emerald-400 focus:bg-white";
+  "w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground outline-brand focus:border-brand focus:bg-app-surface";

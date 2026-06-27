@@ -23,8 +23,8 @@ export function PositionsTable({ positions, currencyCode }: Props) {
   if (positions.length === 0) {
     return (
       <div className={cardLargeClass}>
-        <h2 className="text-sm font-semibold text-slate-900">Posições</h2>
-        <p className="mt-4 text-sm text-slate-500">Nenhuma posição encontrada.</p>
+        <h2 className="text-sm font-semibold text-foreground">Posições</h2>
+        <p className="mt-4 text-sm text-muted-foreground-dark">Nenhuma posição encontrada.</p>
       </div>
     );
   }
@@ -37,11 +37,11 @@ export function PositionsTable({ positions, currencyCode }: Props) {
       animate="visible"
       className={cardLargeClass}
     >
-      <h2 className="mb-4 text-sm font-semibold text-slate-900">Posições</h2>
+      <h2 className="mb-4 text-sm font-semibold text-foreground">Posições</h2>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[640px] text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-100 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <tr className="border-b border-app-border/60 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground-dark">
               <th className="pb-3 pr-4">Ativo</th>
               <th className="pb-3 pr-4">Status</th>
               <th className="pb-3 pr-4">Tipo</th>
@@ -60,40 +60,40 @@ export function PositionsTable({ positions, currencyCode }: Props) {
                 : pos.typeLabel;
 
               return (
-                <tr key={pos.id} className="text-slate-700">
+                <tr key={pos.id} className="text-foreground/90">
                   <td className="py-3 pr-4">
-                    <p className="font-medium text-slate-900">{pos.name}</p>
+                    <p className="font-medium text-foreground">{pos.name}</p>
                     {pos.code && (
-                      <p className="text-xs text-slate-400">{pos.code}</p>
+                      <p className="text-xs text-muted-foreground-dark">{pos.code}</p>
                     )}
                     {pos.connectorName && (
-                      <p className="text-[10px] text-slate-400">{pos.connectorName}</p>
+                      <p className="text-[10px] text-muted-foreground-dark">{pos.connectorName}</p>
                     )}
                   </td>
                   <td className="py-3 pr-4">
                     <PositionStatusCell position={pos} />
                   </td>
-                  <td className="py-3 pr-4 text-slate-600">{typeLabel}</td>
-                  <td className="py-3 pr-4 text-right font-medium text-slate-900">
+                  <td className="py-3 pr-4 text-muted-foreground-dark">{typeLabel}</td>
+                  <td className="py-3 pr-4 text-right font-medium text-foreground">
                     {formatCurrency(pos.balance, currencyCode)}
                   </td>
-                  <td className="py-3 pr-4 text-right text-slate-600">
+                  <td className="py-3 pr-4 text-right text-muted-foreground-dark">
                     {pos.amountOriginal != null
                       ? formatCurrency(pos.amountOriginal, currencyCode)
                       : "—"}
                   </td>
                   <td
                     className={`py-3 pr-4 text-right font-medium ${
-                      profitPositive ? "text-emerald-600" : "text-rose-600"
+                      profitPositive ? "text-positive" : "text-negative"
                     }`}
                   >
                     {pos.profit >= 0 ? "+" : ""}
                     {formatCurrency(pos.profit, currencyCode)}
                   </td>
-                  <td className="py-3 pr-4 text-right text-slate-600">
+                  <td className="py-3 pr-4 text-right text-muted-foreground-dark">
                     {formatRate(pos)}
                   </td>
-                  <td className="py-3 text-right text-slate-600">
+                  <td className="py-3 text-right text-muted-foreground-dark">
                     {pos.dueDate ? formatDate(pos.dueDate) : "—"}
                   </td>
                 </tr>

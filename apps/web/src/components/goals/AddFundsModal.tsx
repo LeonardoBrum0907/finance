@@ -38,26 +38,26 @@ export function AddFundsModal({ goal, currencyCode, saving, onClose, onSave }: P
     <Modal
       onClose={onClose}
       disableBackdropClose={saving}
-      panelClassName="relative w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl"
+      panelClassName="relative w-full max-w-md rounded-3xl border border-app-border bg-app-surface p-6 shadow-2xl"
     >
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 cursor-pointer rounded-lg p-1 text-slate-400 hover:text-slate-600"
+          className="absolute top-4 right-4 cursor-pointer rounded-lg p-1 text-muted-foreground hover:text-muted-foreground"
           aria-label="Fechar"
         >
           <X className="h-4.5 w-4.5" />
         </button>
 
-        <h3 className="mb-1 font-display text-lg font-bold text-slate-900">Adicionar Fundos</h3>
-        <p className="mb-1 text-sm text-slate-600">{goal.name}</p>
-        <p className="mb-6 text-xs text-slate-400">
+        <h3 className="mb-1 font-display text-lg font-bold text-foreground">Adicionar Fundos</h3>
+        <p className="mb-1 text-sm text-muted-foreground">{goal.name}</p>
+        <p className="mb-6 text-xs text-muted-foreground">
           Faltam {formatCurrency(remaining, currencyCode)} para atingir a meta.
         </p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="fund-amount" className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <label htmlFor="fund-amount" className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
               Valor (R$)
             </label>
             <input
@@ -67,14 +67,14 @@ export function AddFundsModal({ goal, currencyCode, saving, onClose, onSave }: P
               min="0.01"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-emerald-400 focus:border-emerald-400 focus:bg-white"
+              className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground outline-brand focus:border-brand focus:bg-app-surface"
               required
               autoFocus
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="fund-note" className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <label htmlFor="fund-note" className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
               Nota (opcional)
             </label>
             <input
@@ -83,14 +83,14 @@ export function AddFundsModal({ goal, currencyCode, saving, onClose, onSave }: P
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder="Ex.: Bônus do trabalho"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800"
+              className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground"
             />
           </div>
 
           <button
             type="submit"
             disabled={saving}
-            className="w-full cursor-pointer rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white shadow-md hover:bg-emerald-700 disabled:opacity-60"
+            className="w-full cursor-pointer rounded-xl bg-brand py-3 text-xs font-bold text-white shadow-md hover:bg-brand/90 disabled:opacity-60"
           >
             {saving ? "Registrando..." : "Registrar aporte"}
           </button>

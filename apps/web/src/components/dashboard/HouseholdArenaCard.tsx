@@ -6,15 +6,15 @@ import { useAssistant } from "../../lib/assistantContext";
 import { formatCurrency } from "../../lib/format";
 
 const toneStyles = {
-  praise: "border-emerald-200 bg-emerald-50/60",
+  praise: "border-positive/20 bg-positive/10",
   roast: "border-amber-200 bg-amber-50/60",
-  neutral: "border-slate-200 bg-slate-50/60",
+  neutral: "border-app-border bg-app-bg/60",
 } as const;
 
 const toneText = {
-  praise: "text-emerald-800",
+  praise: "text-positive",
   roast: "text-amber-900",
-  neutral: "text-slate-800",
+  neutral: "text-foreground",
 } as const;
 
 export function HouseholdArenaCard() {
@@ -39,18 +39,18 @@ export function HouseholdArenaCard() {
   const isCompetitive = data.personCount >= 2;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
+    <div className="rounded-xl border border-app-border bg-app-surface p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             {isCompetitive ? (
               <Trophy className="h-4 w-4 text-amber-500" />
             ) : (
-              <Medal className="h-4 w-4 text-brand-600" />
+              <Medal className="h-4 w-4 text-brand" />
             )}
             {isCompetitive ? "Arena da semana" : "Seu placar"}
           </h3>
-          <p className="mt-0.5 text-[11px] text-slate-500">{data.periodLabel}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">{data.periodLabel}</p>
         </div>
         <button
           type="button"
@@ -62,7 +62,7 @@ export function HouseholdArenaCard() {
               source: "arena",
             })
           }
-          className="shrink-0 text-[11px] font-semibold text-brand-600 hover:underline"
+          className="shrink-0 text-[11px] font-semibold text-brand hover:underline"
         >
           Ver resumo
         </button>
@@ -78,19 +78,19 @@ export function HouseholdArenaCard() {
               <div className="min-w-0 flex-1">
                 <p className={`text-xs font-semibold ${toneText[r.tone]}`}>
                   {isCompetitive && (
-                    <span className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-white/80 text-[10px] font-bold">
+                    <span className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-app-surface/80 text-[10px] font-bold">
                       {r.rank}
                     </span>
                   )}
                   {r.personName}
                 </p>
-                <p className="mt-1 text-[11px] leading-snug text-slate-700">{r.verdict}</p>
+                <p className="mt-1 text-[11px] leading-snug text-foreground/90">{r.verdict}</p>
                 {r.badges.length > 0 && (
                   <div className="mt-1.5 flex flex-wrap gap-1">
                     {r.badges.map((badge) => (
                       <span
                         key={badge}
-                        className="rounded-full bg-white/70 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-600"
+                        className="rounded-full bg-app-surface/70 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground"
                       >
                         {badge}
                       </span>
@@ -100,7 +100,7 @@ export function HouseholdArenaCard() {
               </div>
               <div className="shrink-0 text-right">
                 <p
-                  className={`text-xs font-bold ${r.net >= 0 ? "text-emerald-700" : "text-rose-600"}`}
+                  className={`text-xs font-bold ${r.net >= 0 ? "text-positive" : "text-negative"}`}
                 >
                   {formatCurrency(r.net)}
                 </p>
@@ -115,7 +115,7 @@ export function HouseholdArenaCard() {
                       source: "arena",
                     })
                   }
-                  className="mt-1 text-[10px] font-semibold text-brand-600 hover:underline"
+                  className="mt-1 text-[10px] font-semibold text-brand hover:underline"
                 >
                   Abrir
                 </button>
@@ -126,8 +126,8 @@ export function HouseholdArenaCard() {
       </ul>
 
       {data.headToHead.length > 0 && (
-        <div className="mt-3 border-t border-slate-100 pt-3">
-          <p className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+        <div className="mt-3 border-t border-app-border/60 pt-3">
+          <p className="mb-2 flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
             <Swords className="h-3 w-3" />
             Duelos da semana
           </p>
@@ -144,7 +144,7 @@ export function HouseholdArenaCard() {
                       source: "arena",
                     })
                   }
-                  className="w-full rounded-md px-2 py-1.5 text-left text-[11px] text-slate-700 hover:bg-slate-50"
+                  className="w-full rounded-md px-2 py-1.5 text-left text-[11px] text-foreground/90 hover:bg-app-bg"
                 >
                   {h.message}
                 </button>
@@ -154,7 +154,7 @@ export function HouseholdArenaCard() {
         </div>
       )}
 
-      <p className="mt-3 flex items-center gap-1 text-[10px] text-slate-400">
+      <p className="mt-3 flex items-center gap-1 text-[10px] text-muted-foreground">
         <Sparkles className="h-3 w-3" />
         Ranking baseado em sobra, disciplina e tendência da semana
       </p>

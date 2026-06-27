@@ -19,7 +19,7 @@ interface Props {
 const VERDICT_STYLES = {
   affordable: {
     label: "Viável",
-    className: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    className: "border-positive/20 bg-positive/10 text-positive",
   },
   caution: {
     label: "Atenção",
@@ -27,7 +27,7 @@ const VERDICT_STYLES = {
   },
   risky: {
     label: "Arriscado",
-    className: "border-rose-200 bg-rose-50 text-rose-800",
+    className: "border-negative/20 bg-negative/10 text-negative",
   },
 } as const;
 
@@ -90,7 +90,7 @@ export function SimulationResults({
       </div>
 
       <div className={cardClass}>
-        <h3 className="font-display text-sm font-semibold text-slate-800">Resumo do impacto</h3>
+        <h3 className="font-display text-sm font-semibold text-foreground">Resumo do impacto</h3>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Metric
             label="Sobra antes"
@@ -144,10 +144,10 @@ export function SimulationResults({
 
       {result.projected.monthlySeries.length > 0 && (
         <div className={cardClass}>
-          <h3 className="font-display text-sm font-semibold text-slate-800">
+          <h3 className="font-display text-sm font-semibold text-foreground">
             Projeção mês a mês
           </h3>
-          <p className="mt-1 text-xs text-slate-500">Comparativo da sobra com e sem o cenário</p>
+          <p className="mt-1 text-xs text-muted-foreground">Comparativo da sobra com e sem o cenário</p>
           <div className="mt-4">
             <ImpactChart data={result.projected.monthlySeries} currencyCode={currencyCode} />
           </div>
@@ -156,9 +156,9 @@ export function SimulationResults({
 
       {(result.goalImpact.monthsDelayed !== null || result.goalImpact.affectedGoals.length > 0) && (
         <div className={cardClass}>
-          <h3 className="font-display text-sm font-semibold text-slate-800">Impacto em metas</h3>
+          <h3 className="font-display text-sm font-semibold text-foreground">Impacto em metas</h3>
           {result.goalImpact.monthsDelayed !== null && (
-            <p className="mt-2 text-sm text-slate-600">
+            <p className="mt-2 text-sm text-muted-foreground">
               Suas metas podem atrasar cerca de{" "}
               <strong>{result.goalImpact.monthsDelayed} meses</strong>.
             </p>
@@ -166,7 +166,7 @@ export function SimulationResults({
           {result.goalImpact.affectedGoals.length > 0 && (
             <ul className="mt-3 space-y-1.5">
               {result.goalImpact.affectedGoals.slice(0, 5).map((goal) => (
-                <li key={goal.id} className="text-xs text-slate-600">
+                <li key={goal.id} className="text-xs text-muted-foreground">
                   {goal.name} — ~{goal.monthsDelayed} meses de atraso
                 </li>
               ))}
@@ -177,8 +177,8 @@ export function SimulationResults({
 
       {result.budgetImpact && (
         <div className={cardClass}>
-          <h3 className="font-display text-sm font-semibold text-slate-800">Impacto no orçamento</h3>
-          <p className="mt-2 text-sm text-slate-600">
+          <h3 className="font-display text-sm font-semibold text-foreground">Impacto no orçamento</h3>
+          <p className="mt-2 text-sm text-muted-foreground">
             Categoria <strong>{result.budgetImpact.category}</strong>:{" "}
             {formatCurrency(result.budgetImpact.spent, currencyCode)} de{" "}
             {formatCurrency(result.budgetImpact.limit, currencyCode)} (
@@ -189,8 +189,8 @@ export function SimulationResults({
 
       {result.creditImpact && (
         <div className={cardClass}>
-          <h3 className="font-display text-sm font-semibold text-slate-800">Impacto no cartão</h3>
-          <p className="mt-2 text-sm text-slate-600">
+          <h3 className="font-display text-sm font-semibold text-foreground">Impacto no cartão</h3>
+          <p className="mt-2 text-sm text-muted-foreground">
             {result.creditImpact.accountName}: fatura de{" "}
             {formatCurrency(result.creditImpact.nextBillBefore, currencyCode)} para{" "}
             {formatCurrency(result.creditImpact.nextBillAfter, currencyCode)} (+{" "}
@@ -210,7 +210,7 @@ export function SimulationResults({
             Transformar em objetivo
           </button>
         )}
-        <p className="text-[10px] text-slate-400">{result.disclaimer}</p>
+        <p className="text-[10px] text-muted-foreground">{result.disclaimer}</p>
       </div>
     </section>
   );
@@ -228,12 +228,12 @@ function Metric({
   deltaNegative?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3">
-      <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">{label}</p>
-      <p className="mt-1 font-display text-lg font-semibold text-slate-900">{value}</p>
+    <div className="rounded-xl border border-app-border/60 bg-app-bg/60 px-4 py-3">
+      <p className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">{label}</p>
+      <p className="mt-1 font-display text-lg font-semibold text-foreground">{value}</p>
       {delta && (
         <p
-          className={`mt-0.5 text-xs font-medium ${deltaNegative ? "text-rose-600" : "text-emerald-600"}`}
+          className={`mt-0.5 text-xs font-medium ${deltaNegative ? "text-negative" : "text-positive"}`}
         >
           {delta}
         </p>

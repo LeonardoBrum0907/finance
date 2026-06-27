@@ -30,12 +30,20 @@ export const DEFAULT_PAYDAY_CYCLE_ANCHOR: PaydayCycleAnchor = "end";
 
 export const paydayCycleAnchorSchema = z.enum(PAYDAY_CYCLE_ANCHORS);
 
+export const APP_THEMES = ["default", "comfy"] as const;
+export type AppTheme = (typeof APP_THEMES)[number];
+export const DEFAULT_APP_THEME: AppTheme = "default";
+export const appThemeSchema = z.enum(APP_THEMES);
 
+export function parseAppTheme(value: unknown): AppTheme {
+  return value === "comfy" ? "comfy" : "default";
+}
 
 export const updateSettingsSchema = z.object({
   paydayDay: z.number().int().min(1).max(31).nullable().optional(),
   defaultPeriodMode: periodModeSchema.optional(),
   includeInvestmentsInNetWorth: z.boolean().optional(),
+  theme: appThemeSchema.optional(),
 });
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
 
@@ -44,6 +52,7 @@ export interface UserSettingsDTO {
   defaultPeriodMode: PeriodMode;
   paydayConfigured: boolean;
   includeInvestmentsInNetWorth: boolean;
+  theme: AppTheme;
 }
 
 
@@ -93,6 +102,8 @@ export interface TransactionLike {
   category: string | null;
 
   description?: string | null;
+
+  personName?: string | null;
 
 }
 
@@ -686,7 +697,7 @@ export function classifyIncome(
 
   for (const tx of txs) {
 
-    if (!countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description)) {
+    if (!countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description, tx.personName)) {
 
       continue;
 

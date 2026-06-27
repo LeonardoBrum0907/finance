@@ -80,10 +80,10 @@ export function InvestmentsPage() {
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-slate-900">
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
             Investimentos
           </h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-muted-foreground-dark">
             Carteira, alocação e movimentações sincronizadas via Open Finance.
           </p>
         </div>
@@ -99,7 +99,7 @@ export function InvestmentsPage() {
       {investments.isLoading ? (
         <InvestmentsSkeleton />
       ) : investments.isError ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+        <div className="rounded-xl border border-danger-border bg-danger-muted p-6 text-sm text-danger">
           Não foi possível carregar os investimentos. Tente novamente em instantes.
         </div>
       ) : !data || data.summary.positionCount === 0 ? (
@@ -111,13 +111,13 @@ export function InvestmentsPage() {
             stalePositionCount={data?.summary?.stalePositionCount ?? 0}
             stalePositions={stalePositions}
           />
-          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
-            <p className="text-sm font-medium text-slate-700">
+          <div className="rounded-xl border border-dashed border-app-border bg-app-surface p-10 text-center">
+            <p className="text-sm font-medium text-foreground/90">
               {data && data.recentTransactions.length > 0
                 ? "Nenhuma posição ativa na carteira"
                 : "Nenhum investimento sincronizado"}
             </p>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="mt-1 text-sm text-muted-foreground-dark">
               {data && data.recentTransactions.length > 0
                 ? "Há movimentações no histórico, mas posições resgatadas ou com saldo zerado não aparecem aqui."
                 : "Conecte sua corretora (ex.: Íon) e sincronize em Contas."}
@@ -152,20 +152,20 @@ export function InvestmentsPage() {
               currencyCode={data.currencyCode}
             />
             <div className={cardClass}>
-              <h2 className="mb-4 text-sm font-semibold text-slate-900">Insights</h2>
+              <h2 className="mb-4 text-sm font-semibold text-foreground">Insights</h2>
               {insights.length > 0 ? (
                 <ul className="space-y-3">
                   {insights.map((line) => (
                     <li
                       key={line}
-                      className="rounded-lg border border-slate-100 bg-slate-50 px-4 py-3 text-sm text-slate-700"
+                      className="rounded-lg border border-app-border/60 bg-app-bg px-4 py-3 text-sm text-foreground/90"
                     >
                       {line}
                     </li>
                   ))}
                 </ul>
               ) : (
-                <p className="text-sm text-slate-500">Sem insights disponíveis.</p>
+                <p className="text-sm text-muted-foreground-dark">Sem insights disponíveis.</p>
               )}
             </div>
           </div>

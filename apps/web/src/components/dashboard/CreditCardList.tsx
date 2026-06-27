@@ -39,10 +39,10 @@ export function CreditCardList({ accounts }: Props) {
       className={cardLargeClass}
     >
       <div className="mb-5">
-        <h2 className="font-display text-base font-semibold text-slate-900">
+        <h2 className="font-display text-base font-semibold text-foreground">
           Cartões de Crédito
         </h2>
-        <p className="text-[11px] text-slate-400">
+        <p className="text-[11px] text-muted-foreground">
           Fatura, uso do limite e próximo vencimento
         </p>
       </div>
@@ -67,7 +67,7 @@ export function CreditCardList({ accounts }: Props) {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <CreditCard className="h-5 w-5 shrink-0 text-emerald-400" />
+                  <CreditCard className="h-5 w-5 shrink-0 text-accent" />
                   <div className="min-w-0">
                     <p className="truncate text-xs font-bold">{card.name}</p>
                     <p className="font-mono text-[10px] opacity-60 tracking-wider">
@@ -75,7 +75,7 @@ export function CreditCardList({ accounts }: Props) {
                     </p>
                   </div>
                 </div>
-                <span className="h-5 w-9 shrink-0 rounded-full bg-emerald-400/80" aria-hidden />
+                <span className="h-5 w-9 shrink-0 rounded-full bg-accent/80" aria-hidden />
               </div>
 
               <div className="mt-3.5 space-y-2.5">
@@ -96,9 +96,9 @@ export function CreditCardList({ accounts }: Props) {
                       </span>
                     </div>
                     {usedPercent != null && (
-                      <div className="h-2 overflow-hidden rounded-full bg-white/10">
+                      <div className="h-2 overflow-hidden rounded-full bg-app-surface/10">
                         <div
-                          className="h-full rounded-full bg-emerald-400 transition-all"
+                          className="h-full rounded-full bg-accent transition-all"
                           style={{ width: `${usedPercent}%` }}
                         />
                       </div>

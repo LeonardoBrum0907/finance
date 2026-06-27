@@ -121,18 +121,18 @@ export function EditGoalModal({
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 cursor-pointer rounded-lg p-1 text-slate-400 hover:text-slate-600"
+          className="absolute top-4 right-4 cursor-pointer rounded-lg p-1 text-muted-foreground hover:text-muted-foreground"
           aria-label="Fechar"
         >
           <X className="h-4.5 w-4.5" />
         </button>
 
-        <h3 className="mb-1 font-display text-lg font-bold text-slate-900">Editar Objetivo</h3>
-        <p className="mb-6 font-sans text-xs text-slate-400">{goal.name}</p>
+        <h3 className="mb-1 font-display text-lg font-bold text-foreground">Editar Objetivo</h3>
+        <p className="mb-6 font-sans text-xs text-muted-foreground">{goal.name}</p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="edit-goal-name" className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <label htmlFor="edit-goal-name" className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
               Nome
             </label>
             <input
@@ -140,21 +140,21 @@ export function EditGoalModal({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800"
+              className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground"
               required
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="edit-goal-type" className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+              <label htmlFor="edit-goal-type" className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
                 Tipo
               </label>
               <select
                 id="edit-goal-type"
                 value={type}
                 onChange={(e) => setType(e.target.value as GoalType)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800"
+                className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground"
               >
                 {GOAL_TYPES.map((item) => (
                   <option key={item.value} value={item.value}>
@@ -164,14 +164,14 @@ export function EditGoalModal({
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="edit-goal-status" className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+              <label htmlFor="edit-goal-status" className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
                 Status
               </label>
               <select
                 id="edit-goal-status"
                 value={status}
                 onChange={(e) => setStatus(e.target.value as GoalStatus)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800"
+                className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground"
               >
                 {STATUSES.map((item) => (
                   <option key={item.value} value={item.value}>
@@ -183,7 +183,7 @@ export function EditGoalModal({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="edit-goal-amount" className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <label htmlFor="edit-goal-amount" className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
               Valor alvo (R$)
             </label>
             <input
@@ -193,13 +193,13 @@ export function EditGoalModal({
               min="0.01"
               value={targetAmount}
               onChange={(e) => setTargetAmount(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800"
+              className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground"
               required
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="edit-goal-date" className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <label htmlFor="edit-goal-date" className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
               Prazo
             </label>
             <input
@@ -207,12 +207,12 @@ export function EditGoalModal({
               type="date"
               value={targetDate}
               onChange={(e) => setTargetDate(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800"
+              className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground"
             />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="edit-goal-desc" className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <label htmlFor="edit-goal-desc" className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
               Descrição
             </label>
             <textarea
@@ -220,12 +220,12 @@ export function EditGoalModal({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800"
+              className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground"
             />
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-3">
-            <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-slate-700">
+          <div className="rounded-xl border border-app-border bg-app-bg/40 p-3">
+            <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-foreground/90">
               <input
                 type="checkbox"
                 checked={useAuto}
@@ -242,7 +242,7 @@ export function EditGoalModal({
                   onChange={handleSourcesChange}
                 />
                 {sources.length > 0 && (
-                  <p className="mt-2 text-xs text-emerald-700">
+                  <p className="mt-2 text-xs text-positive">
                     Progresso estimado:{" "}
                     <strong>{formatCurrency(previewTotal, currencyCode)}</strong>
                   </p>
@@ -271,7 +271,7 @@ export function EditGoalModal({
               if (ok) onDelete(goal.id);
             }}
             disabled={deleting}
-            className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-rose-200 py-3 text-xs font-bold text-rose-600 hover:bg-rose-50 disabled:opacity-60"
+            className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-negative/20 py-3 text-xs font-bold text-negative hover:bg-negative/10 disabled:opacity-60"
           >
             <Trash2 className="h-3.5 w-3.5" />
             {deleting ? "Excluindo..." : "Excluir objetivo"}

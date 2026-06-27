@@ -48,7 +48,7 @@ export function MarkdownMessage({ content }: Props) {
           <pre className="mb-2 overflow-x-auto rounded-md last:mb-0">{children}</pre>
         ),
         blockquote: ({ children }) => (
-          <blockquote className="mb-2 border-l-2 border-brand-500 pl-3 text-slate-600 last:mb-0">
+          <blockquote className="mb-2 border-l-2 border-brand-500 pl-3 text-muted-foreground-dark last:mb-0">
             {children}
           </blockquote>
         ),
@@ -57,7 +57,7 @@ export function MarkdownMessage({ content }: Props) {
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-medium text-brand-600 underline hover:text-brand-700"
+            className="font-medium text-brand underline hover:text-brand"
           >
             {children}
           </a>
@@ -69,14 +69,14 @@ export function MarkdownMessage({ content }: Props) {
         ),
         thead: ({ children }) => <thead className="bg-slate-200/60">{children}</thead>,
         th: ({ children }) => (
-          <th className="border border-slate-300 px-2 py-1 text-left font-semibold">
+          <th className="border border-app-border px-2 py-1 text-left font-semibold">
             {children}
           </th>
         ),
         td: ({ children }) => (
-          <td className="border border-slate-300 px-2 py-1">{children}</td>
+          <td className="border border-app-border px-2 py-1">{children}</td>
         ),
-        hr: () => <hr className="my-3 border-slate-300" />,
+        hr: () => <hr className="my-3 border-app-border" />,
       }}
     >
       {content}

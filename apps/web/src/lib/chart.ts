@@ -34,8 +34,13 @@ export function ensureChartJsRegistered(): void {
   registered = true;
 }
 
-function hexToRgb(hex: string): [number, number, number] {
-  const normalized = hex.replace("#", "");
+function parseColorChannels(color: string): [number, number, number] {
+  const rgbMatch = color.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+  if (rgbMatch) {
+    return [Number(rgbMatch[1]), Number(rgbMatch[2]), Number(rgbMatch[3])];
+  }
+
+  const normalized = color.replace("#", "");
   return [
     parseInt(normalized.slice(0, 2), 16),
     parseInt(normalized.slice(2, 4), 16),
@@ -46,10 +51,10 @@ function hexToRgb(hex: string): [number, number, number] {
 export function createAreaGradient(
   ctx: CanvasRenderingContext2D,
   area: ChartArea,
-  hexColor: string,
+  color: string,
   opacity = 0.25,
 ): CanvasGradient {
-  const [r, g, b] = hexToRgb(hexColor);
+  const [r, g, b] = parseColorChannels(color);
   const gradient = ctx.createLinearGradient(0, area.top, 0, area.bottom);
   gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${opacity})`);
   gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);

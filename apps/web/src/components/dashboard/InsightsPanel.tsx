@@ -20,10 +20,10 @@ const TYPE_STYLES: Record<
   { container: string; iconBox: string; icon: LucideIcon; iconColor: string }
 > = {
   success: {
-    container: "border-emerald-500/15 bg-emerald-500/5",
-    iconBox: "bg-emerald-500/10",
+    container: "border-positive/15 bg-positive/5",
+    iconBox: "bg-positive/10",
     icon: CircleCheck,
-    iconColor: "text-emerald-600",
+    iconColor: "text-positive",
   },
   info: {
     container: "border-sky-500/15 bg-sky-500/5",
@@ -70,10 +70,10 @@ export function InsightsPanel({ insights, personId }: Props) {
       className={cardLargeClass}
     >
       <div className="mb-4">
-        <h2 className="font-display text-base font-semibold text-slate-900">
+        <h2 className="font-display text-base font-semibold text-foreground">
           Insights Inteligentes
         </h2>
-        <p className="text-[11px] text-slate-400">
+        <p className="text-[11px] text-muted-foreground">
           Notificações preditivas adaptadas ao seu perfil
         </p>
       </div>
@@ -95,7 +95,7 @@ export function InsightsPanel({ insights, personId }: Props) {
                 <Icon className={`h-4 w-4 ${style.iconColor}`} />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold leading-snug text-slate-800">{text}</p>
+                <p className="text-xs font-semibold leading-snug text-foreground">{text}</p>
                 <div className="mt-2">
                   <AssistantSpotlightButton
                     message={`Explique este insight e sugira uma ação prática: "${text}"`}

@@ -84,7 +84,7 @@ export function getMonthlySummary(
   let income = 0;
   let expenses = 0;
   for (const tx of filtered) {
-    if (!countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description)) {
+    if (!countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description, tx.personName)) {
       continue;
     }
     const abs = Math.abs(tx.amount);
@@ -114,7 +114,7 @@ export function getSpendingByCategory(
   const map = new Map<string, { total: number; count: number }>();
 
   for (const tx of filtered) {
-    if (!countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description)) {
+    if (!countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description, tx.personName)) {
       continue;
     }
     if (!isTransactionOutflow(tx.amount, tx.accountType)) continue;
@@ -138,7 +138,7 @@ export function getTopExpenses(
   return filterByDateRange(txs, range)
     .filter(
       (tx) =>
-        countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description) &&
+        countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description, tx.personName) &&
         isTransactionOutflow(tx.amount, tx.accountType),
     )
     .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
@@ -208,7 +208,7 @@ export function summarizeTransactions(
   let income = 0;
   let expenses = 0;
   for (const tx of filtered) {
-    if (!countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description)) {
+    if (!countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description, tx.personName)) {
       continue;
     }
     const abs = Math.abs(tx.amount);
@@ -431,6 +431,7 @@ export function buildCycleSummary(
   paydayDay: number,
   cycleKey?: string,
   paydayCycleAnchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
+  manualCommittedExpenses = 0,
 ): {
   cycleKey: string;
   from: string;
@@ -442,6 +443,8 @@ export function buildCycleSummary(
   income: number;
   expenses: number;
   committedExpenses: number;
+  committedExpensesBank: number;
+  committedExpensesManual: number;
   net: number;
   salaryIncome: number;
   extraIncome: number;
@@ -460,6 +463,9 @@ export function buildCycleSummary(
     meta.isComplete || today > meta.to ? range : { from: meta.from, to: today };
   const incomeBreakdown = classifyIncome(txs, incomeRange, paydayDay);
 
+  const bankCommitted = meta.isComplete ? 0 : totals.committedExpenses;
+  const manualCommitted = meta.isComplete ? 0 : manualCommittedExpenses;
+
   return {
     cycleKey: meta.cycleKey,
     from: meta.from,
@@ -470,7 +476,9 @@ export function buildCycleSummary(
     isComplete: meta.isComplete,
     income: totals.income,
     expenses: totals.expenses,
-    committedExpenses: totals.committedExpenses,
+    committedExpenses: bankCommitted + manualCommitted,
+    committedExpensesBank: bankCommitted,
+    committedExpensesManual: manualCommitted,
     net: totals.net,
     salaryIncome: incomeBreakdown.salary,
     extraIncome: incomeBreakdown.extra,
@@ -481,8 +489,9 @@ export function buildCurrentCycleSummary(
   txs: FinancialTransaction[],
   paydayDay: number,
   paydayCycleAnchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
+  manualCommittedExpenses = 0,
 ) {
-  return buildCycleSummary(txs, paydayDay, undefined, paydayCycleAnchor);
+  return buildCycleSummary(txs, paydayDay, undefined, paydayCycleAnchor, manualCommittedExpenses);
 }
 
 const RECENT_CYCLES_COUNT = 12;
@@ -492,9 +501,13 @@ export function buildRecentCycleSummaries(
   paydayDay: number,
   count = RECENT_CYCLES_COUNT,
   paydayCycleAnchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
+  manualCommittedByCycleKey?: Map<string, number>,
 ) {
   const keys = getRecentPaydayCycles(count, paydayDay, 0, paydayCycleAnchor);
-  return keys.map((key) => buildCycleSummary(txs, paydayDay, key, paydayCycleAnchor));
+  return keys.map((key) => {
+    const manual = manualCommittedByCycleKey?.get(key) ?? 0;
+    return buildCycleSummary(txs, paydayDay, key, paydayCycleAnchor, manual);
+  });
 }
 
 function calcPeriodChange(current: number, previous: number): number | null {
@@ -521,6 +534,8 @@ export interface GrowthMetrics {
     dailyAvgExpense: number;
     expensesToDate: number;
     committedExpenses: number;
+    committedExpensesManual?: number;
+    committedExpensesBank?: number;
     projectedExpense: number;
     projectedIncome: number;
     projectedNet: number;
@@ -544,7 +559,7 @@ function sumCategoryInflowInRange(
 ): number {
   let total = 0;
   for (const tx of txs) {
-    if (!countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description)) {
+    if (!countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description, tx.personName)) {
       continue;
     }
     if (isTransactionOutflow(tx.amount, tx.accountType)) continue;
@@ -597,6 +612,7 @@ export function buildGrowthMetrics(params: {
   paydayDay: number | null;
   paydayCycleAnchor: PaydayCycleAnchor;
   periodMode: PeriodMode;
+  manualCommittedExpenses?: number;
 }): GrowthMetrics {
   const {
     period,
@@ -607,6 +623,7 @@ export function buildGrowthMetrics(params: {
     paydayDay,
     paydayCycleAnchor,
     periodMode,
+    manualCommittedExpenses = 0,
   } = params;
   const { income, expenses, net } = period;
 
@@ -644,13 +661,15 @@ export function buildGrowthMetrics(params: {
   const buildProjection = (
     projectionIncome: number,
     expensesToDate: number,
-    committedExpenses: number,
+    committedExpensesBank: number,
+    committedExpensesManual: number,
     daysElapsed: number,
     daysTotal: number,
     receivedSalary: number,
   ) => {
     if (daysElapsed <= 0 || daysElapsed >= daysTotal) return null;
 
+    const committedExpenses = committedExpensesBank + committedExpensesManual;
     const daysRemaining = daysTotal - daysElapsed;
     const dailyAvgExpense = expensesToDate / daysElapsed;
 
@@ -690,6 +709,8 @@ export function buildGrowthMetrics(params: {
       dailyAvgExpense,
       expensesToDate,
       committedExpenses,
+      committedExpensesBank,
+      committedExpensesManual,
       projectedExpense,
       projectedIncome,
       projectedNet: projectedIncome - projectedExpense,
@@ -716,6 +737,7 @@ export function buildGrowthMetrics(params: {
         cycleCash.income,
         cycleCash.expenses,
         cycleCash.committedExpenses,
+        manualCommittedExpenses,
         meta.dayIndex,
         meta.totalDays,
         salaryReceived,
@@ -727,10 +749,16 @@ export function buildGrowthMetrics(params: {
       const daysTotal = diffDateKeys(from, to) + 1;
       const daysElapsed = diffDateKeys(from, today) + 1;
       const toDateTotals = summarizeTransactions(txs, { from, to: today });
+      const committedFrom = addDaysToDateKey(today, 1);
+      let bankCommitted = 0;
+      if (committedFrom <= to) {
+        bankCommitted = summarizeTransactions(txs, { from: committedFrom, to }).expenses;
+      }
       projection = buildProjection(
         toDateTotals.income,
         toDateTotals.expenses,
-        0,
+        bankCommitted,
+        manualCommittedExpenses,
         daysElapsed,
         daysTotal,
         0,

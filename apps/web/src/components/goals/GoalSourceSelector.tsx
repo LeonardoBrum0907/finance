@@ -59,7 +59,7 @@ export function GoalSourceSelector({
 
   if (availableSources.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
+      <p className="rounded-xl border border-dashed border-app-border bg-app-bg px-3 py-3 text-xs text-muted-foreground">
         Conecte contas ou investimentos em Contas para vincular ao objetivo.
       </p>
     );
@@ -95,13 +95,13 @@ export function GoalSourceSelector({
 
   return (
     <div className="space-y-2">
-      <p className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+      <p className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
         Vincular ao saldo real
       </p>
-      <p className="text-xs text-slate-500">
+      <p className="text-xs text-muted-foreground">
         Selecione contas ou investimentos. O progresso será calculado automaticamente pelos saldos.
       </p>
-      <ul className="max-h-56 space-y-2 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/50 p-2">
+      <ul className="max-h-56 space-y-2 overflow-y-auto rounded-xl border border-app-border bg-app-bg/50 p-2">
         {selectableSources.map((item) => {
           const key = sourceKey(item);
           const isSelected = selected.has(key);
@@ -115,7 +115,7 @@ export function GoalSourceSelector({
             <li
               key={key}
               className={`rounded-lg border px-3 py-2 ${
-                isSelected ? "border-emerald-200 bg-emerald-50/60" : "border-slate-100 bg-white"
+                isSelected ? "border-positive/20 bg-positive/10" : "border-app-border/60 bg-app-surface"
               }`}
             >
               <label className="flex cursor-pointer items-start gap-2">
@@ -126,8 +126,8 @@ export function GoalSourceSelector({
                   className="mt-0.5"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-xs font-medium text-slate-800">{item.name}</p>
-                  <p className="text-[10px] text-slate-400">
+                  <p className="truncate text-xs font-medium text-foreground">{item.name}</p>
+                  <p className="text-[10px] text-muted-foreground">
                     {item.sourceLabel} · {formatCurrency(item.balance, currencyCode)}
                     {item.isStale ? " · dado possivelmente desatualizado" : ""}
                   </p>
@@ -140,7 +140,7 @@ export function GoalSourceSelector({
               </label>
               {isSelected && selection && (
                 <div className="mt-2 flex items-center gap-2 pl-6">
-                  <label className="text-[10px] text-slate-500">Alocação</label>
+                  <label className="text-[10px] text-muted-foreground">Alocação</label>
                   <input
                     type="number"
                     min={0.01}
@@ -150,10 +150,10 @@ export function GoalSourceSelector({
                     onChange={(e) =>
                       updatePercent(key, Math.min(maxPercent, Math.max(0.01, Number(e.target.value) || 0)))
                     }
-                    className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-xs"
+                    className="w-20 rounded-lg border border-app-border px-2 py-1 text-xs"
                   />
-                  <span className="text-[10px] text-slate-500">%</span>
-                  <span className="ml-auto text-[10px] font-medium text-emerald-700">
+                  <span className="text-[10px] text-muted-foreground">%</span>
+                  <span className="ml-auto text-[10px] font-medium text-positive">
                     {formatCurrency(item.balance * (selection.allocationPercent / 100), currencyCode)}
                   </span>
                 </div>

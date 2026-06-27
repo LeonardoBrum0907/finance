@@ -1,6 +1,67 @@
 import type { ChartOptions, TooltipItem } from "chart.js";
 import { formatCurrency, formatCurrencyCompact } from "./format";
+import { readCssColor, readCssColors } from "./theme/applyTheme";
 
+function parseColorChannels(color: string): [number, number, number] | null {
+  const rgbMatch = color.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+  if (rgbMatch) {
+    return [Number(rgbMatch[1]), Number(rgbMatch[2]), Number(rgbMatch[3])];
+  }
+
+  const normalized = color.replace("#", "");
+  if (normalized.length === 6) {
+    return [
+      parseInt(normalized.slice(0, 2), 16),
+      parseInt(normalized.slice(2, 4), 16),
+      parseInt(normalized.slice(4, 6), 16),
+    ];
+  }
+
+  return null;
+}
+
+export function chartColorWithAlpha(color: string, alpha: number): string {
+  const channels = parseColorChannels(color);
+  if (!channels) return color;
+  const [r, g, b] = channels;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+export interface ChartColors {
+  income: string;
+  expense: string;
+  net: string;
+  projection: string;
+  target: string;
+  grid: string;
+  tick: string;
+  tickMuted: string;
+  categories: readonly string[];
+}
+
+export function getChartColors(): ChartColors {
+  const categories = readCssColors([
+    "--chart-cat-1",
+    "--chart-cat-2",
+    "--chart-cat-3",
+    "--chart-cat-4",
+    "--chart-cat-5",
+  ]);
+
+  return {
+    income: readCssColor("--chart-income"),
+    expense: readCssColor("--chart-expense"),
+    net: readCssColor("--chart-net"),
+    projection: readCssColor("--chart-projection"),
+    target: readCssColor("--chart-target"),
+    grid: readCssColor("--chart-grid"),
+    tick: readCssColor("--chart-tick"),
+    tickMuted: readCssColor("--chart-tick-muted"),
+    categories,
+  };
+}
+
+/** @deprecated Use getChartColors() for theme-aware colors */
 export const CHART_COLORS = {
   income: "#10B981",
   expense: "#F43F5E",
@@ -11,22 +72,24 @@ export const CHART_COLORS = {
   categories: ["#10B981", "#F59E0B", "#0EA5E9", "#6366F1", "#94A3B8"] as const,
 };
 
-export function categoryColor(index: number): string {
-  return CHART_COLORS.categories[index % CHART_COLORS.categories.length];
+export function categoryColor(index: number, colors?: ChartColors): string {
+  const palette = colors?.categories ?? getChartColors().categories;
+  return palette[index % palette.length] ?? palette[0]!;
 }
 
-export function baseScaleOptions(currencyCode: string) {
+export function baseScaleOptions(currencyCode: string, colors?: ChartColors) {
+  const chartColors = colors ?? getChartColors();
   return {
     x: {
       grid: { display: false },
       border: { display: false },
-      ticks: { color: CHART_COLORS.tick, font: { size: 11, weight: 600 as const } },
+      ticks: { color: chartColors.tick, font: { size: 11, weight: 600 as const } },
     },
     y: {
-      grid: { color: CHART_COLORS.grid },
+      grid: { color: chartColors.grid },
       border: { display: false },
       ticks: {
-        color: CHART_COLORS.tickMuted,
+        color: chartColors.tickMuted,
         font: { size: 10 },
         callback: (value: string | number) =>
           formatCurrencyCompact(Number(value), currencyCode),

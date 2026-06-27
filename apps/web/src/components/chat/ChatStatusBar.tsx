@@ -36,15 +36,15 @@ export function ChatStatusBar({ people, streamingPhase, toolActivity }: Props) {
   }
 
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground-dark">
       <span>{syncMessage}</span>
       {streamingPhase === "thinking" && (
-        <span className="animate-pulse text-brand-600">
+        <span className="animate-pulse text-brand">
           {toolActivity ?? "Pensando…"}
         </span>
       )}
       {streamingPhase === "streaming" && (
-        <span className="text-brand-600">Respondendo…</span>
+        <span className="text-brand">Respondendo…</span>
       )}
     </div>
   );

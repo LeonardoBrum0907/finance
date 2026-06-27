@@ -15,6 +15,7 @@ model User {
   paydayDay                    Int?
   defaultPeriodMode            String   @default("calendar")
   includeInvestmentsInNetWorth Boolean  @default(true)
+  theme                        String   @default("default")
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -26,6 +27,7 @@ model User {
   plans               Plan[]
   chatActionProposals ChatActionProposal[]
   categoryMappings    CategoryMapping[]
+  paymentCommitments  PaymentCommitment[]
 }
 
 model Person {
@@ -105,10 +107,56 @@ model Transaction {
   accountId           String
   createdAt           DateTime @default(now())
 
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account            Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  anchorCommitment   PaymentCommitment?   @relation("AnchorTransaction")
+  installmentPayment PaymentInstallment?
 
   @@index([accountId])
   @@index([date])
+}
+
+model PaymentCommitment {
+  id                  String   @id @default(cuid())
+  userId              String
+  title               String
+  payeeName           String?
+  notes               String?
+  totalAmount         Float
+  installmentAmount   Float
+  totalInstallments   Int
+  dayOfMonth          Int?
+  status              String   @default("active")
+  anchorTransactionId String?  @unique
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  installments PaymentInstallment[]
+  anchorTx     Transaction?         @relation("AnchorTransaction", fields: [anchorTransactionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model PaymentInstallment {
+  id            String    @id @default(cuid())
+  commitmentId  String
+  sequence      Int
+  dueDate       DateTime
+  amount        Float
+  status        String    @default("pending")
+  transactionId String?   @unique
+  paidAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  commitment  PaymentCommitment @relation(fields: [commitmentId], references: [id], onDelete: Cascade)
+  transaction Transaction?      @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@unique([commitmentId, sequence])
+  @@index([commitmentId])
+  @@index([status])
+  @@index([dueDate])
 }
 
 model CategoryMapping {

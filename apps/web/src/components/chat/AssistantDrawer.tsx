@@ -89,20 +89,20 @@ export function AssistantDrawer() {
         aria-hidden
       />
       <aside
-        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col border-l border-slate-200 bg-slate-50 shadow-2xl md:max-w-md"
+        className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col border-l border-app-border bg-app-bg shadow-2xl md:max-w-md"
         role="dialog"
         aria-label="Assistente financeiro"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-200 bg-white px-4 py-3">
+        <div className="flex shrink-0 items-center justify-between border-b border-app-border bg-app-surface px-4 py-3">
           <div>
-            <h2 className="text-sm font-semibold text-slate-900">Assistente</h2>
-            <p className="text-[11px] text-slate-500">Ctrl+K para abrir/fechar</p>
+            <h2 className="text-sm font-semibold text-foreground">Assistente</h2>
+            <p className="text-[11px] text-muted-foreground-dark">Ctrl+K para abrir/fechar</p>
           </div>
           <div className="flex items-center gap-2">
             <Link
               to="/chat"
               onClick={closeAssistant}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground-dark hover:bg-slate-100 hover:text-foreground/90"
             >
               <ExternalLink className="h-3.5 w-3.5" />
               Tela cheia
@@ -110,7 +110,7 @@ export function AssistantDrawer() {
             <button
               type="button"
               onClick={closeAssistant}
-              className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100"
+              className="rounded-md p-1.5 text-muted-foreground-dark hover:bg-slate-100"
               aria-label="Fechar"
             >
               <X className="h-5 w-5" />
@@ -120,7 +120,7 @@ export function AssistantDrawer() {
 
         <div className="flex min-h-0 flex-1 flex-col p-4">
           {resolving || !activeThreadId ? (
-            <div className="flex flex-1 items-center justify-center text-sm text-slate-500">
+            <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground-dark">
               Carregando conversa...
             </div>
           ) : (

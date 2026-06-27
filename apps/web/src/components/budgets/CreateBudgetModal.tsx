@@ -54,14 +54,14 @@ export function CreateBudgetModal({
         <button
           type="button"
           onClick={onClose}
-          className="absolute top-4 right-4 cursor-pointer rounded-lg p-1 text-slate-400 hover:text-slate-600"
+          className="absolute top-4 right-4 cursor-pointer rounded-lg p-1 text-muted-foreground hover:text-muted-foreground"
           aria-label="Fechar"
         >
           <X className="h-4.5 w-4.5" />
         </button>
 
-        <h3 className="mb-1 font-display text-lg font-bold text-slate-900">Novo Orçamento</h3>
-        <p className="mb-6 font-sans text-xs text-slate-400">
+        <h3 className="mb-1 font-display text-lg font-bold text-foreground">Novo Orçamento</h3>
+        <p className="mb-6 font-sans text-xs text-muted-foreground">
           Agrupe categorias automáticas em um teto de consumo personalizado.
         </p>
 
@@ -69,7 +69,7 @@ export function CreateBudgetModal({
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="budget-name"
-              className="text-[10px] font-bold tracking-wider text-slate-400 uppercase"
+              className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase"
             >
               Nome do orçamento
             </label>
@@ -79,7 +79,7 @@ export function CreateBudgetModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex.: Gastos Desnecessários"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-emerald-400 focus:border-emerald-400 focus:bg-white"
+              className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground outline-brand focus:border-brand focus:bg-app-surface"
               required
               autoFocus
             />
@@ -88,7 +88,7 @@ export function CreateBudgetModal({
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="create-budget-limit"
-              className="text-[10px] font-bold tracking-wider text-slate-400 uppercase"
+              className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase"
             >
               Limite mensal (R$)
             </label>
@@ -99,17 +99,17 @@ export function CreateBudgetModal({
               min="0.01"
               value={limit}
               onChange={(e) => setLimit(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2 text-xs text-slate-800 outline-emerald-400 focus:border-emerald-400 focus:bg-white"
+              className="w-full rounded-xl border border-app-border bg-app-bg/50 px-3 py-2 text-xs text-foreground outline-brand focus:border-brand focus:bg-app-surface"
               required
             />
           </div>
 
           <div className="flex flex-col gap-2">
-            <span className="text-[10px] font-bold tracking-wider text-slate-400 uppercase">
+            <span className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
               Categorias incluídas
             </span>
             {availableCategories.length === 0 ? (
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-muted-foreground">
                 Todas as categorias já estão em outros orçamentos.
               </p>
             ) : (
@@ -123,8 +123,8 @@ export function CreateBudgetModal({
                       onClick={() => toggleCategory(category)}
                       className={`cursor-pointer rounded-full border px-3 py-1 text-[11px] font-medium transition ${
                         active
-                          ? "border-emerald-400 bg-emerald-50 text-emerald-700"
-                          : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300"
+                          ? "border-emerald-400 bg-positive/10 text-emerald-700"
+                          : "border-app-border bg-app-bg text-muted-foreground hover:border-app-border"
                       }`}
                     >
                       {category}

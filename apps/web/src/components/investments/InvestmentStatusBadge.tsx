@@ -3,15 +3,15 @@ import type { InvestmentPositionDTO } from "@finance/shared";
 export function investmentStatusBadgeClass(status: string): string {
   const normalized = status.toUpperCase();
   if (normalized === "ACTIVE") {
-    return "bg-emerald-500/10 text-emerald-700";
+    return "bg-positive/10 text-positive";
   }
   if (normalized === "PENDING") {
     return "bg-amber-500/10 text-amber-700";
   }
   if (normalized === "TOTAL_WITHDRAWAL") {
-    return "bg-slate-200 text-slate-600";
+    return "bg-slate-200 text-muted-foreground";
   }
-  return "bg-slate-100 text-slate-600";
+  return "bg-slate-100 text-muted-foreground";
 }
 
 interface Props {

@@ -114,10 +114,10 @@ export function SimulatorPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <Calculator className="h-6 w-6 text-emerald-600" />
-            <h1 className="font-display text-2xl font-bold text-slate-900">Simulador</h1>
+            <Calculator className="h-6 w-6 text-positive" />
+            <h1 className="font-display text-2xl font-bold text-foreground">Simulador</h1>
           </div>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-muted-foreground">
             Simule compras e objetivos considerando sua saúde financeira atual
           </p>
         </div>
@@ -143,13 +143,13 @@ export function SimulatorPage() {
       </div>
 
       {baseline.isLoading && (
-        <div className="rounded-2xl border border-slate-200/60 bg-white p-8 text-center text-sm text-slate-500">
+        <div className="rounded-2xl border border-app-border/60 bg-app-surface p-8 text-center text-sm text-muted-foreground">
           Carregando sua situação financeira...
         </div>
       )}
 
       {baseline.isError && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+        <div className="rounded-2xl border border-negative/20 bg-negative/10 p-4 text-sm text-negative">
           Não foi possível carregar os dados. Tente novamente.
         </div>
       )}
@@ -168,7 +168,7 @@ export function SimulatorPage() {
       )}
 
       {simulate.isError && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+        <div className="rounded-2xl border border-negative/20 bg-negative/10 p-4 text-sm text-negative">
           Erro ao simular. Verifique os dados e tente novamente.
         </div>
       )}

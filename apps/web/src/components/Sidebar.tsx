@@ -39,15 +39,15 @@ function NavItemLink({ item }: { item: Extract<NavItem, { to: string }> }) {
          end={item.end}
          className={({ isActive }) =>
             `group flex items-center gap-3.5 rounded-xl px-4 py-3 text-left text-sm transition-all duration-200 ${isActive
-               ? "border-l-[3px] border-emerald-400 bg-slate-800/70 font-medium text-white shadow-sm"
-               : "text-slate-400 hover:bg-slate-800/30 hover:text-slate-100"
+               ? "border-l-[3px] border-accent bg-sidebar-active/70 font-medium text-white shadow-sm"
+               : "text-muted-foreground-light hover:bg-sidebar-hover/30 hover:text-slate-100"
             }`
          }
       >
          {({ isActive }) => (
             <>
                <Icon
-                  className={`h-5 w-5 shrink-0 transition-transform duration-200 group-hover:scale-105 ${isActive ? "text-emerald-400" : "text-slate-400 group-hover:text-slate-300"
+                  className={`h-5 w-5 shrink-0 transition-transform duration-200 group-hover:scale-105 ${isActive ? "text-accent" : "text-muted-foreground-light group-hover:text-slate-300"
                      }`}
                />
                <span className="tracking-wide">{item.label}</span>
@@ -63,7 +63,7 @@ function NavItemPlaceholder({ item }: { item: Extract<NavItem, { comingSoon: tru
    return (
       <span
          title="Em breve"
-         className="flex cursor-not-allowed items-center gap-3.5 rounded-xl px-4 py-3 text-sm text-slate-400 opacity-50"
+         className="flex cursor-not-allowed items-center gap-3.5 rounded-xl px-4 py-3 text-sm text-muted-foreground-light opacity-50"
       >
          <Icon className="h-5 w-5 shrink-0" />
          <span className="tracking-wide">{item.label}</span>
@@ -83,12 +83,12 @@ export function Sidebar() {
    return (
       <aside className="fixed inset-y-0 left-0 z-40 flex h-screen w-64 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar p-6 text-slate-300">
          <div className="flex shrink-0 items-center gap-3 px-2">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 shadow-lg shadow-emerald-500/5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-accent/10 shadow-lg shadow-accent/5">
                <svg
                   viewBox="0 0 24 24"
                   fill="none"
                   xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6 text-emerald-400"
+                  className="h-6 w-6 text-accent"
                   aria-hidden
                >
                   <path
@@ -109,7 +109,7 @@ export function Sidebar() {
                <span className="font-display text-lg font-bold leading-none tracking-tight text-white">
                   vista
                </span>
-               <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-400">
+               <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent">
                   FINANÇAS
                </span>
             </div>
@@ -127,19 +127,19 @@ export function Sidebar() {
             </div>
          </nav>
 
-         <div className="mt-4 flex shrink-0 flex-col gap-4 border-t border-slate-800/80 pt-6">
+         <div className="mt-4 flex shrink-0 flex-col gap-4 border-t border-sidebar-border/80 pt-6">
 
             {user && (
                <div className="flex items-center gap-3 rounded-xl px-2 py-1">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-700 bg-emerald-500/20 text-sm font-semibold text-emerald-400">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-sidebar-border bg-accent/20 text-sm font-semibold text-accent">
                      {initials || "?"}
                   </div>
                   <div className="min-w-0 flex-1">
                      <p className="truncate text-sm font-semibold text-white">{user.name}</p>
-                     <p className="truncate font-mono text-[10px] font-medium uppercase tracking-wide text-emerald-400">
+                     <p className="truncate font-mono text-[10px] font-medium uppercase tracking-wide text-accent">
                         Conta Pro
                      </p>
-                     <p className="truncate text-[10px] text-slate-500">{user.email}</p>
+                     <p className="truncate text-[10px] text-muted-foreground-light">{user.email}</p>
                   </div>
                </div>
             )}
@@ -147,7 +147,7 @@ export function Sidebar() {
             <button
                type="button"
                onClick={() => logout()}
-               className="flex cursor-pointer items-center gap-3.5 rounded-xl px-4 py-3 text-left text-sm text-slate-400 transition-colors duration-200 hover:bg-rose-500/10 hover:text-rose-400"
+               className="flex cursor-pointer items-center gap-3.5 rounded-xl px-4 py-3 text-left text-sm text-muted-foreground-light transition-colors duration-200 hover:bg-negative/10 hover:text-negative"
             >
                <LogOut className="h-5 w-5 shrink-0" />
                <span>Sair</span>

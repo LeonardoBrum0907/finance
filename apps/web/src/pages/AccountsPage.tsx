@@ -38,21 +38,21 @@ export function AccountsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-800">Contas</h1>
-        <p className="text-sm text-slate-500">
+        <h1 className="text-2xl font-semibold text-foreground">Contas</h1>
+        <p className="text-sm text-muted-foreground-dark">
           Conecte e gerencie contas bancárias. Uma mesma pessoa pode ter vários
           bancos (ex.: Itaú e Nubank).
         </p>
       </div>
 
       {!hasPeople ? (
-        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center">
-          <p className="text-sm font-medium text-slate-700">
+        <div className="rounded-lg border border-dashed border-app-border bg-app-surface p-6 text-center">
+          <p className="text-sm font-medium text-foreground/90">
             Cadastre uma pessoa antes de conectar contas
           </p>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-muted-foreground-dark">
             Vá em{" "}
-            <Link to="/pessoas" className="font-medium text-brand-600 hover:underline">
+            <Link to="/pessoas" className="font-medium text-brand hover:underline">
               Pessoas
             </Link>{" "}
             para adicionar quem faz parte do seu orçamento.
@@ -70,12 +70,12 @@ export function AccountsPage() {
                 return (
                   <div
                     key={person.id}
-                    className="rounded-lg border border-slate-200 bg-white p-4"
+                    className="rounded-lg border border-app-border bg-app-surface p-4"
                   >
                     <div className="mb-3">
-                      <p className="font-medium text-slate-800">{person.name}</p>
+                      <p className="font-medium text-foreground">{person.name}</p>
                       {person.relationship && (
-                        <p className="text-xs text-slate-500">{person.relationship}</p>
+                        <p className="text-xs text-muted-foreground-dark">{person.relationship}</p>
                       )}
                     </div>
                     <div className="space-y-2">
@@ -101,11 +101,11 @@ export function AccountsPage() {
               })}
             </div>
           ) : (
-            <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center">
-              <p className="text-sm font-medium text-slate-700">
+            <div className="rounded-lg border border-dashed border-app-border bg-app-surface p-6 text-center">
+              <p className="text-sm font-medium text-foreground/90">
                 Nenhuma conta conectada ainda
               </p>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-muted-foreground-dark">
                 Use o botão acima para conectar o primeiro banco.
               </p>
             </div>

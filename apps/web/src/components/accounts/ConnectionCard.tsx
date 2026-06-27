@@ -17,7 +17,7 @@ export function ConnectionCard({
   disconnecting,
 }: Props) {
   return (
-    <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+    <div className="rounded-md border border-app-border/60 bg-app-bg p-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {connection.connectorImageUrl && (
@@ -27,17 +27,17 @@ export function ConnectionCard({
               className="h-6 w-6 rounded"
             />
           )}
-          <span className="text-sm font-medium text-slate-700">
+          <span className="text-sm font-medium text-foreground/90">
             {connection.connectorName ?? "Instituição"}
           </span>
-          <span className="text-xs text-slate-400">{connection.status}</span>
+          <span className="text-xs text-muted-foreground-dark">{connection.status}</span>
         </div>
         <div className="flex gap-3 text-xs">
           <button
             type="button"
             onClick={() => onSync(connection.id)}
             disabled={syncing}
-            className="text-brand-600 hover:underline disabled:opacity-60"
+            className="text-brand hover:underline disabled:opacity-60"
           >
             {syncing ? "Sincronizando..." : "Sincronizar"}
           </button>
@@ -45,7 +45,7 @@ export function ConnectionCard({
             type="button"
             onClick={() => onDisconnect(connection.id)}
             disabled={disconnecting}
-            className="text-red-600 hover:underline disabled:opacity-60"
+            className="text-danger hover:underline disabled:opacity-60"
           >
             Desconectar
           </button>
@@ -55,7 +55,7 @@ export function ConnectionCard({
         {connection.accounts.map((acc) => (
           <div
             key={acc.id}
-            className="flex justify-between text-sm text-slate-600"
+            className="flex justify-between text-sm text-muted-foreground-dark"
           >
             <span>{acc.name}</span>
             <span>{formatCurrency(acc.balance, acc.currencyCode)}</span>

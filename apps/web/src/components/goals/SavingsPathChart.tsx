@@ -3,7 +3,8 @@ import { Line } from "react-chartjs-2";
 import type { SavingsPathPoint } from "@finance/shared";
 import { formatCurrency, formatMonthLabel } from "../../lib/format";
 import { ensureChartJsRegistered } from "../../lib/chart";
-import { baseScaleOptions, CHART_COLORS } from "../../lib/chartTheme";
+import { baseScaleOptions, chartColorWithAlpha, getChartColors } from "../../lib/chartTheme";
+import { useTheme } from "../../lib/theme/useTheme";
 
 ensureChartJsRegistered();
 
@@ -32,6 +33,8 @@ export function SavingsPathChart({
   totalTarget,
   projectedCompletionMonth,
 }: Props) {
+  const { theme } = useTheme();
+  const chartColors = useMemo(() => getChartColors(), [theme]);
   const targetAmount = data[0]?.targetAmount ?? totalTarget;
 
   const chartData = useMemo(
@@ -41,15 +44,18 @@ export function SavingsPathChart({
         {
           label: "Projeção acumulada",
           data: data.map((point) => point.projectedAmount),
-          borderColor: CHART_COLORS.income,
-          backgroundColor: "rgba(16, 185, 129, 0.12)",
+          borderColor: chartColors.projection,
+          backgroundColor: chartColorWithAlpha(chartColors.projection, 0.14),
           fill: true,
           tension: 0.35,
           pointRadius: data.map((point) => (point.label ? 5 : 3)),
           pointHoverRadius: 6,
           pointBackgroundColor: data.map((point) =>
-            point.label === "Meta atingida" ? "#059669" : CHART_COLORS.income,
+            point.label === "Meta atingida"
+              ? chartColors.projection
+              : chartColorWithAlpha(chartColors.projection, 0.85),
           ),
+          pointBorderColor: chartColors.projection,
           borderWidth: 2.5,
         },
         ...(targetAmount > 0
@@ -57,7 +63,7 @@ export function SavingsPathChart({
               {
                 label: "Meta total",
                 data: data.map(() => targetAmount),
-                borderColor: "rgba(100, 116, 139, 0.45)",
+                borderColor: chartColorWithAlpha(chartColors.target, 0.55),
                 borderDash: [6, 4],
                 pointRadius: 0,
                 fill: false,
@@ -67,7 +73,7 @@ export function SavingsPathChart({
           : []),
       ],
     }),
-    [data, targetAmount],
+    [chartColors, data, targetAmount],
   );
 
   const options = useMemo(
@@ -94,55 +100,55 @@ export function SavingsPathChart({
           },
         },
       },
-      scales: baseScaleOptions(currencyCode),
+      scales: baseScaleOptions(currencyCode, chartColors),
     }),
-    [currencyCode, data],
+    [chartColors, currencyCode, data],
   );
 
   const progressPercent =
     totalTarget > 0 ? Math.min(100, Math.round((totalCurrent / totalTarget) * 100)) : 0;
 
   return (
-    <div className="rounded-2xl border border-slate-200/60 bg-white p-6">
+    <div className="rounded-2xl border border-app-border/60 bg-app-surface p-6">
       <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="font-display text-lg font-semibold text-slate-900">Caminho de Poupança</h2>
-          <p className="mt-1 text-sm text-slate-500">
+          <h2 className="font-display text-lg font-semibold text-foreground">Caminho de Poupança</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             Projeção até atingir todas as metas com o aporte mensal do plano ou a sobra média.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
-          <div className="rounded-xl border border-slate-200/60 bg-slate-50/50 px-3 py-2 text-right">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          <div className="rounded-xl border border-app-border/60 bg-app-bg/50 px-3 py-2 text-right">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               Poupança total
             </p>
-            <p className="font-mono text-sm font-bold text-slate-900">
+            <p className="font-mono text-sm font-bold text-foreground">
               {formatCurrency(totalCurrent, currencyCode)}
             </p>
-            <p className="text-[10px] text-slate-400">{progressPercent}% da meta</p>
+            <p className="text-[10px] text-muted-foreground">{progressPercent}% da meta</p>
           </div>
-          <div className="rounded-xl border border-slate-200/60 bg-slate-50/50 px-3 py-2 text-right">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          <div className="rounded-xl border border-app-border/60 bg-app-bg/50 px-3 py-2 text-right">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               Meta total
             </p>
-            <p className="font-mono text-sm font-bold text-slate-900">
+            <p className="font-mono text-sm font-bold text-foreground">
               {formatCurrency(totalTarget, currencyCode)}
             </p>
             {projectedCompletionMonth && (
-              <p className="text-[10px] text-slate-400">
+              <p className="text-[10px] text-muted-foreground">
                 Previsão: {formatMonthLabel(projectedCompletionMonth)}
               </p>
             )}
           </div>
-          <div className="rounded-xl border border-emerald-200/60 bg-emerald-50/50 px-3 py-2 text-right">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+          <div className="rounded-xl border border-positive/20 bg-positive/10 px-3 py-2 text-right">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-positive">
               Aporte estimado
             </p>
-            <p className="font-mono text-sm font-bold text-emerald-700">
+            <p className="font-mono text-sm font-bold text-positive">
               {formatCurrency(monthlyContribution, currencyCode)}
             </p>
             {monthlyContribution !== monthlySurplus && (
-              <p className="text-[10px] text-emerald-600">
+              <p className="text-[10px] text-positive">
                 {surplusLabel}: {formatCurrency(monthlySurplus, currencyCode)}
               </p>
             )}
@@ -153,7 +159,7 @@ export function SavingsPathChart({
         {data.length > 0 ? (
           <Line data={chartData} options={options} />
         ) : (
-          <div className="flex h-full items-center justify-center text-sm text-slate-400">
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             Crie objetivos para ver a projeção.
           </div>
         )}

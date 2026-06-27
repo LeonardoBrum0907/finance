@@ -29,21 +29,21 @@ export function InvestmentNetWorthSetting() {
   };
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-4 rounded-xl border border-app-border bg-app-surface p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between">
       <div className="flex gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-brand-500/10 bg-brand-500/10">
-          <PieChart className="h-4 w-4 text-brand-600" aria-hidden />
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-brand/10 bg-brand/10">
+          <PieChart className="h-4 w-4 text-brand" aria-hidden />
         </div>
         <div>
-          <p className="text-sm font-medium text-slate-900">
+          <p className="text-sm font-medium text-foreground">
             Incluir no patrimônio líquido do painel
           </p>
-          <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
             Quando desativado, o saldo de investimentos não entra no total do Painel Geral.
             Útil se os dados estiverem desatualizados.
           </p>
           {save.isError && (
-            <p className="mt-1 text-xs text-red-600">
+            <p className="mt-1 text-xs text-danger">
               {(save.error as Error)?.message ?? "Não foi possível salvar"}
             </p>
           )}
@@ -57,11 +57,11 @@ export function InvestmentNetWorthSetting() {
         disabled={disabled}
         onClick={handleToggle}
         className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-60 ${
-          included ? "bg-brand-600" : "bg-slate-300"
+          included ? "bg-brand" : "bg-slate-300"
         }`}
       >
         <span
-          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition ${
+          className={`inline-block h-5 w-5 transform rounded-full bg-app-surface shadow-sm transition ${
             included ? "translate-x-6" : "translate-x-1"
           }`}
         />

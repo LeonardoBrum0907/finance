@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Calendar, Save, Users } from "lucide-react";
+import { Calendar, Palette, Save, Users } from "lucide-react";
 import type {
+  AppTheme,
   PaydayCycleAnchor,
   PeriodMode,
   PersonDTO,
@@ -11,9 +12,13 @@ import type {
 } from "@finance/shared";
 import { describePaydayCycleBounds, isPaydayDayConfigured } from "@finance/shared";
 import { api } from "../lib/api";
+import { useTheme } from "../lib/theme/useTheme";
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
+  const { theme, setTheme, isLoading: themeLoading } = useTheme();
+  const [themeError, setThemeError] = useState<string | null>(null);
+  const [themeSaving, setThemeSaving] = useState(false);
   const settings = useQuery({
     queryKey: ["settings"],
     queryFn: () => api.get<UserSettingsDTO>("/api/settings"),
@@ -132,6 +137,19 @@ export function SettingsPage() {
     setTimeout(() => setSaved(false), 2500);
   };
 
+  const handleThemeChange = async (next: AppTheme) => {
+    if (next === theme) return;
+    setThemeError(null);
+    setThemeSaving(true);
+    try {
+      await setTheme(next);
+    } catch (error) {
+      setThemeError((error as Error).message ?? "Erro ao salvar o tema.");
+    } finally {
+      setThemeSaving(false);
+    }
+  };
+
   const isSaving = saveSettings.isPending || savePerson.isPending;
   const isLoading = settings.isLoading || people.isLoading;
   const isError = settings.isError || people.isError;
@@ -139,37 +157,37 @@ export function SettingsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight text-slate-900">
+        <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
           Configurações
         </h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-muted-foreground">
           Personalize como o app calcula os períodos financeiros de cada pessoa.
         </p>
       </div>
 
       {isLoading ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-8 text-sm text-slate-500">
+        <div className="rounded-xl border border-app-border bg-app-surface p-8 text-sm text-muted-foreground">
           Carregando...
         </div>
       ) : isError ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+        <div className="rounded-xl border border-danger-border bg-danger-muted p-6 text-sm text-danger">
           Não foi possível carregar as configurações.
         </div>
       ) : (
         <form
           onSubmit={handleSubmit}
-          className="space-y-6 rounded-xl border border-slate-200 bg-white p-6 shadow-xs"
+          className="space-y-6 rounded-xl border border-app-border bg-app-surface p-6 shadow-xs"
         >
           <div>
-            <p className="mb-3 flex items-center gap-2 text-sm font-medium text-slate-700">
-              <Users className="h-4 w-4 text-brand-600" />
+            <p className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground/90">
+              <Users className="h-4 w-4 text-brand" />
               Ciclo financeiro por pessoa
             </p>
 
             {people.data?.length === 0 ? (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-muted-foreground">
                 Cadastre pessoas em{" "}
-                <Link to="/pessoas" className="font-medium text-brand-600 hover:underline">
+                <Link to="/pessoas" className="font-medium text-brand hover:underline">
                   Pessoas
                 </Link>{" "}
                 para configurar o dia de recebimento de cada uma.
@@ -182,16 +200,16 @@ export function SettingsPage() {
                   return (
                     <div
                       key={person.id}
-                      className="rounded-lg border border-slate-100 bg-slate-50/50 p-4"
+                      className="rounded-lg border border-app-border/60 bg-app-bg/50 p-4"
                     >
                       <label
                         htmlFor={`payday-${person.id}`}
-                        className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-800"
+                        className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground"
                       >
-                        <Calendar className="h-4 w-4 text-brand-600" />
+                        <Calendar className="h-4 w-4 text-brand" />
                         {person.name}
                         {person.relationship && (
-                          <span className="font-normal text-slate-500">
+                          <span className="font-normal text-muted-foreground">
                             ({person.relationship})
                           </span>
                         )}
@@ -209,12 +227,12 @@ export function SettingsPage() {
                             [person.id]: e.target.value,
                           }))
                         }
-                        className="w-full max-w-xs rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                        className="w-full max-w-xs rounded-lg border border-app-border bg-app-surface px-3 py-2 text-sm text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
                       />
-                      <p className="mt-3 text-xs font-medium text-slate-600">
+                      <p className="mt-3 text-xs font-medium text-muted-foreground">
                         O pagamento é o…
                       </p>
-                      <div className="mt-1.5 inline-flex rounded-lg border border-slate-200 bg-white p-0.5">
+                      <div className="mt-1.5 inline-flex rounded-lg border border-app-border bg-app-surface p-0.5">
                         <button
                           type="button"
                           onClick={() =>
@@ -222,8 +240,8 @@ export function SettingsPage() {
                           }
                           className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
                             anchor === "end"
-                              ? "bg-brand-50 text-brand-700"
-                              : "text-slate-600 hover:text-slate-800"
+                              ? "bg-brand/10 text-brand"
+                              : "text-muted-foreground hover:text-foreground"
                           }`}
                         >
                           Último dia do ciclo
@@ -235,14 +253,14 @@ export function SettingsPage() {
                           }
                           className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
                             anchor === "start"
-                              ? "bg-brand-50 text-brand-700"
-                              : "text-slate-600 hover:text-slate-800"
+                              ? "bg-brand/10 text-brand"
+                              : "text-muted-foreground hover:text-foreground"
                           }`}
                         >
                           Primeiro dia do ciclo
                         </button>
                       </div>
-                      <p className="mt-2 text-xs text-slate-500">
+                      <p className="mt-2 text-xs text-muted-foreground">
                         {describePaydayCycleBounds(dayValue || "X", anchor)}
                       </p>
                     </div>
@@ -253,15 +271,67 @@ export function SettingsPage() {
           </div>
 
           <div>
-            <p className="mb-2 text-sm font-medium text-slate-700">Modo padrão do painel</p>
-            <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+            <p className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground/90">
+              <Palette className="h-4 w-4 text-brand" />
+              Aparência
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(
+                [
+                  {
+                    id: "default" as const,
+                    label: "Padrão",
+                    description: "Visual atual, verdes vibrantes e contraste nítido.",
+                    swatches: ["bg-app-bg", "bg-positive", "bg-negative"],
+                  },
+                  {
+                    id: "comfy" as const,
+                    label: "Comfy",
+                    description: "Tons pastéis, off-white e negativos em cinza suave.",
+                    swatches: ["bg-[#faf9f6]", "bg-[#a7d7c5]", "bg-[#94a3b8]"],
+                  },
+                ] as const
+              ).map((option) => {
+                const selected = theme === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    disabled={themeLoading || themeSaving}
+                    onClick={() => void handleThemeChange(option.id)}
+                    className={`rounded-xl border p-4 text-left transition ${
+                      selected
+                        ? "border-brand bg-brand/5 shadow-sm"
+                        : "border-app-border bg-app-bg hover:border-app-border/80"
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                  >
+                    <div className="mb-3 flex gap-2">
+                      {option.swatches.map((swatch) => (
+                        <span
+                          key={swatch}
+                          className={`h-6 w-6 rounded-full border border-app-border/60 ${swatch}`}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-sm font-semibold text-foreground">{option.label}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{option.description}</p>
+                  </button>
+                );
+              })}
+            </div>
+            {themeError && <p className="mt-2 text-xs text-danger">{themeError}</p>}
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-medium text-foreground/90">Modo padrão do painel</p>
+            <div className="inline-flex rounded-lg border border-app-border bg-app-bg p-1">
               <button
                 type="button"
                 onClick={() => setDefaultPeriodMode("calendar")}
                 className={`rounded-md px-4 py-2 text-sm font-medium transition ${
                   defaultPeriodMode === "calendar"
-                    ? "bg-white text-brand-700 shadow-sm"
-                    : "text-slate-600 hover:text-slate-800"
+                    ? "bg-app-surface text-brand shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Mês calendário
@@ -272,31 +342,31 @@ export function SettingsPage() {
                 disabled={!anyPaydayConfigured}
                 className={`rounded-md px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
                   defaultPeriodMode === "payday"
-                    ? "bg-white text-brand-700 shadow-sm"
-                    : "text-slate-600 hover:text-slate-800"
+                    ? "bg-app-surface text-brand shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Meu ciclo
               </button>
             </div>
-            <p className="mt-2 text-xs text-slate-500">
+            <p className="mt-2 text-xs text-muted-foreground">
               Na visão consolidada, o modo ciclo só funciona quando todas as pessoas têm o mesmo
               dia de pagamento e a mesma posição no ciclo.
             </p>
           </div>
 
-          <div className="flex items-center gap-3 border-t border-slate-100 pt-4">
+          <div className="flex items-center gap-3 border-t border-app-border/60 pt-4">
             <button
               type="submit"
               disabled={isSaving}
-              className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-60"
+              className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-medium text-white transition hover:bg-brand/90 disabled:opacity-60"
             >
               <Save className="h-4 w-4" />
               {isSaving ? "Salvando..." : "Salvar"}
             </button>
-            {saved && <span className="text-sm text-emerald-600">Salvo com sucesso!</span>}
+            {saved && <span className="text-sm text-positive">Salvo com sucesso!</span>}
             {(saveSettings.isError || savePerson.isError) && (
-              <span className="text-sm text-red-600">
+              <span className="text-sm text-danger">
                 {((saveSettings.error ?? savePerson.error) as Error)?.message ?? "Erro ao salvar"}
               </span>
             )}

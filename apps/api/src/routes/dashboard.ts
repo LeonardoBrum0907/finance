@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { accountNetWorthContribution, getRecentPaydayCycles, paydayCyclesToDateRange, isInvestmentAccount, isPaydayDayConfigured } from "@finance/shared";
+import { accountNetWorthContribution, getRecentPaydayCycles, getPaydayCycleRange, paydayCyclesToDateRange, isInvestmentAccount, isPaydayDayConfigured } from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
 import type { FinancialTransaction } from "../services/finance/types.js";
@@ -25,6 +25,7 @@ import {
 import { loadInvestmentData } from "./investments.js";
 import { loadUserSettings, resolvePaydayCycle, resolvePeriodMode } from "../services/userSettings.js";
 import { buildHouseholdArena } from "../services/finance/householdComparison.js";
+import { sumPendingInstallmentsInRange } from "../services/finance/commitments.js";
 
 const MIN_PAYDAY_CYCLES_FETCH = 12;
 
@@ -234,13 +235,51 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       periodMode: periods.periodMode,
     });
 
+    let manualCommittedCurrent = 0;
+    if (paydayDay !== null) {
+      const cycleMeta = getPaydayCycleRange(paydayDay, new Date(), paydayCycleAnchor);
+      if (!cycleMeta.isComplete) {
+        manualCommittedCurrent = await sumPendingInstallmentsInRange(
+          userId,
+          cycleMeta.from,
+          cycleMeta.to,
+        );
+      }
+    } else if (periods.currentRange.from && periods.currentRange.to) {
+      const today = new Date().toISOString().slice(0, 10);
+      if (today >= periods.currentRange.from && today <= periods.currentRange.to) {
+        manualCommittedCurrent = await sumPendingInstallmentsInRange(
+          userId,
+          today,
+          periods.currentRange.to,
+        );
+      }
+    }
+
     const currentCycle =
       paydayDay !== null
-        ? buildCurrentCycleSummary(financialTransactions, paydayDay, paydayCycleAnchor)
+        ? buildCurrentCycleSummary(
+            financialTransactions,
+            paydayDay,
+            paydayCycleAnchor,
+            manualCommittedCurrent,
+          )
         : null;
+
+    const manualByCycle = new Map<string, number>();
+    if (paydayDay !== null && manualCommittedCurrent > 0 && currentCycle) {
+      manualByCycle.set(currentCycle.cycleKey, manualCommittedCurrent);
+    }
+
     const recentCycles =
       paydayDay !== null
-        ? buildRecentCycleSummaries(financialTransactions, paydayDay, undefined, paydayCycleAnchor)
+        ? buildRecentCycleSummaries(
+            financialTransactions,
+            paydayDay,
+            undefined,
+            paydayCycleAnchor,
+            manualByCycle,
+          )
         : null;
 
     const growthMetrics = buildGrowthMetrics({
@@ -252,6 +291,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       paydayDay,
       paydayCycleAnchor,
       periodMode: periods.periodMode,
+      manualCommittedExpenses: manualCommittedCurrent,
     });
 
     const { investmentBalance, investments } = await loadInvestmentData(

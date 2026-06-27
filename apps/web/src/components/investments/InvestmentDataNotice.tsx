@@ -63,8 +63,8 @@ export function InvestmentDataNotice({
         </div>
       )}
 
-      <div className="flex gap-3 rounded-xl border border-slate-200/80 bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-600">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-hidden />
+      <div className="flex gap-3 rounded-xl border border-app-border/80 bg-app-bg px-4 py-3 text-xs leading-relaxed text-muted-foreground-dark">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground-dark" aria-hidden />
         <div>
           <p>
             Dados obtidos via <strong>Open Finance</strong> (Pluggy)
@@ -78,12 +78,12 @@ export function InvestmentDataNotice({
             para evitar duplicidade.
           </p>
           {lastSyncedAt ? (
-            <p className="mt-1 text-slate-500">
+            <p className="mt-1 text-muted-foreground-dark">
               Última sincronização: {formatDateTime(lastSyncedAt)}. Posições
               resgatadas ou com saldo zerado não entram na carteira.
             </p>
           ) : (
-            <p className="mt-1 text-slate-500">
+            <p className="mt-1 text-muted-foreground-dark">
               Sincronize em <strong>Contas</strong> para atualizar. Posições
               resgatadas ou com saldo zerado não entram na carteira.
             </p>

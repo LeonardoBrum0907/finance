@@ -24,8 +24,8 @@ export function AccountsList({ accounts }: Props) {
       className={cardClass}
     >
       <div className="mb-4">
-        <h2 className="text-base font-semibold text-slate-800">Contas bancárias</h2>
-        <p className="text-sm text-slate-500">
+        <h2 className="text-base font-semibold text-foreground">Contas bancárias</h2>
+        <p className="text-sm text-muted-foreground-dark">
           {bankAccounts.length} conta(s) conectada(s)
         </p>
       </div>
@@ -34,16 +34,16 @@ export function AccountsList({ accounts }: Props) {
         {bankAccounts.map((acc) => (
           <div
             key={acc.id}
-            className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50/50 px-4 py-3 transition hover:border-slate-200 hover:bg-white"
+            className="flex items-center justify-between rounded-lg border border-app-border/60 bg-app-bg/50 px-4 py-3 transition hover:border-app-border hover:bg-app-surface"
           >
             <div className="min-w-0">
-              <p className="truncate font-medium text-slate-800">{acc.name}</p>
-              <p className="text-xs text-slate-500">
+              <p className="truncate font-medium text-foreground">{acc.name}</p>
+              <p className="text-xs text-muted-foreground-dark">
                 {acc.personName} · {acc.type ?? "Conta"}
                 {acc.number ? ` · ${acc.number}` : ""}
               </p>
             </div>
-            <span className="ml-4 shrink-0 font-semibold text-slate-800">
+            <span className="ml-4 shrink-0 font-semibold text-foreground">
               {formatCurrency(acc.balance, acc.currencyCode)}
             </span>
           </div>

@@ -63,21 +63,21 @@ export function ProposalCard({ proposal, threadId, onResolved }: Props) {
     <div
       className={`mt-3 rounded-xl border p-4 ${
         proposal.status === "confirmed"
-          ? "border-emerald-300 bg-emerald-50/80"
+          ? "border-positive/30 bg-positive/10"
           : proposal.status === "discarded"
-            ? "border-slate-200 bg-slate-50/80 opacity-70"
-            : "border-emerald-200 bg-emerald-50/60"
+            ? "border-app-border bg-app-bg/80 opacity-70"
+            : "border-positive/20 bg-positive/10"
       }`}
     >
-      <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-positive">
         {TYPE_LABELS[proposal.type]}
         {isResolved && (
-          <span className="ml-2 text-slate-500">{STATUS_LABELS[proposal.status]}</span>
+          <span className="ml-2 text-muted-foreground">{STATUS_LABELS[proposal.status]}</span>
         )}
       </p>
-      <p className="mt-1 text-sm text-slate-700">{renderPayloadSummary(proposal)}</p>
+      <p className="mt-1 text-sm text-foreground/90">{renderPayloadSummary(proposal)}</p>
       {proposal.impactSummary && (
-        <p className="mt-1 text-xs text-emerald-800">{proposal.impactSummary}</p>
+        <p className="mt-1 text-xs text-positive">{proposal.impactSummary}</p>
       )}
 
       {proposal.status === "pending" && (
@@ -86,7 +86,7 @@ export function ProposalCard({ proposal, threadId, onResolved }: Props) {
             type="button"
             onClick={() => resolve.mutate("confirm")}
             disabled={resolve.isPending}
-            className="inline-flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+            className="inline-flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:bg-brand/90 disabled:opacity-60"
           >
             <Check className="h-3.5 w-3.5" />
             Confirmar
@@ -95,7 +95,7 @@ export function ProposalCard({ proposal, threadId, onResolved }: Props) {
             type="button"
             onClick={() => resolve.mutate("discard")}
             disabled={resolve.isPending}
-            className="inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+            className="inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-app-border bg-app-surface px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-app-bg disabled:opacity-60"
           >
             <X className="h-3.5 w-3.5" />
             Descartar
@@ -107,7 +107,7 @@ export function ProposalCard({ proposal, threadId, onResolved }: Props) {
         (proposal.type === "create_goal" || proposal.type === "add_contribution") && (
           <Link
             to="/objetivos"
-            className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline"
+            className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-positive hover:underline"
           >
             <ExternalLink className="h-3 w-3" />
             Ver objetivos
