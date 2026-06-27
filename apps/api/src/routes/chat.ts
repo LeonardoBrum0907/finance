@@ -9,7 +9,16 @@ import {
 } from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
-import { isAiConfigured } from "../services/ai.js";
+import { isChatAiAvailable } from "../services/ai.js";
+import {
+  AiQuotaExceededError,
+  RegenerateCooldownError,
+  assertAiQuota,
+  assertRegenerateCooldown,
+  getAiQuota,
+  releaseStreamLock,
+  tryAcquireStreamLock,
+} from "../services/aiUsage.js";
 import { runChatStream } from "../services/chatStream.js";
 import { applyChatProposal, serializeProposal, computeProposalImpact } from "../services/chatProposal.js";
 import {
@@ -29,7 +38,12 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
 
   app.get("/api/chat/status", async (_request, reply) => {
-    return reply.send({ configured: isAiConfigured() });
+    return reply.send({ configured: isChatAiAvailable() });
+  });
+
+  app.get("/api/chat/quota", async (request, reply) => {
+    const quota = await getAiQuota(request.user!.sub);
+    return reply.send(quota);
   });
 
   app.get("/api/chat/suggestions", async (request, reply) => {
@@ -50,7 +64,7 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/api/chat/recap", async (request, reply) => {
-    if (!isAiConfigured()) {
+    if (!isChatAiAvailable()) {
       return reply.code(503).send({ error: "IA não configurada no servidor" });
     }
     const body = (request.body ?? {}) as { scope?: string; personId?: string };
@@ -181,39 +195,58 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.issues[0]?.message });
     }
-    if (!isAiConfigured()) {
+    if (!isChatAiAvailable()) {
       return reply.code(503).send({ error: "IA não configurada no servidor" });
     }
 
     const userId = request.user!.sub;
     const { message: userText, threadId, personId, contextHint } = parsed.data;
 
-    const thread = await findUserThread(userId, threadId);
-    if (!thread) return reply.code(404).send({ error: "Conversa não encontrada" });
+    if (!tryAcquireStreamLock(userId)) {
+      return reply.code(429).send({
+        error: "Aguarde a resposta anterior terminar antes de enviar outra mensagem.",
+      });
+    }
 
-    await prisma.chatMessage.create({
-      data: { userId, threadId, role: "user", content: userText },
-    });
-    await autoTitleFromFirstMessage(threadId, userText);
-    await touchThread(threadId);
+    try {
+      try {
+        await assertAiQuota(userId);
+      } catch (err) {
+        if (err instanceof AiQuotaExceededError) {
+          return reply.code(429).send({ error: err.message, quota: err.quota });
+        }
+        throw err;
+      }
 
-    const history = await prisma.chatMessage.findMany({
-      where: { threadId },
-      orderBy: { createdAt: "asc" },
-      take: 40,
-    });
+      const thread = await findUserThread(userId, threadId);
+      if (!thread) return reply.code(404).send({ error: "Conversa não encontrada" });
 
-    await runChatStream({
-      userId,
-      threadId,
-      personId,
-      contextHint,
-      historyRows: history,
-      reply,
-      abortSignal: request.signal,
-      log: request.log,
-    });
-    return reply;
+      await prisma.chatMessage.create({
+        data: { userId, threadId, role: "user", content: userText },
+      });
+      await autoTitleFromFirstMessage(threadId, userText);
+      await touchThread(threadId);
+
+      const history = await prisma.chatMessage.findMany({
+        where: { threadId },
+        orderBy: { createdAt: "asc" },
+        take: 40,
+      });
+
+      await runChatStream({
+        userId,
+        threadId,
+        personId,
+        contextHint,
+        historyRows: history,
+        reply,
+        abortSignal: request.signal,
+        log: request.log,
+      });
+      return reply;
+    } finally {
+      releaseStreamLock(userId);
+    }
   });
 
   app.post("/api/chat/regenerate", async (request, reply) => {
@@ -221,42 +254,68 @@ export async function chatRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.issues[0]?.message });
     }
-    if (!isAiConfigured()) {
+    if (!isChatAiAvailable()) {
       return reply.code(503).send({ error: "IA não configurada no servidor" });
     }
 
     const userId = request.user!.sub;
     const { threadId, personId } = parsed.data;
 
-    const thread = await findUserThread(userId, threadId);
-    if (!thread) return reply.code(404).send({ error: "Conversa não encontrada" });
-
-    const last = await prisma.chatMessage.findFirst({
-      where: { threadId },
-      orderBy: { createdAt: "desc" },
-    });
-    if (!last || last.role !== "assistant") {
-      return reply.code(400).send({ error: "Nenhuma resposta para regenerar" });
+    if (!tryAcquireStreamLock(userId)) {
+      return reply.code(429).send({
+        error: "Aguarde a resposta anterior terminar antes de regenerar.",
+      });
     }
 
-    await prisma.chatMessage.delete({ where: { id: last.id } });
+    try {
+      try {
+        await assertAiQuota(userId);
+        await assertRegenerateCooldown(userId, threadId);
+      } catch (err) {
+        if (err instanceof AiQuotaExceededError) {
+          return reply.code(429).send({ error: err.message, quota: err.quota });
+        }
+        if (err instanceof RegenerateCooldownError) {
+          return reply.code(429).send({
+            error: err.message,
+            retryAfterMs: err.retryAfterMs,
+          });
+        }
+        throw err;
+      }
 
-    const history = await prisma.chatMessage.findMany({
-      where: { threadId },
-      orderBy: { createdAt: "asc" },
-      take: 40,
-    });
+      const thread = await findUserThread(userId, threadId);
+      if (!thread) return reply.code(404).send({ error: "Conversa não encontrada" });
 
-    await runChatStream({
-      userId,
-      threadId,
-      personId,
-      historyRows: history,
-      reply,
-      abortSignal: request.signal,
-      log: request.log,
-    });
-    return reply;
+      const last = await prisma.chatMessage.findFirst({
+        where: { threadId },
+        orderBy: { createdAt: "desc" },
+      });
+      if (!last || last.role !== "assistant") {
+        return reply.code(400).send({ error: "Nenhuma resposta para regenerar" });
+      }
+
+      await prisma.chatMessage.delete({ where: { id: last.id } });
+
+      const history = await prisma.chatMessage.findMany({
+        where: { threadId },
+        orderBy: { createdAt: "asc" },
+        take: 40,
+      });
+
+      await runChatStream({
+        userId,
+        threadId,
+        personId,
+        historyRows: history,
+        reply,
+        abortSignal: request.signal,
+        log: request.log,
+      });
+      return reply;
+    } finally {
+      releaseStreamLock(userId);
+    }
   });
 
   app.post("/api/chat/proposals/:id/confirm", async (request, reply) => {

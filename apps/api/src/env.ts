@@ -29,9 +29,16 @@ export const env = {
   ai: {
     provider: (process.env.AI_PROVIDER ?? "openai").toLowerCase(),
     model: process.env.AI_MODEL ?? "",
+    fallbackProvider: (process.env.AI_FALLBACK_PROVIDER ?? "anthropic").toLowerCase(),
+    fallbackModel: process.env.AI_FALLBACK_MODEL ?? "",
     openaiKey: process.env.OPENAI_API_KEY ?? "",
     anthropicKey: process.env.ANTHROPIC_API_KEY ?? "",
     googleKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? "",
+    monthlyTokenBudget: Number(process.env.AI_MONTHLY_TOKEN_BUDGET ?? 300_000),
+    maxSteps: Number(process.env.AI_MAX_STEPS ?? 6),
+    maxToolCalls: Number(process.env.AI_MAX_TOOL_CALLS ?? 6),
+    requestTimeoutMs: Number(process.env.AI_REQUEST_TIMEOUT_MS ?? 90_000),
+    regenerateCooldownMs: Number(process.env.AI_REGENERATE_COOLDOWN_MS ?? 5_000),
   },
 };
 
@@ -46,8 +53,15 @@ export function getAiEnv() {
   return {
     provider: (process.env.AI_PROVIDER ?? "openai").toLowerCase(),
     model: process.env.AI_MODEL ?? "",
+    fallbackProvider: (process.env.AI_FALLBACK_PROVIDER ?? "anthropic").toLowerCase(),
+    fallbackModel: process.env.AI_FALLBACK_MODEL ?? "",
     openaiKey: process.env.OPENAI_API_KEY ?? "",
     anthropicKey: process.env.ANTHROPIC_API_KEY ?? "",
     googleKey: process.env.GOOGLE_GENERATIVE_AI_API_KEY ?? "",
+    monthlyTokenBudget: Number(process.env.AI_MONTHLY_TOKEN_BUDGET ?? 300_000),
+    maxSteps: Number(process.env.AI_MAX_STEPS ?? 6),
+    maxToolCalls: Number(process.env.AI_MAX_TOOL_CALLS ?? 6),
+    requestTimeoutMs: Number(process.env.AI_REQUEST_TIMEOUT_MS ?? 90_000),
+    regenerateCooldownMs: Number(process.env.AI_REGENERATE_COOLDOWN_MS ?? 5_000),
   };
 }

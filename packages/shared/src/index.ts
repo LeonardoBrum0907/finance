@@ -48,6 +48,22 @@ export {
   type UpdateCommitmentInput,
 } from "./commitments";
 export {
+  simulatedPurchaseInputSchema,
+  buildInstallmentSchedule,
+  createSimulatedPurchase,
+  computeSimulationCycleImpact,
+  computeSimulationStatDelta,
+  flattenSimulatedRows,
+  todayDateKeyInTimeZone,
+  type SimulatedInstallment,
+  type SimulatedPurchase,
+  type SimulatedPurchaseInput,
+  type SimulationCycleRange,
+  type SimulationCycleImpact,
+  type SimulationStatDelta,
+  type FlatSimulatedRow,
+} from "./simulation";
+export {
   PERIOD_MODES,
   periodModeSchema,
   PAYDAY_CYCLE_ANCHORS,
@@ -72,6 +88,7 @@ export {
   getPaydayCycleRangeByKey,
   getPaydayCycleRangeByEnd,
   getRecentPaydayCycles,
+  getPaydayCycleEndOffset,
   paydayCyclesToDateRange,
   formatPaydayCycleLabel,
   formatPaydayCycleShortLabel,
@@ -144,7 +161,7 @@ export const createConnectionSchema = z.object({
 export type CreateConnectionInput = z.infer<typeof createConnectionSchema>;
 
 export const chatMessageSchema = z.object({
-  message: z.string().min(1, "Digite uma mensagem"),
+  message: z.string().min(1, "Digite uma mensagem").max(4000, "Mensagem muito longa (máx. 4000 caracteres)"),
   threadId: z.string().min(1, "Informe a conversa"),
   personId: z.string().cuid().optional(),
   contextHint: z.string().max(2000).optional(),
@@ -678,6 +695,23 @@ export interface ChatMessageMetadata {
   toolActivity?: string[];
   dataPeriod?: string;
   syncAt?: string | null;
+  ai?: {
+    provider: string;
+    modelId: string;
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    usedFallback?: boolean;
+    steps?: number;
+  };
+}
+
+export interface ChatAiQuotaDTO {
+  used: number;
+  limit: number;
+  remaining: number;
+  periodKey: string;
+  resetsAt: string;
 }
 
 export interface ChatAlertDTO {

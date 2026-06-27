@@ -18,7 +18,7 @@ import { runSinglePurchaseSimulation } from "./purchaseSimulation.js";
 import { prisma } from "../../prisma.js";
 
 const MAX_TRANSACTIONS = 50;
-const TOOL_TRANSACTIONS_PER_ACCOUNT = 500;
+const TOOL_TRANSACTIONS_PER_ACCOUNT = 150;
 
 const PROPOSAL_MARKER = { proposal: true as const };
 

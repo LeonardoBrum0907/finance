@@ -15,29 +15,30 @@ export interface ModelCandidate {
 
 const DEFAULT_MODELS: Record<AiProvider, string> = {
   openai: "gpt-4o-mini",
-  anthropic: "claude-3-5-sonnet-latest",
+  anthropic: "claude-haiku-4-5-20251001",
+  google: "gemini-3.5-flash",
+};
+
+const DEFAULT_FALLBACK_MODELS: Record<AiProvider, string> = {
+  openai: "gpt-4o-mini",
+  anthropic: "claude-haiku-4-5-20251001",
   google: "gemini-3.5-flash",
 };
 
 /** Modelos Google elegíveis ao tier free (Standard). Ordem: mais capaz → mais leve. */
-const FALLBACK_MODELS: Record<AiProvider, string[]> = {
-  google: [
-    "gemini-3.5-flash",
-    "gemini-2.5-flash",
-    "gemini-3.1-flash-lite",
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-pro",
-    "gemini-flash-latest",
-  ],
-  openai: ["gpt-4o-mini"],
-  anthropic: ["claude-3-5-haiku-latest", "claude-3-5-sonnet-latest"],
-};
+const GOOGLE_FALLBACK_MODELS = [
+  "gemini-3.5-flash",
+  "gemini-2.5-flash",
+  "gemini-3.1-flash-lite",
+  "gemini-2.5-flash-lite",
+  "gemini-2.5-pro",
+  "gemini-flash-latest",
+];
 
 export const AI_MAX_RETRIES = 2;
 
-export function isAiConfigured(): boolean {
-  const ai = getAiEnv();
-  switch (ai.provider) {
+function hasProviderKey(provider: AiProvider, ai: ReturnType<typeof getAiEnv>): boolean {
+  switch (provider) {
     case "openai":
       return Boolean(ai.openaiKey);
     case "anthropic":
@@ -47,6 +48,20 @@ export function isAiConfigured(): boolean {
     default:
       return false;
   }
+}
+
+/** Provider primário configurado (classifier, recap, etc.). */
+export function isAiConfigured(): boolean {
+  const ai = getAiEnv();
+  return hasProviderKey(ai.provider as AiProvider, ai);
+}
+
+/** Chat disponível se primary OU fallback tiver chave. */
+export function isChatAiAvailable(): boolean {
+  const ai = getAiEnv();
+  const primary = ai.provider as AiProvider;
+  const fallback = ai.fallbackProvider as AiProvider;
+  return hasProviderKey(primary, ai) || hasProviderKey(fallback, ai);
 }
 
 function dedupeCandidates(candidates: ModelCandidate[]): ModelCandidate[] {
@@ -59,23 +74,43 @@ function dedupeCandidates(candidates: ModelCandidate[]): ModelCandidate[] {
   });
 }
 
-export function getModelCandidates(): ModelCandidate[] {
+function candidateIfAvailable(
+  provider: AiProvider,
+  modelId: string,
+  ai: ReturnType<typeof getAiEnv>,
+): ModelCandidate | null {
+  if (!hasProviderKey(provider, ai)) return null;
+  return { provider, modelId };
+}
+
+/** Cadeia explícita para chat: primary → fallback configurado. */
+export function getChatModelCandidates(): ModelCandidate[] {
   const ai = getAiEnv();
-  const provider = ai.provider as AiProvider;
-  const primary = ai.model || DEFAULT_MODELS[provider];
-  const sameProvider = [...new Set([primary, ...(FALLBACK_MODELS[provider] ?? [])])].map(
-    (modelId) => ({ provider, modelId }),
-  );
+  const primaryProvider = ai.provider as AiProvider;
+  const fallbackProvider = ai.fallbackProvider as AiProvider;
+  const primaryModel = ai.model || DEFAULT_MODELS[primaryProvider];
+  const fallbackModel =
+    ai.fallbackModel || DEFAULT_FALLBACK_MODELS[fallbackProvider] || DEFAULT_MODELS.anthropic;
 
-  const crossProvider: ModelCandidate[] = [];
-  if (provider !== "openai" && ai.openaiKey) {
-    crossProvider.push({ provider: "openai", modelId: DEFAULT_MODELS.openai });
-  }
-  if (provider !== "anthropic" && ai.anthropicKey) {
-    crossProvider.push({ provider: "anthropic", modelId: "claude-3-5-haiku-latest" });
+  const candidates: ModelCandidate[] = [];
+  const primary = candidateIfAvailable(primaryProvider, primaryModel, ai);
+  if (primary) candidates.push(primary);
+
+  const fallback = candidateIfAvailable(fallbackProvider, fallbackModel, ai);
+  if (fallback) {
+    const primaryKey = primary ? `${primary.provider}:${primary.modelId}` : "";
+    const fallbackKey = `${fallback.provider}:${fallback.modelId}`;
+    if (fallbackKey !== primaryKey) {
+      candidates.push(fallback);
+    }
   }
 
-  return dedupeCandidates([...sameProvider, ...crossProvider]);
+  return candidates;
+}
+
+/** @deprecated Use getChatModelCandidates para o chat. Mantido para compatibilidade interna. */
+export function getModelCandidates(): ModelCandidate[] {
+  return getChatModelCandidates();
 }
 
 export function getModelForCandidate({ provider, modelId }: ModelCandidate): LanguageModel {
@@ -94,10 +129,18 @@ export function getModelForCandidate({ provider, modelId }: ModelCandidate): Lan
 
 export function getModel(modelId?: string): LanguageModel {
   const ai = getAiEnv();
-  return getModelForCandidate({
-    provider: ai.provider as AiProvider,
-    modelId: modelId ?? ai.model ?? DEFAULT_MODELS[ai.provider as AiProvider],
-  });
+  const provider = ai.provider as AiProvider;
+  const resolvedModel = modelId ?? ai.model ?? DEFAULT_MODELS[provider];
+
+  if (provider === "google" && !modelId) {
+    for (const googleModel of GOOGLE_FALLBACK_MODELS) {
+      if (googleModel === resolvedModel || GOOGLE_FALLBACK_MODELS.includes(resolvedModel)) {
+        return getModelForCandidate({ provider, modelId: resolvedModel });
+      }
+    }
+  }
+
+  return getModelForCandidate({ provider, modelId: resolvedModel });
 }
 
 export function isTransientAiError(err: unknown): boolean {
@@ -130,7 +173,7 @@ export function buildAllCandidatesFailedMessage(streamError: string): string {
   const hasAlternate = Boolean(ai.openaiKey || ai.anthropicKey);
   const hint = hasAlternate
     ? ""
-    : " Como alternativa, configure OPENAI_API_KEY no .env e defina AI_PROVIDER=openai.";
+    : " Configure OPENAI_API_KEY e/ou ANTHROPIC_API_KEY no .env.";
   return `Erro da IA: ${streamError}.${hint}`;
 }
 

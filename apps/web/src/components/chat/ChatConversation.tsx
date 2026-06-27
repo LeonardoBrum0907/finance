@@ -6,10 +6,12 @@ import { api } from "../../lib/api";
 import { MarkdownMessage } from "../MarkdownMessage";
 import { ProposalCard } from "./ProposalCard";
 import { ChatStatusBar } from "./ChatStatusBar";
+import { ChatQuotaBar } from "./ChatQuotaBar";
 import { FollowUpChips } from "./FollowUpChips";
 import { RichMessageRenderer } from "./RichMessageRenderer";
 import { ChatEmptyState } from "./ChatEmptyState";
 import { useChatStream } from "../../hooks/useChatStream";
+import { useChatQuota } from "../../hooks/useChatQuota";
 import { useConfirm } from "../../lib/confirm";
 import { formatDate } from "../../lib/format";
 
@@ -71,6 +73,8 @@ export function ChatConversation({
   });
 
   const aiConfigured = status.data?.configured !== false;
+
+  const { quota, isExhausted, isLow } = useChatQuota(aiConfigured);
 
   const people = useQuery({
     queryKey: ["people"],
@@ -154,7 +158,8 @@ export function ChatConversation({
   }
 
   const showSuggestions = messages.length === 0 && !streaming;
-  const inputDisabled = streaming || !aiConfigured || !activeThreadId;
+  const inputDisabled =
+    streaming || !aiConfigured || !activeThreadId || isExhausted;
   const lastMessage = messages[messages.length - 1];
   const canRegenerate =
     !streaming && lastMessage?.role === "assistant" && lastMessage.content.length > 0;
@@ -190,6 +195,7 @@ export function ChatConversation({
                 streamingPhase={streamingPhase}
                 toolActivity={toolActivity}
               />
+              <ChatQuotaBar quota={quota} isExhausted={isExhausted} isLow={isLow} />
             </div>
             {activeThreadId && !compact && (
               <button
@@ -232,6 +238,13 @@ export function ChatConversation({
               </select>
             </div>
           )}
+        </div>
+      )}
+
+      {isExhausted && (
+        <div className="mb-3 shrink-0 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          Limite mensal de IA atingido.
+          {quota?.resetsAt ? ` Renova em ${formatDate(quota.resetsAt)}.` : ""}
         </div>
       )}
 

@@ -2,10 +2,11 @@ import type { FastifyBaseLogger, FastifyReply } from "fastify";
 import { streamText, stepCountIs, type CoreMessage } from "ai";
 import type { ChatMessageMetadata } from "@finance/shared";
 import { prisma } from "../prisma.js";
+import { getAiEnv } from "../env.js";
 import {
   buildFinancialContext,
   getModelForCandidate,
-  getModelCandidates,
+  getChatModelCandidates,
   buildAllCandidatesFailedMessage,
   formatAiErrorMessage,
   isRetryableWithNextModel,
@@ -13,6 +14,8 @@ import {
   SYSTEM_PROMPT,
   type ModelCandidate,
 } from "./ai.js";
+import { wrapToolsWithGuards } from "./aiGuards.js";
+import { combineAbortSignals, recordAiUsage } from "./aiUsage.js";
 import { InvalidPersonError } from "./finance/queries.js";
 import { createFinanceTools } from "./finance/tools.js";
 import { touchThread } from "./chatThread.js";
@@ -42,6 +45,25 @@ export interface RunChatStreamOptions {
   log: FastifyBaseLogger;
 }
 
+async function extractStreamUsage(
+  streamResult: Awaited<ReturnType<typeof streamText>>,
+): Promise<{ inputTokens: number; outputTokens: number; totalTokens: number }> {
+  try {
+    const usage =
+      (await streamResult.totalUsage) ??
+      (await streamResult.usage);
+    const inputTokens = usage?.inputTokens ?? 0;
+    const outputTokens = usage?.outputTokens ?? 0;
+    return {
+      inputTokens,
+      outputTokens,
+      totalTokens: usage?.totalTokens ?? inputTokens + outputTokens,
+    };
+  } catch {
+    return { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+  }
+}
+
 export async function runChatStream({
   userId,
   threadId,
@@ -52,6 +74,11 @@ export async function runChatStream({
   abortSignal,
   log,
 }: RunChatStreamOptions): Promise<void> {
+  const aiEnv = getAiEnv();
+  const maxSteps = Number.isFinite(aiEnv.maxSteps) && aiEnv.maxSteps > 0 ? aiEnv.maxSteps : 6;
+  const maxToolCalls =
+    Number.isFinite(aiEnv.maxToolCalls) && aiEnv.maxToolCalls > 0 ? aiEnv.maxToolCalls : 6;
+
   let context: string;
   let goalsContext: string;
   let syncAt: string | null = null;
@@ -101,23 +128,36 @@ export async function runChatStream({
   reply.raw.setHeader("Cache-Control", "no-cache");
   reply.raw.setHeader("X-Accel-Buffering", "no");
 
-  const tools = createFinanceTools(userId, personId);
+  const timeoutController = new AbortController();
+  const timeoutMs =
+    Number.isFinite(aiEnv.requestTimeoutMs) && aiEnv.requestTimeoutMs > 0
+      ? aiEnv.requestTimeoutMs
+      : 90_000;
+  const timeoutId = setTimeout(() => timeoutController.abort(), timeoutMs);
+  const streamAbortSignal = abortSignal
+    ? combineAbortSignals([abortSignal, timeoutController.signal])
+    : timeoutController.signal;
+
+  const tools = wrapToolsWithGuards(createFinanceTools(userId, personId), maxToolCalls);
   let assistantText = "";
   let streamError: string | null = null;
   let streamErrorRaw: unknown = null;
   let streamResult: ReturnType<typeof streamText> | null = null;
   let usedCandidate: ModelCandidate | null = null;
-  const candidates = getModelCandidates();
+  let stepCount = 0;
+  const candidates = getChatModelCandidates();
+  const primaryCandidate = candidates[0] ?? null;
 
   try {
     for (let i = 0; i < candidates.length; i++) {
       const candidate = candidates[i]!;
-      if (abortSignal?.aborted) break;
+      if (streamAbortSignal.aborted) break;
 
       assistantText = "";
       streamError = null;
       streamErrorRaw = null;
       usedCandidate = candidate;
+      stepCount = 0;
 
       streamResult = streamText({
         model: getModelForCandidate(candidate),
@@ -125,8 +165,11 @@ export async function runChatStream({
         messages,
         tools,
         maxRetries: AI_MAX_RETRIES,
-        stopWhen: stepCountIs(8),
-        abortSignal,
+        stopWhen: stepCountIs(maxSteps),
+        abortSignal: streamAbortSignal,
+        onStepFinish: () => {
+          stepCount += 1;
+        },
         onError({ error }) {
           streamErrorRaw = error;
           streamError = formatAiErrorMessage(error);
@@ -134,7 +177,7 @@ export async function runChatStream({
       }) as unknown as ReturnType<typeof streamText>;
 
       for await (const part of streamResult!.fullStream) {
-        if (abortSignal?.aborted) break;
+        if (streamAbortSignal.aborted) break;
         if (part.type === "text-delta") {
           assistantText += part.text;
           reply.raw.write(part.text);
@@ -149,18 +192,18 @@ export async function runChatStream({
         isRetryableWithNextModel(streamErrorRaw) &&
         i < candidates.length - 1;
 
-      if (assistantText || abortSignal?.aborted) break;
+      if (assistantText || streamAbortSignal.aborted) break;
       if (!canRetry) break;
 
       log.warn({ candidate, err: streamError }, "Modelo indisponível, tentando fallback");
     }
 
-    if (!assistantText && !abortSignal?.aborted && streamError) {
+    if (!assistantText && !streamAbortSignal.aborted && streamError) {
       assistantText = buildAllCandidatesFailedMessage(streamError);
       reply.raw.write(assistantText);
     }
   } catch (err) {
-    if (abortSignal?.aborted) {
+    if (streamAbortSignal.aborted) {
       reply.raw.end();
       return;
     }
@@ -170,22 +213,50 @@ export async function runChatStream({
       assistantText = `Erro da IA: ${errMsg}`;
       reply.raw.write(assistantText);
     }
+  } finally {
+    clearTimeout(timeoutId);
   }
 
-  if (assistantText && !abortSignal?.aborted) {
+  if (assistantText && !streamAbortSignal.aborted) {
     const lastUser = [...historyRows].reverse().find((m) => m.role === "user");
     const metadata: ChatMessageMetadata = {
       dataPeriod: formatMonthLabel(currentMonth),
       syncAt,
     };
 
-    if (streamResult && !streamError && !assistantText.startsWith("Erro da IA:")) {
+    const successResponse =
+      streamResult && !streamError && !assistantText.startsWith("Erro da IA:");
+
+    if (successResponse) {
       try {
-        const steps = await streamResult.steps;
+        const steps = await streamResult!.steps;
         metadata.toolActivity = extractToolActivityFromSteps(steps);
         metadata.blocks = extractBlocksFromSteps(steps);
         if (lastUser) {
           metadata.followUps = buildFollowUpSuggestions(lastUser.content, assistantText);
+        }
+
+        const usage = await extractStreamUsage(streamResult!);
+        if (usedCandidate) {
+          metadata.ai = {
+            provider: usedCandidate.provider,
+            modelId: usedCandidate.modelId,
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            totalTokens: usage.totalTokens,
+            usedFallback: primaryCandidate
+              ? `${usedCandidate.provider}:${usedCandidate.modelId}` !==
+                `${primaryCandidate.provider}:${primaryCandidate.modelId}`
+              : false,
+            steps: steps.length || stepCount,
+          };
+
+          await recordAiUsage(userId, {
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            provider: usedCandidate.provider,
+            modelId: usedCandidate.modelId,
+          });
         }
       } catch (metaErr) {
         log.warn({ err: metaErr }, "Falha ao extrair metadata da resposta");
@@ -204,9 +275,9 @@ export async function runChatStream({
       } as Parameters<typeof prisma.chatMessage.create>[0]["data"],
     });
 
-    if (streamResult && !streamError && !assistantText.startsWith("Erro da IA:")) {
+    if (successResponse) {
       try {
-        const steps = await streamResult.steps;
+        const steps = await streamResult!.steps;
         const extracted = extractProposalFromSteps(steps);
         if (extracted) {
           await prisma.chatActionProposal.create({

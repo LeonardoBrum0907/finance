@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { ChatMessageDTO } from "@finance/shared";
+import type { ChatAiQuotaDTO, ChatMessageDTO } from "@finance/shared";
 import { api } from "../lib/api";
+import { formatDate } from "../lib/format";
 
 export type StreamingPhase = "thinking" | "streaming" | null;
 
@@ -61,7 +62,22 @@ export function useChatStream({ threadId, personId, enabled }: UseChatStreamOpti
   const consumeStream = useCallback(
     async (res: Response, optimisticAssistantId: string) => {
       if (!res.ok || !res.body) {
-        const data = await res.json().catch(() => ({}));
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          quota?: ChatAiQuotaDTO;
+          retryAfterMs?: number;
+        };
+
+        if (res.status === 429) {
+          if (data.quota) {
+            await queryClient.setQueryData(["chat-quota"], data.quota);
+            throw new Error(
+              `Limite mensal de IA atingido. Renova em ${formatDate(data.quota.resetsAt)}.`,
+            );
+          }
+          throw new Error(data.error ?? "Limite de uso atingido. Tente novamente em instantes.");
+        }
+
         throw new Error(data.error ?? "Erro ao falar com a IA");
       }
 
@@ -93,7 +109,7 @@ export function useChatStream({ threadId, personId, enabled }: UseChatStreamOpti
         throw new Error("A IA retornou resposta vazia. Verifique a chave e o modelo no .env.");
       }
     },
-    [],
+    [queryClient],
   );
 
   const stop = useCallback(() => {
@@ -141,6 +157,7 @@ export function useChatStream({ threadId, personId, enabled }: UseChatStreamOpti
         await consumeStream(res, assistantMsg.id);
         await invalidateMessages();
         await queryClient.invalidateQueries({ queryKey: ["chat-threads"] });
+        await queryClient.invalidateQueries({ queryKey: ["chat-quota"] });
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") {
           setMessages((prev) => prev.filter((m) => m.id !== assistantMsg.id));
@@ -201,6 +218,7 @@ export function useChatStream({ threadId, personId, enabled }: UseChatStreamOpti
       await consumeStream(res, assistantMsg.id);
       await invalidateMessages();
       await queryClient.invalidateQueries({ queryKey: ["chat-threads"] });
+      await queryClient.invalidateQueries({ queryKey: ["chat-quota"] });
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
         await invalidateMessages();
