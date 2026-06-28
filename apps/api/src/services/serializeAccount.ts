@@ -13,8 +13,12 @@ export function serializeAccount(acc: {
   minimumPayment?: number | null;
   balanceCloseDate?: Date | null;
   balanceDueDate?: Date | null;
+  closedBillAmount?: number | null;
+  closedBillDueDate?: Date | null;
   nextBillAmount?: number | null;
   nextBillDueDate?: Date | null;
+  openBillAmount?: number | null;
+  openBillDueDate?: Date | null;
 }) {
   return {
     id: acc.id,
@@ -31,7 +35,11 @@ export function serializeAccount(acc: {
     minimumPayment: acc.minimumPayment ?? null,
     balanceCloseDate: acc.balanceCloseDate?.toISOString() ?? null,
     balanceDueDate: acc.balanceDueDate?.toISOString() ?? null,
+    closedBillAmount: acc.closedBillAmount ?? null,
+    closedBillDueDate: acc.closedBillDueDate?.toISOString() ?? null,
     nextBillAmount: acc.nextBillAmount ?? null,
     nextBillDueDate: acc.nextBillDueDate?.toISOString() ?? null,
+    openBillAmount: acc.openBillAmount ?? null,
+    openBillDueDate: acc.openBillDueDate?.toISOString() ?? null,
   };
 }

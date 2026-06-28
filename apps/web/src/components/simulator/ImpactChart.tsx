@@ -35,8 +35,8 @@ export function ImpactChart({ data, currencyCode }: Props) {
         {
           label: "Com cenário",
           data: data.map((p) => p.scenarioSurplus),
-          borderColor: chartColors.income,
-          backgroundColor: chartColorWithAlpha(chartColors.income, 0.12),
+          borderColor: chartColors.projection,
+          backgroundColor: chartColorWithAlpha(chartColors.projection, 0.14),
           fill: true,
           tension: 0.3,
           pointRadius: 3,

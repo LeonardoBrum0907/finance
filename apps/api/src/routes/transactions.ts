@@ -14,7 +14,9 @@ import {
   getRecentMonthKeys,
   monthKeysToDateRange,
   parseDashboardMonths,
+  resolvePeriodRanges,
 } from "../services/finance/aggregates.js";
+import { loadUserSettings, resolvePaydayCycle, resolvePeriodMode } from "../services/userSettings.js";
 import { toTransactionDtoFields } from "../services/transactionCategory.js";
 import { upsertCategoryMapping } from "../services/categoryMapping.js";
 import { recategorizeUserTransactions } from "../services/categoryPipeline.js";
@@ -91,10 +93,13 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
       categoryGroups?: string;
       cashFlowOnly?: string;
       type?: string;
+      periodMode?: string;
+      cycleKey?: string;
     };
 
     const months = parseDashboardMonths(query.months);
     const personId = query.personId?.trim() || undefined;
+    const cycleKey = query.cycleKey?.trim() || undefined;
     const page = parsePage(query.page);
     const pageSize = parsePageSize(query.pageSize);
     const search = query.search?.trim() || undefined;
@@ -104,8 +109,26 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
     const cashFlowOnly = parseCashFlowOnly(query.cashFlowOnly);
     const typeFilter = parseTypeFilter(query.type);
 
-    const monthKeys = getRecentMonthKeys(months, 0);
-    const range = monthKeysToDateRange(monthKeys);
+    const userId = request.user!.sub;
+    const settings = await loadUserSettings(userId);
+    const { paydayDay, paydayCycleAnchor } = await resolvePaydayCycle(userId, personId);
+    const periodMode = resolvePeriodMode(query.periodMode, settings, paydayDay);
+
+    let range: { from?: string; to?: string };
+    if (periodMode === "payday" && paydayDay !== null) {
+      const periods = resolvePeriodRanges(
+        months,
+        periodMode,
+        paydayDay,
+        paydayCycleAnchor,
+        cycleKey,
+      );
+      range = periods.currentRange;
+    } else {
+      const monthKeys = getRecentMonthKeys(months, 0);
+      range = monthKeysToDateRange(monthKeys);
+    }
+
     const dateFrom = range.from ? new Date(`${range.from}T00:00:00.000Z`) : new Date(0);
     const dateTo = range.to ? new Date(`${range.to}T23:59:59.999Z`) : new Date();
 

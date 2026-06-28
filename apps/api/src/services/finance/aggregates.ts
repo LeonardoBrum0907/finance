@@ -6,6 +6,7 @@ import {
   getPaydayCycleBounds,
   getPaydayCycleRange,
   getPaydayCycleRangeByKey,
+  getPaydayCycleEndOffset,
   getRecentPaydayCycles,
   paydayCyclesToDateRange,
   type PaydayCycleAnchor,
@@ -198,6 +199,12 @@ export interface PeriodSummary {
   income: number;
   expenses: number;
   net: number;
+  committedExpenses?: number;
+  availableNet?: number;
+  pendingSalary?: number | null;
+  salaryPending?: boolean;
+  balanceWithSalary?: number;
+  balanceAtPayday?: number;
 }
 
 export function summarizeTransactions(
@@ -336,11 +343,32 @@ export function buildDashboardInsights(params: {
   }
 
   if (period.income > 0 || period.expenses > 0) {
+    const untilNowBalance = period.balanceWithSalary ?? period.net;
     insights.push(
-      period.net >= 0
-        ? `Resultado positivo de ${formatCurrency(period.net, currencyCode)} no ${periodLabel}.`
-        : `Déficit de ${formatCurrency(Math.abs(period.net), currencyCode)} no ${periodLabel}.`,
+      untilNowBalance >= 0
+        ? `Sobra de ${formatCurrency(untilNowBalance, currencyCode)} até agora neste ${periodLabel}.`
+        : `Faltam ${formatCurrency(Math.abs(untilNowBalance), currencyCode)} até agora neste ${periodLabel}.`,
     );
+    const committed = period.committedExpenses ?? 0;
+    if (committed > 0 && period.availableNet !== undefined) {
+      insights.push(
+        period.availableNet >= 0
+          ? `Depois dos agendamentos (${formatCurrency(committed, currencyCode)} a pagar), sobra de ${formatCurrency(period.availableNet, currencyCode)}.`
+          : `Depois dos agendamentos (${formatCurrency(committed, currencyCode)} a pagar), faltam ${formatCurrency(Math.abs(period.availableNet), currencyCode)}.`,
+      );
+    }
+    if (period.pendingSalary != null && period.pendingSalary > 0) {
+      insights.push(
+        `Salário previsto de ${formatCurrency(period.pendingSalary, currencyCode)} no pagamento.`,
+      );
+      if (period.balanceAtPayday !== undefined) {
+        insights.push(
+          period.balanceAtPayday >= 0
+            ? `Até o pagamento, sobra de ${formatCurrency(period.balanceAtPayday, currencyCode)}.`
+            : `Até o pagamento, faltam ${formatCurrency(Math.abs(period.balanceAtPayday), currencyCode)}.`,
+        );
+      }
+    }
   }
 
   return insights.slice(0, 5);
@@ -363,6 +391,8 @@ export interface PeriodRanges {
   previousRange: DateRange;
   periodMode: PeriodMode;
   currentLabel?: string;
+  /** Ciclos atrás do atual que termina o período (0 = ciclo atual). Só em modo payday. */
+  endOffsetCycles?: number;
 }
 
 export function resolvePeriodRanges(
@@ -370,10 +400,17 @@ export function resolvePeriodRanges(
   periodMode: PeriodMode,
   paydayDay: number | null,
   paydayCycleAnchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
+  anchorCycleKey?: string,
 ): PeriodRanges {
   if (periodMode === "payday" && paydayDay !== null) {
-    const currentKeys = getRecentPaydayCycles(months, paydayDay, 0, paydayCycleAnchor);
-    const previousKeys = getRecentPaydayCycles(months, paydayDay, months, paydayCycleAnchor);
+    let endOffset = 0;
+    if (anchorCycleKey) {
+      const computed = getPaydayCycleEndOffset(anchorCycleKey, paydayDay, paydayCycleAnchor);
+      if (computed !== null) endOffset = computed;
+    }
+
+    const currentKeys = getRecentPaydayCycles(months, paydayDay, endOffset, paydayCycleAnchor);
+    const previousKeys = getRecentPaydayCycles(months, paydayDay, months + endOffset, paydayCycleAnchor);
     const currentRange = paydayCyclesToDateRange(currentKeys, paydayDay, paydayCycleAnchor);
     const previousRange = paydayCyclesToDateRange(previousKeys, paydayDay, paydayCycleAnchor);
     const lastKey = currentKeys[currentKeys.length - 1];
@@ -387,6 +424,7 @@ export function resolvePeriodRanges(
       previousRange,
       periodMode,
       currentLabel,
+      endOffsetCycles: endOffset,
     };
   }
 
@@ -446,6 +484,11 @@ export function buildCycleSummary(
   committedExpensesBank: number;
   committedExpensesManual: number;
   net: number;
+  availableNet: number;
+  pendingSalary: number | null;
+  salaryPending: boolean;
+  balanceWithSalary: number;
+  balanceAtPayday: number;
   salaryIncome: number;
   extraIncome: number;
 } {
@@ -465,6 +508,38 @@ export function buildCycleSummary(
 
   const bankCommitted = meta.isComplete ? 0 : totals.committedExpenses;
   const manualCommitted = meta.isComplete ? 0 : manualCommittedExpenses;
+  const totalCommitted = bankCommitted + manualCommitted;
+  const availableNet = totals.net - totalCommitted;
+
+  let pendingSalary: number | null = null;
+  let salaryPending = false;
+  if (
+    !meta.isComplete &&
+    paydayCycleAnchor === "end" &&
+    incomeBreakdown.salary === 0
+  ) {
+    const endOffset =
+      getPaydayCycleEndOffset(meta.cycleKey, paydayDay, paydayCycleAnchor) ?? 0;
+    const prevKeys = getRecentPaydayCycles(
+      1,
+      paydayDay,
+      endOffset + 1,
+      paydayCycleAnchor,
+    );
+    const previousRange = paydayCyclesToDateRange(prevKeys, paydayDay, paydayCycleAnchor);
+    pendingSalary = estimatePendingCycleSalary(
+      txs,
+      previousRange,
+      paydayDay,
+      0,
+      paydayCycleAnchor,
+    );
+    salaryPending = pendingSalary === null;
+  }
+
+  const pendingAmount = pendingSalary ?? 0;
+  const balanceWithSalary = totals.net + pendingAmount;
+  const balanceAtPayday = availableNet + pendingAmount;
 
   return {
     cycleKey: meta.cycleKey,
@@ -476,12 +551,44 @@ export function buildCycleSummary(
     isComplete: meta.isComplete,
     income: totals.income,
     expenses: totals.expenses,
-    committedExpenses: bankCommitted + manualCommitted,
+    committedExpenses: totalCommitted,
     committedExpensesBank: bankCommitted,
     committedExpensesManual: manualCommitted,
     net: totals.net,
+    availableNet,
+    pendingSalary,
+    salaryPending,
+    balanceWithSalary,
+    balanceAtPayday,
     salaryIncome: incomeBreakdown.salary,
     extraIncome: incomeBreakdown.extra,
+  };
+}
+
+export type CycleSummary = ReturnType<typeof buildCycleSummary>;
+
+export function buildCyclePeriodSummary(
+  cycle: CycleSummary,
+  months: DashboardMonths,
+  paydayDay: number,
+  paydayCycleAnchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
+  periodMode: PeriodMode = "payday",
+) {
+  return {
+    months,
+    income: cycle.income,
+    expenses: cycle.expenses,
+    net: cycle.net,
+    committedExpenses: cycle.committedExpenses,
+    availableNet: cycle.availableNet,
+    pendingSalary: cycle.pendingSalary,
+    salaryPending: cycle.salaryPending,
+    balanceWithSalary: cycle.balanceWithSalary,
+    balanceAtPayday: cycle.balanceAtPayday,
+    periodMode,
+    from: cycle.from,
+    to: cycle.to,
+    label: formatPaydayCycleShortLabel(cycle.cycleKey, paydayDay, paydayCycleAnchor),
   };
 }
 
@@ -613,6 +720,8 @@ export function buildGrowthMetrics(params: {
   paydayCycleAnchor: PaydayCycleAnchor;
   periodMode: PeriodMode;
   manualCommittedExpenses?: number;
+  /** Ciclo focado no modo payday (último de currentKeys quando months=1). */
+  focusCycleKey?: string;
 }): GrowthMetrics {
   const {
     period,
@@ -624,6 +733,7 @@ export function buildGrowthMetrics(params: {
     paydayCycleAnchor,
     periodMode,
     manualCommittedExpenses = 0,
+    focusCycleKey,
   } = params;
   const { income, expenses, net } = period;
 
@@ -644,7 +754,9 @@ export function buildGrowthMetrics(params: {
           const range =
             periodMode === "payday"
               ? (() => {
-                  const meta = getPaydayCycleRange(paydayDay, new Date(), paydayCycleAnchor);
+                  const meta = focusCycleKey
+                    ? getPaydayCycleRangeByKey(focusCycleKey, paydayDay, paydayCycleAnchor)
+                    : getPaydayCycleRange(paydayDay, new Date(), paydayCycleAnchor);
                   if (meta.isComplete || today > meta.to) {
                     return { from: meta.from, to: meta.to };
                   }
@@ -724,8 +836,10 @@ export function buildGrowthMetrics(params: {
   };
 
   if (periodMode === "payday" && paydayDay !== null) {
-    const meta = getPaydayCycleRange(paydayDay, new Date(), paydayCycleAnchor);
-    if (today >= meta.from && today <= meta.to) {
+    const meta = focusCycleKey
+      ? getPaydayCycleRangeByKey(focusCycleKey, paydayDay, paydayCycleAnchor)
+      : getPaydayCycleRange(paydayDay, new Date(), paydayCycleAnchor);
+    if (!meta.isComplete && today >= meta.from && today <= meta.to) {
       const cycleCash = summarizeCycleCashFlow(
         txs,
         { from: meta.from, to: meta.to },

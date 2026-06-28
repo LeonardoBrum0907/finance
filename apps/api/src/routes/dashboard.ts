@@ -1,13 +1,18 @@
 import type { FastifyInstance } from "fastify";
-import { accountNetWorthContribution, getRecentPaydayCycles, getPaydayCycleRange, paydayCyclesToDateRange, isInvestmentAccount, isPaydayDayConfigured } from "@finance/shared";
+import { accountNetWorthContribution, getRecentPaydayCycles, getPaydayCycleRange, getPaydayCycleRangeByKey, paydayCyclesToDateRange, isInvestmentAccount, isPaydayDayConfigured } from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
 import type { FinancialTransaction } from "../services/finance/types.js";
 import { effectiveTransactionCategory } from "../services/transactionCategory.js";
 import { serializeAccount } from "../services/serializeAccount.js";
-import { computeNextBill } from "../services/finance/creditBill.js";
+import { resolveNextDueDate } from "../services/finance/creditBill.js";
+import { pickLatestClosedBill } from "../services/finance/creditBillSync.js";
+import { getPluggyClient } from "../services/pluggy.js";
+import { isPluggyConfigured } from "../env.js";
 import {
   buildCurrentCycleSummary,
+  buildCyclePeriodSummary,
+  buildCycleSummary,
   buildRecentCycleSummaries,
   buildDashboardInsights,
   buildGrowthMetrics,
@@ -33,16 +38,28 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
 
   app.get("/api/dashboard", async (request, reply) => {
-    const query = request.query as { months?: string; personId?: string; periodMode?: string };
+    const query = request.query as {
+      months?: string;
+      personId?: string;
+      periodMode?: string;
+      cycleKey?: string;
+    };
     const months = parseDashboardMonths(query.months);
     const personId = query.personId?.trim() || undefined;
+    const cycleKey = query.cycleKey?.trim() || undefined;
     const userId = request.user!.sub;
 
     const settings = await loadUserSettings(userId);
     const { paydayDay, paydayCycleAnchor } = await resolvePaydayCycle(userId, personId);
     const periodMode = resolvePeriodMode(query.periodMode, settings, paydayDay);
 
-    const periods = resolvePeriodRanges(months, periodMode, paydayDay, paydayCycleAnchor);
+    const periods = resolvePeriodRanges(
+      months,
+      periodMode,
+      paydayDay,
+      paydayCycleAnchor,
+      cycleKey,
+    );
     const fetchRange =
       periodMode === "payday" && paydayDay !== null
         ? paydayCyclesToDateRange(
@@ -118,6 +135,31 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     let bankBalance = 0;
     let creditDebt = 0;
 
+    const pluggy = isPluggyConfigured() ? getPluggyClient() : null;
+    const closedBillCache = new Map<string, { amount: number; dueDate: Date } | null>();
+
+    async function loadClosedBill(pluggyAccountId: string) {
+      if (closedBillCache.has(pluggyAccountId)) {
+        return closedBillCache.get(pluggyAccountId) ?? null;
+      }
+      if (!pluggy) {
+        closedBillCache.set(pluggyAccountId, null);
+        return null;
+      }
+      try {
+        const bills = await pluggy.fetchCreditCardBills(pluggyAccountId);
+        const closed = pickLatestClosedBill(bills.results ?? []);
+        const value = closed
+          ? { amount: closed.totalAmount, dueDate: new Date(closed.dueDate) }
+          : null;
+        closedBillCache.set(pluggyAccountId, value);
+        return value;
+      } catch {
+        closedBillCache.set(pluggyAccountId, null);
+        return null;
+      }
+    }
+
     for (const person of people) {
       let personBalance = 0;
       for (const connection of person.connections) {
@@ -130,28 +172,27 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
             bankBalance += acc.balance;
           }
 
-          const accountTxs = acc.transactions.map((tx) => ({
-            accountId: acc.id,
-            date: tx.date,
-            amount: tx.amount,
-          }));
-
-          const nextBill =
+          const openBillDueDate =
             acc.type === "CREDIT"
-              ? computeNextBill(
-                  acc.id,
-                  acc.type,
-                  acc.balanceCloseDate,
-                  acc.balanceDueDate,
-                  accountTxs,
-                )
-              : { nextBillAmount: null, nextBillDueDate: null };
+              ? resolveNextDueDate(acc.balanceDueDate)
+              : null;
+          const openBillAmount =
+            acc.type === "CREDIT" && Math.abs(acc.balance) > 0
+              ? Math.abs(acc.balance)
+              : null;
+
+          const closedBill =
+            acc.type === "CREDIT" ? await loadClosedBill(acc.pluggyAccountId) : null;
 
           accounts.push({
             ...serializeAccount({
               ...acc,
-              nextBillAmount: nextBill.nextBillAmount,
-              nextBillDueDate: nextBill.nextBillDueDate,
+              closedBillAmount: closedBill?.amount ?? null,
+              closedBillDueDate: closedBill?.dueDate ?? null,
+              openBillAmount,
+              openBillDueDate,
+              nextBillAmount: openBillAmount,
+              nextBillDueDate: openBillDueDate,
             }),
             personName: person.name,
           });
@@ -185,24 +226,153 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const currencyCode = "BRL";
-    const currentTotals = summarizeTransactions(financialTransactions, periods.currentRange);
-    const previousTotals = summarizeTransactions(financialTransactions, periods.previousRange);
 
-    const period = {
-      months,
-      ...currentTotals,
-      periodMode: periods.periodMode,
-      from: periods.currentRange.from,
-      to: periods.currentRange.to,
-      label: periods.currentLabel,
+    let manualCommittedForCurrent = 0;
+    let manualCommittedForFocus = 0;
+    const focusCycleKey =
+      periodMode === "payday" && paydayDay !== null
+        ? periods.currentKeys[periods.currentKeys.length - 1]
+        : undefined;
+
+    if (paydayDay !== null) {
+      const currentMeta = getPaydayCycleRange(paydayDay, new Date(), paydayCycleAnchor);
+      if (!currentMeta.isComplete) {
+        manualCommittedForCurrent = await sumPendingInstallmentsInRange(
+          userId,
+          currentMeta.from,
+          currentMeta.to,
+        );
+      }
+      if (focusCycleKey) {
+        const focusMeta = getPaydayCycleRangeByKey(
+          focusCycleKey,
+          paydayDay,
+          paydayCycleAnchor,
+        );
+        if (!focusMeta.isComplete) {
+          manualCommittedForFocus = await sumPendingInstallmentsInRange(
+            userId,
+            focusMeta.from,
+            focusMeta.to,
+          );
+        }
+      }
+    } else if (periods.currentRange.from && periods.currentRange.to) {
+      const today = new Date().toISOString().slice(0, 10);
+      if (today >= periods.currentRange.from && today <= periods.currentRange.to) {
+        manualCommittedForFocus = await sumPendingInstallmentsInRange(
+          userId,
+          today,
+          periods.currentRange.to,
+        );
+      }
+    }
+
+    const currentCycle =
+      paydayDay !== null
+        ? buildCurrentCycleSummary(
+            financialTransactions,
+            paydayDay,
+            paydayCycleAnchor,
+            manualCommittedForCurrent,
+          )
+        : null;
+
+    const manualByCycle = new Map<string, number>();
+    if (paydayDay !== null && manualCommittedForCurrent > 0 && currentCycle) {
+      manualByCycle.set(currentCycle.cycleKey, manualCommittedForCurrent);
+    }
+
+    const recentCycles =
+      paydayDay !== null
+        ? buildRecentCycleSummaries(
+            financialTransactions,
+            paydayDay,
+            undefined,
+            paydayCycleAnchor,
+            manualByCycle,
+          )
+        : null;
+
+    let period: {
+      months: typeof months;
+      income: number;
+      expenses: number;
+      net: number;
+      committedExpenses?: number;
+      availableNet?: number;
+      periodMode: typeof periods.periodMode;
+      from?: string;
+      to?: string;
+      label?: string;
     };
-    const previousPeriod = {
-      months,
-      ...previousTotals,
-      periodMode: periods.periodMode,
-      from: periods.previousRange.from,
-      to: periods.previousRange.to,
+    let previousPeriod: {
+      months: typeof months;
+      income: number;
+      expenses: number;
+      net: number;
+      committedExpenses?: number;
+      availableNet?: number;
+      periodMode: typeof periods.periodMode;
+      from?: string;
+      to?: string;
     };
+
+    if (periodMode === "payday" && paydayDay !== null && focusCycleKey) {
+      const focusCycleSummary = buildCycleSummary(
+        financialTransactions,
+        paydayDay,
+        focusCycleKey,
+        paydayCycleAnchor,
+        manualCommittedForFocus,
+      );
+      const endOffset = periods.endOffsetCycles ?? 0;
+      const previousCycleKeys = getRecentPaydayCycles(
+        1,
+        paydayDay,
+        endOffset + 1,
+        paydayCycleAnchor,
+      );
+      const previousCycleSummary = buildCycleSummary(
+        financialTransactions,
+        paydayDay,
+        previousCycleKeys[0],
+        paydayCycleAnchor,
+        0,
+      );
+      period = buildCyclePeriodSummary(
+        focusCycleSummary,
+        months,
+        paydayDay,
+        paydayCycleAnchor,
+        periods.periodMode,
+      );
+      previousPeriod = buildCyclePeriodSummary(
+        previousCycleSummary,
+        months,
+        paydayDay,
+        paydayCycleAnchor,
+        periods.periodMode,
+      );
+    } else {
+      const currentTotals = summarizeTransactions(financialTransactions, periods.currentRange);
+      const previousTotals = summarizeTransactions(financialTransactions, periods.previousRange);
+      period = {
+        months,
+        ...currentTotals,
+        periodMode: periods.periodMode,
+        from: periods.currentRange.from,
+        to: periods.currentRange.to,
+        label: periods.currentLabel,
+      };
+      previousPeriod = {
+        months,
+        ...previousTotals,
+        periodMode: periods.periodMode,
+        from: periods.previousRange.from,
+        to: periods.previousRange.to,
+      };
+    }
 
     const monthlySeries =
       periodMode === "payday" && paydayDay !== null
@@ -235,53 +405,6 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       periodMode: periods.periodMode,
     });
 
-    let manualCommittedCurrent = 0;
-    if (paydayDay !== null) {
-      const cycleMeta = getPaydayCycleRange(paydayDay, new Date(), paydayCycleAnchor);
-      if (!cycleMeta.isComplete) {
-        manualCommittedCurrent = await sumPendingInstallmentsInRange(
-          userId,
-          cycleMeta.from,
-          cycleMeta.to,
-        );
-      }
-    } else if (periods.currentRange.from && periods.currentRange.to) {
-      const today = new Date().toISOString().slice(0, 10);
-      if (today >= periods.currentRange.from && today <= periods.currentRange.to) {
-        manualCommittedCurrent = await sumPendingInstallmentsInRange(
-          userId,
-          today,
-          periods.currentRange.to,
-        );
-      }
-    }
-
-    const currentCycle =
-      paydayDay !== null
-        ? buildCurrentCycleSummary(
-            financialTransactions,
-            paydayDay,
-            paydayCycleAnchor,
-            manualCommittedCurrent,
-          )
-        : null;
-
-    const manualByCycle = new Map<string, number>();
-    if (paydayDay !== null && manualCommittedCurrent > 0 && currentCycle) {
-      manualByCycle.set(currentCycle.cycleKey, manualCommittedCurrent);
-    }
-
-    const recentCycles =
-      paydayDay !== null
-        ? buildRecentCycleSummaries(
-            financialTransactions,
-            paydayDay,
-            undefined,
-            paydayCycleAnchor,
-            manualByCycle,
-          )
-        : null;
-
     const growthMetrics = buildGrowthMetrics({
       period,
       previousPeriod,
@@ -291,7 +414,11 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       paydayDay,
       paydayCycleAnchor,
       periodMode: periods.periodMode,
-      manualCommittedExpenses: manualCommittedCurrent,
+      manualCommittedExpenses: manualCommittedForFocus,
+      focusCycleKey:
+        periodMode === "payday" && paydayDay !== null
+          ? periods.currentKeys[periods.currentKeys.length - 1]
+          : undefined,
     });
 
     const { investmentBalance, investments } = await loadInvestmentData(

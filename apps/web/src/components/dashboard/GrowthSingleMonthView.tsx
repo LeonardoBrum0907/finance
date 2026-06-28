@@ -8,6 +8,7 @@ import type {
 } from "@finance/shared";
 import { formatCurrency, formatPercent } from "../../lib/format";
 import { ensureChartJsRegistered } from "../../lib/chart";
+import { CYCLE_COPY, formatCycleBalance, toneTextClass } from "../../lib/cycleLabels";
 import { baseChartOptions, getChartColors } from "../../lib/chartTheme";
 import { useTheme } from "../../lib/theme/useTheme";
 
@@ -22,6 +23,12 @@ interface Props {
   view: GrowthView;
   periodMode?: PeriodMode;
   hideIncomeBreakdown?: boolean;
+  /** Até agora (com salário previsto quando aplicável). */
+  balanceWithSalary?: number;
+  /** Depois dos agendamentos. */
+  availableNet?: number;
+  /** Até o pagamento. */
+  balanceAtPayday?: number;
 }
 
 function ChangeChip({
@@ -86,13 +93,34 @@ export function GrowthSingleMonthView({
   view,
   periodMode = "calendar",
   hideIncomeBreakdown = false,
+  balanceWithSalary,
+  availableNet,
+  balanceAtPayday,
 }: Props) {
   const { theme } = useTheme();
   const chartColors = useMemo(() => getChartColors(), [theme]);
-  const { income, expenses, net } = point;
+  const { income, expenses, net: pointNet } = point;
+  const displayUntilNow = balanceWithSalary ?? pointNet;
+  const untilNowBalance = formatCycleBalance(displayUntilNow, currencyCode);
+  const afterScheduledBalance =
+    availableNet !== undefined ? formatCycleBalance(availableNet, currencyCode) : null;
+  const atPaydayBalance =
+    balanceAtPayday !== undefined ? formatCycleBalance(balanceAtPayday, currencyCode) : null;
   const { savingsRate, expenseRatio, vsPrevious, incomeBreakdown, projection } = growthMetrics;
   const maxFlow = Math.max(income, expenses, 1);
   const compareLabel = periodMode === "payday" ? "vs ciclo anterior" : "vs mês anterior";
+  const showAfterScheduled =
+    availableNet !== undefined &&
+    projection?.isPartialPeriod &&
+    availableNet !== displayUntilNow;
+  const showAtPayday =
+    balanceAtPayday !== undefined &&
+    projection?.isPartialPeriod &&
+    balanceAtPayday !== availableNet;
+  const balanceLabel =
+    periodMode === "payday" && projection?.isPartialPeriod
+      ? CYCLE_COPY.untilNow
+      : "Saldo";
 
   const flowDoughnutData = useMemo(
     () => ({
@@ -110,12 +138,12 @@ export function GrowthSingleMonthView({
   );
 
   const balanceDoughnutData = useMemo(() => {
-    if (net >= 0) {
+    if (displayUntilNow >= 0) {
       return {
         labels: ["Poupança", "Gasto"],
         datasets: [
           {
-            data: [net, Math.max(0, expenses)],
+            data: [displayUntilNow, Math.max(0, expenses)],
             backgroundColor: [chartColors.income, chartColors.expense],
             borderWidth: 0,
             hoverOffset: 4,
@@ -127,14 +155,14 @@ export function GrowthSingleMonthView({
       labels: ["Déficit"],
       datasets: [
         {
-          data: [Math.abs(net)],
+          data: [Math.abs(displayUntilNow)],
           backgroundColor: [chartColors.expense],
           borderWidth: 0,
           hoverOffset: 4,
         },
       ],
     };
-  }, [net, expenses, chartColors]);
+  }, [displayUntilNow, expenses, chartColors]);
 
   const doughnutOptions = useMemo(
     () => ({
@@ -175,16 +203,35 @@ export function GrowthSingleMonthView({
             {view === "flow" ? (
               <>
                 <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                  Saldo
+                  {balanceLabel}
                 </span>
                 <span
-                  className={`font-display text-sm font-bold ${
-                    net >= 0 ? "text-positive" : "text-negative"
-                  }`}
+                  className={`text-[10px] font-bold uppercase tracking-wide ${toneTextClass(untilNowBalance.tone)}`}
                 >
-                  {net >= 0 ? "+" : ""}
-                  {formatCurrency(net, currencyCode)}
+                  {untilNowBalance.status}
                 </span>
+                <span
+                  className={`font-display text-sm font-bold ${toneTextClass(untilNowBalance.tone)}`}
+                >
+                  {untilNowBalance.formattedAmount}
+                </span>
+                {showAfterScheduled && afterScheduledBalance && (
+                  <span className="mt-0.5 text-[9px] font-medium text-muted-foreground">
+                    {CYCLE_COPY.afterScheduled}:{" "}
+                    <span className={toneTextClass(afterScheduledBalance.tone)}>
+                      {afterScheduledBalance.status}{" "}
+                      {afterScheduledBalance.formattedAmount}
+                    </span>
+                  </span>
+                )}
+                {showAtPayday && atPaydayBalance && (
+                  <span className="mt-0.5 text-[9px] font-medium text-muted-foreground">
+                    {CYCLE_COPY.atPayday}:{" "}
+                    <span className={toneTextClass(atPaydayBalance.tone)}>
+                      {atPaydayBalance.status} {atPaydayBalance.formattedAmount}
+                    </span>
+                  </span>
+                )}
                 {savingsRate !== null && (
                   <span className="mt-0.5 text-[10px] font-semibold text-muted-foreground">
                     {savingsRate.toFixed(0)}% poupança
@@ -194,16 +241,35 @@ export function GrowthSingleMonthView({
             ) : (
               <>
                 <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                  Saldo líquido
+                  {balanceLabel}
                 </span>
                 <span
-                  className={`font-display text-sm font-bold ${
-                    net >= 0 ? "text-positive" : "text-negative"
-                  }`}
+                  className={`text-[10px] font-bold uppercase tracking-wide ${toneTextClass(untilNowBalance.tone)}`}
                 >
-                  {net >= 0 ? "+" : ""}
-                  {formatCurrency(net, currencyCode)}
+                  {untilNowBalance.status}
                 </span>
+                <span
+                  className={`font-display text-sm font-bold ${toneTextClass(untilNowBalance.tone)}`}
+                >
+                  {untilNowBalance.formattedAmount}
+                </span>
+                {showAfterScheduled && afterScheduledBalance && (
+                  <span className="mt-0.5 text-[9px] font-medium text-muted-foreground">
+                    {CYCLE_COPY.afterScheduled}:{" "}
+                    <span className={toneTextClass(afterScheduledBalance.tone)}>
+                      {afterScheduledBalance.status}{" "}
+                      {afterScheduledBalance.formattedAmount}
+                    </span>
+                  </span>
+                )}
+                {showAtPayday && atPaydayBalance && (
+                  <span className="mt-0.5 text-[9px] font-medium text-muted-foreground">
+                    {CYCLE_COPY.atPayday}:{" "}
+                    <span className={toneTextClass(atPaydayBalance.tone)}>
+                      {atPaydayBalance.status} {atPaydayBalance.formattedAmount}
+                    </span>
+                  </span>
+                )}
               </>
             )}
           </div>
@@ -232,15 +298,15 @@ export function GrowthSingleMonthView({
               <HorizontalBar
                 label="Receitas"
                 value={income}
-                max={Math.max(income, Math.abs(net), 1)}
+                max={Math.max(income, untilNowBalance.amount, 1)}
                 color={chartColors.income}
                 currencyCode={currencyCode}
               />
               <HorizontalBar
-                label={net >= 0 ? "Sobra" : "Déficit"}
-                value={Math.abs(net)}
-                max={Math.max(income, Math.abs(net), 1)}
-                color={net >= 0 ? chartColors.net : chartColors.expense}
+                label={untilNowBalance.status}
+                value={untilNowBalance.amount}
+                max={Math.max(income, untilNowBalance.amount, 1)}
+                color={displayUntilNow >= 0 ? chartColors.net : chartColors.expense}
                 currencyCode={currencyCode}
               />
             </>

@@ -13,7 +13,7 @@ import {
 } from "@finance/shared";
 import { prisma } from "../../prisma.js";
 import { effectiveTransactionCategory } from "../transactionCategory.js";
-import { computeNextBill } from "./creditBill.js";
+import { resolveNextDueDate } from "./creditBill.js";
 import {
   addMonthsToMonthKey,
   buildGrowthMetrics,
@@ -170,18 +170,9 @@ async function loadSimulatorContext(
             bankBalance += contribution;
           }
         } else {
-          const billTxs = acc.transactions.map((tx) => ({
-            accountId: acc.id,
-            date: tx.date,
-            amount: tx.amount,
-          }));
-          const bill = computeNextBill(
-            acc.id,
-            acc.type,
-            acc.balanceCloseDate,
-            acc.balanceDueDate,
-            billTxs,
-          );
+          const openBillAmount =
+            Math.abs(acc.balance) > 0 ? Math.abs(acc.balance) : null;
+          const openBillDueDate = resolveNextDueDate(acc.balanceDueDate);
           creditAccounts.push({
             id: acc.id,
             name: acc.name,
@@ -189,9 +180,9 @@ async function loadSimulatorContext(
             type: acc.type,
             balanceCloseDate: acc.balanceCloseDate,
             balanceDueDate: acc.balanceDueDate,
-            nextBillAmount: bill.nextBillAmount,
+            nextBillAmount: openBillAmount,
             nextBillDueDate:
-              bill.nextBillDueDate?.toISOString() ?? acc.balanceDueDate?.toISOString() ?? null,
+              openBillDueDate?.toISOString() ?? acc.balanceDueDate?.toISOString() ?? null,
           });
         }
       }

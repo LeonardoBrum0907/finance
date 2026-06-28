@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import type { DashboardNetWorth, DashboardPeriodSummary, PeriodMode } from "@finance/shared";
 import { formatCurrency, formatPercent } from "../../lib/format";
+import { formatCycleBalance } from "../../lib/cycleLabels";
 import { AssistantSpotlightButton } from "../chat/AssistantSpotlightButton";
 import { AnimatedValue } from "./AnimatedValue";
 import { cardClass, cardHighlightClass, fadeUp } from "./motion";
@@ -137,6 +138,9 @@ interface StatCardsProps {
   previousPeriod: DashboardPeriodSummary;
   periodMode?: PeriodMode;
   personId?: string;
+  simulationDelta?: { expenses: number; net: number; committedExpenses?: number };
+  /** Modo ciclo: exibe só Patrimônio Líquido (demais métricas no card de ciclo). */
+  compactCycleMode?: boolean;
 }
 
 export function StatCards({
@@ -146,15 +150,30 @@ export function StatCards({
   previousPeriod,
   periodMode = "calendar",
   personId,
+  simulationDelta,
+  compactCycleMode = false,
 }: StatCardsProps) {
-  const netPositive = period.net >= 0;
+  const simExpenses = simulationDelta?.expenses ?? 0;
+  const simNet = simulationDelta?.net ?? 0;
+  const hasSimulation = simExpenses > 0 || (simulationDelta?.committedExpenses ?? 0) > 0;
+
+  const displayExpenses = period.expenses + simExpenses;
+  const displayNet = period.net + simNet;
+  const netBalance = formatCycleBalance(displayNet, currencyCode);
+  const netPositive = displayNet >= 0;
 
   const netWorthBreakdown = netWorth.investmentsIncluded
     ? `Contas ${formatCurrency(netWorth.bankBalance, currencyCode)} · Invest. ${formatCurrency(netWorth.investmentBalance, currencyCode)} · Cartão −${formatCurrency(netWorth.creditDebt, currencyCode)}`
     : `Contas ${formatCurrency(netWorth.bankBalance, currencyCode)} · Cartão −${formatCurrency(netWorth.creditDebt, currencyCode)} · Invest. excluído (${formatCurrency(netWorth.investmentBalance, currencyCode)})`;
 
   return (
-    <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
+    <div
+      className={
+        compactCycleMode
+          ? "grid gap-6 max-w-md"
+          : "grid gap-6 sm:grid-cols-2 xl:grid-cols-4"
+      }
+    >
       <StatCard
         label="Patrimônio Líquido"
         value={netWorth.total}
@@ -166,14 +185,15 @@ export function StatCards({
         iconBoxClassName="border border-positive/10 bg-positive/10"
         subtitle={netWorthBreakdown}
       />
+      {!compactCycleMode && (
+        <>
       <StatCard
-        label="Entradas (Inflow)"
+        label="Já entrou"
         value={period.income}
         currencyCode={currencyCode}
         change={calcChange(period.income, previousPeriod.income)}
         index={1}
-        prefix="+"
-        valueClassName="text-positive"
+        valueClassName="text-foreground"
         icon={ArrowUpRight}
         iconClassName="text-positive"
         iconBoxClassName="border border-positive/10 bg-positive/10"
@@ -181,26 +201,25 @@ export function StatCards({
         periodMode={periodMode}
       />
       <StatCard
-        label="Saídas (Outflow)"
-        value={period.expenses}
+        label="Já gastei"
+        value={displayExpenses}
         currencyCode={currencyCode}
         change={calcChange(period.expenses, previousPeriod.expenses)}
         index={2}
-        prefix="-"
-        valueClassName="text-negative"
+        valueClassName="text-foreground"
         icon={ArrowDownRight}
         iconClassName="text-negative"
         iconBoxClassName="border border-negative/10 bg-negative/10"
         badgeTone="negative"
         periodMode={periodMode}
+        subtitle={hasSimulation ? "com simulação" : undefined}
       />
       <StatCard
-        label="Saldo Sobrando"
-        value={period.net}
+        label={netBalance.status}
+        value={netBalance.amount}
         currencyCode={currencyCode}
         change={calcChange(period.net, previousPeriod.net)}
         index={3}
-        prefix={period.net > 0 ? "+" : ""}
         valueClassName={netPositive ? "text-positive" : "text-negative"}
         icon={netPositive ? ArrowUpRight : ArrowDownRight}
         iconClassName={netPositive ? "text-positive" : "text-negative"}
@@ -211,6 +230,7 @@ export function StatCards({
         }
         badgeTone={netPositive ? "positive" : "negative"}
         periodMode={periodMode}
+        subtitle={hasSimulation ? "com simulação" : undefined}
         spotlightMessage={
           !netPositive
             ? "Meu saldo está negativo neste período. Onde posso cortar gastos?"
@@ -218,11 +238,13 @@ export function StatCards({
         }
         spotlightContext={
           !netPositive
-            ? JSON.stringify({ source: "stat_card", metric: "net", value: period.net })
+            ? JSON.stringify({ source: "stat_card", metric: "net", value: displayNet })
             : undefined
         }
         spotlightPersonId={personId}
       />
+        </>
+      )}
     </div>
   );
 }

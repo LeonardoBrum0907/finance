@@ -525,7 +525,28 @@ function offsetCycleKey(
 
 }
 
+const MAX_CYCLE_OFFSET_LOOKUP = 120;
 
+/**
+ * Quantos ciclos `selectedCycleKey` está atrás do ciclo atual (0 = ciclo atual).
+ * Retorna null se a chave não pertence a um ciclo recente válido.
+ */
+export function getPaydayCycleEndOffset(
+  selectedCycleKey: string,
+  paydayDay: number,
+  anchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
+): number | null {
+  const currentKey = getPaydayCycleKey(paydayDay, anchor);
+  if (selectedCycleKey === currentKey) return 0;
+
+  let key = currentKey;
+  for (let offset = 1; offset <= MAX_CYCLE_OFFSET_LOOKUP; offset++) {
+    key = offsetCycleKey(key, paydayDay, 1);
+    if (key === selectedCycleKey) return offset;
+  }
+
+  return null;
+}
 
 /**
 

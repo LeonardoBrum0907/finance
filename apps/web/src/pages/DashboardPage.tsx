@@ -6,9 +6,17 @@ import type {
    DashboardSummary,
    PeriodMode,
    PersonDTO,
+   SimulatedPurchase,
    UserSettingsDTO,
 } from "@finance/shared";
-import { isCreditAccount, isPaydayDayConfigured, parsePaydayCycleAnchor } from "@finance/shared";
+import {
+   computeSimulationCycleImpact,
+   computeSimulationStatDelta,
+   isCreditAccount,
+   isPaydayDayConfigured,
+   parsePaydayCycleAnchor,
+   todayDateKeyInTimeZone,
+} from "@finance/shared";
 import { api } from "../lib/api";
 import { CreditCardList } from "../components/dashboard/CreditCardList";
 import { CycleProgressCard } from "../components/dashboard/CycleProgressCard";
@@ -34,6 +42,7 @@ export function DashboardPage() {
    const [periodMode, setPeriodMode] = useState<PeriodMode>("calendar");
    const [categorySelection, setCategorySelection] = useState<CategoryChartSelection | null>(null);
    const [selectedCycleKey, setSelectedCycleKey] = useState<string | null>(null);
+   const [simulatedPurchases, setSimulatedPurchases] = useState<SimulatedPurchase[]>([]);
    const transactionsRef = useRef<HTMLElement>(null);
 
    const settings = useQuery({
@@ -86,13 +95,20 @@ export function DashboardPage() {
    const effectivePeriodMode =
       periodMode === "payday" && paydayConfigured ? "payday" : "calendar";
 
-   const dashboardParams = new URLSearchParams({ months: String(months) });
-   if (personId !== "all") dashboardParams.set("personId", personId);
-   if (effectivePeriodMode === "payday") dashboardParams.set("periodMode", "payday");
+   const cycleKeyForApi =
+      effectivePeriodMode === "payday" && selectedCycleKey ? selectedCycleKey : undefined;
 
    const dashboard = useQuery({
-      queryKey: ["dashboard", months, personId, effectivePeriodMode],
-      queryFn: () => api.get<DashboardSummary>(`/api/dashboard?${dashboardParams}`),
+      queryKey: ["dashboard", months, personId, effectivePeriodMode, cycleKeyForApi ?? "current"],
+      queryFn: () => {
+         const dashboardParams = new URLSearchParams({ months: String(months) });
+         if (personId !== "all") dashboardParams.set("personId", personId);
+         if (effectivePeriodMode === "payday") {
+            dashboardParams.set("periodMode", "payday");
+            if (cycleKeyForApi) dashboardParams.set("cycleKey", cycleKeyForApi);
+         }
+         return api.get<DashboardSummary>(`/api/dashboard?${dashboardParams}`);
+      },
       enabled: settings.isSuccess,
    });
 
@@ -120,10 +136,62 @@ export function DashboardPage() {
    }, [months, personId, effectivePeriodMode]);
 
    useEffect(() => {
+      setCategorySelection(null);
+   }, [selectedCycleKey]);
+
+   useEffect(() => {
       setDashboardPersonFilter(personId);
    }, [personId, setDashboardPersonFilter]);
 
    const effectivePersonId = personId === "all" ? undefined : personId;
+   const isHistoricalCycle = Boolean(
+      effectivePeriodMode === "payday" && displayCycle?.isComplete,
+   );
+
+   const simulationEnabled = Boolean(
+      effectivePeriodMode === "payday" &&
+         !isHistoricalCycle &&
+         data?.currentCycle &&
+         !data.currentCycle.isComplete,
+   );
+
+   const simulationImpact = useMemo(() => {
+      if (!simulationEnabled || simulatedPurchases.length === 0) return null;
+      const cycle = data?.currentCycle ?? displayCycle;
+      if (!cycle) return null;
+      return computeSimulationCycleImpact(
+         simulatedPurchases,
+         { from: cycle.from, to: cycle.to },
+         todayDateKeyInTimeZone(),
+      );
+   }, [simulationEnabled, simulatedPurchases, data?.currentCycle, displayCycle]);
+
+   const simulationStatDelta = useMemo(
+      () => (simulationImpact ? computeSimulationStatDelta(simulationImpact) : undefined),
+      [simulationImpact],
+   );
+
+   const handleAddSimulation = useCallback((purchase: SimulatedPurchase) => {
+      setSimulatedPurchases((prev) => [...prev, purchase]);
+   }, []);
+
+   const handleRemoveSimulation = useCallback((purchaseId: string) => {
+      setSimulatedPurchases((prev) => prev.filter((p) => p.id !== purchaseId));
+   }, []);
+
+   const handleClearSimulations = useCallback(() => {
+      setSimulatedPurchases([]);
+   }, []);
+
+   useEffect(() => {
+      setSimulatedPurchases([]);
+   }, [personId, effectivePeriodMode, selectedCycleKey]);
+
+   useEffect(() => {
+      return () => {
+         setSimulatedPurchases([]);
+      };
+   }, []);
 
    return (
       <div className="space-y-8">
@@ -202,7 +270,24 @@ export function DashboardPage() {
             </div>
          ) : (
             <>
-               <AssistantAlertBanner />
+               {!isHistoricalCycle && <AssistantAlertBanner />}
+
+               {simulatedPurchases.length > 0 && simulationEnabled && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                     <span>
+                        {simulatedPurchases.length}{" "}
+                        {simulatedPurchases.length === 1 ? "simulação ativa" : "simulações ativas"}{" "}
+                        · impacto no ciclo atual
+                     </span>
+                     <button
+                        type="button"
+                        onClick={handleClearSimulations}
+                        className="text-xs font-semibold underline hover:no-underline"
+                     >
+                        Limpar tudo
+                     </button>
+                  </div>
+               )}
 
                {showCycleCard && data.paydayDay !== null && displayCycle && activeCycleKey && (
                   <CycleProgressCard
@@ -213,6 +298,15 @@ export function DashboardPage() {
                      paydayCycleAnchor={data.paydayCycleAnchor}
                      selectedCycleKey={activeCycleKey}
                      onSelectCycle={setSelectedCycleKey}
+                     simulationOverlay={
+                        simulationImpact && simulationEnabled
+                           ? {
+                                realizedExpenses: simulationImpact.realizedExpenses,
+                                committedExpenses: simulationImpact.committedExpenses,
+                             }
+                           : undefined
+                     }
+                     onClearSimulation={handleClearSimulations}
                   />
                )}
 
@@ -223,6 +317,8 @@ export function DashboardPage() {
                   previousPeriod={data.previousPeriod}
                   periodMode={effectivePeriodMode}
                   personId={effectivePersonId}
+                  simulationDelta={simulationStatDelta}
+                  compactCycleMode={Boolean(showCycleCard)}
                />
 
                <InvestmentSnapshot
@@ -242,25 +338,47 @@ export function DashboardPage() {
                   hideIncomeBreakdown={Boolean(showCycleCard)}
                   onCategorySelect={handleCategorySelect}
                   personId={effectivePersonId}
+                  balanceWithSalary={
+                     effectivePeriodMode === "payday"
+                        ? data.period.balanceWithSalary
+                        : undefined
+                  }
+                  availableNet={
+                     effectivePeriodMode === "payday" ? data.period.availableNet : undefined
+                  }
+                  balanceAtPayday={
+                     effectivePeriodMode === "payday" ? data.period.balanceAtPayday : undefined
+                  }
                />
 
                <div className="grid gap-8 lg:grid-cols-2">
                   <InsightsPanel insights={data.insights} personId={effectivePersonId} />
-                  <div className="flex flex-col gap-4">
-                     <WeeklyRecapCard />
-                     {hasCreditCards && <CreditCardList accounts={data.accounts} />}
-                  </div>
+                  {!isHistoricalCycle && (
+                     <div className="flex flex-col gap-4">
+                        <WeeklyRecapCard />
+                        {hasCreditCards && <CreditCardList accounts={data.accounts} />}
+                     </div>
+                  )}
                </div>
 
-               <HouseholdArenaCard />
+               {!isHistoricalCycle && <HouseholdArenaCard />}
 
 
                <RecentTransactions
                   personId={personId}
                   dashboardMonths={months}
+                  periodMode={effectivePeriodMode}
+                  cycleKey={cycleKeyForApi}
+                  periodSummary={
+                     effectivePeriodMode === "payday" ? data.period : undefined
+                  }
                   categorySelection={categorySelection}
                   onClearCategorySelection={handleClearCategorySelection}
                   sectionRef={transactionsRef}
+                  simulatedPurchases={simulatedPurchases}
+                  simulationEnabled={simulationEnabled}
+                  onAddSimulation={handleAddSimulation}
+                  onRemoveSimulation={handleRemoveSimulation}
                />
             </>
          )}

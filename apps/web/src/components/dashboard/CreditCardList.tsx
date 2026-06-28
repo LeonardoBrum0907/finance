@@ -27,7 +27,9 @@ function maskedNumber(number: string | null): string {
 }
 
 export function CreditCardList({ accounts }: Props) {
-  const cards = accounts.filter((acc) => isCreditAccount(acc.type));
+  const cards = accounts.filter(
+    (acc) => isCreditAccount(acc.type) && (acc.creditLimit ?? 0) > 0,
+  );
   if (cards.length === 0) return null;
 
   return (
@@ -43,13 +45,21 @@ export function CreditCardList({ accounts }: Props) {
           Cartões de Crédito
         </h2>
         <p className="text-[11px] text-muted-foreground">
-          Fatura, uso do limite e próximo vencimento
+          Faturas fechada e aberta, uso do limite e vencimentos
         </p>
       </div>
 
       <div className="flex flex-col gap-4">
         {cards.map((card, index) => {
-          const currentBill = Math.abs(card.balance);
+          const openBill = card.openBillAmount ?? card.nextBillAmount;
+          const openBillDue = card.openBillDueDate ?? card.nextBillDueDate;
+          const closedBill = card.closedBillAmount;
+          const closedBillDue = card.closedBillDueDate;
+          const hasClosedBill = closedBill != null && closedBill > 0;
+          const hasOpenBill = openBill != null && openBill > 0;
+          const showClosedOnly = hasClosedBill && (!hasOpenBill || openBill === closedBill);
+          const showBothBills = hasClosedBill && hasOpenBill && openBill !== closedBill;
+
           const hasLimitData =
             card.creditLimit != null &&
             card.creditLimit > 0 &&
@@ -79,12 +89,68 @@ export function CreditCardList({ accounts }: Props) {
               </div>
 
               <div className="mt-3.5 space-y-2.5">
-                <div className="flex justify-between text-[11px]">
-                  <span className="opacity-70">Fatura atual</span>
-                  <span className="font-bold">
-                    {formatCurrency(currentBill, card.currencyCode)}
-                  </span>
-                </div>
+                {showBothBills ? (
+                  <>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="opacity-70">
+                        Fatura fechada
+                        {closedBillDue && (
+                          <span className="opacity-60">
+                            {" "}
+                            · venceu {formatDate(closedBillDue)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="font-bold">
+                        {formatCurrency(closedBill!, card.currencyCode)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="opacity-70">
+                        Fatura aberta
+                        {openBillDue && (
+                          <span className="opacity-60">
+                            {" "}
+                            · vence {formatDate(openBillDue)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="font-bold">
+                        {formatCurrency(openBill!, card.currencyCode)}
+                      </span>
+                    </div>
+                  </>
+                ) : showClosedOnly ? (
+                  <div className="flex justify-between text-[11px]">
+                    <span className="opacity-70">
+                      Fatura fechada
+                      {closedBillDue && (
+                        <span className="opacity-60">
+                          {" "}
+                          · vence {formatDate(closedBillDue)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="font-bold">
+                      {formatCurrency(closedBill!, card.currencyCode)}
+                    </span>
+                  </div>
+                ) : hasOpenBill ? (
+                  <div className="flex justify-between text-[11px]">
+                    <span className="opacity-70">
+                      Fatura aberta
+                      {openBillDue && (
+                        <span className="opacity-60">
+                          {" "}
+                          · vence {formatDate(openBillDue)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="font-bold">
+                      {formatCurrency(openBill!, card.currencyCode)}
+                    </span>
+                  </div>
+                ) : null}
 
                 {hasLimitData && usedFromLimit != null && (
                   <div className="flex flex-col gap-1.5">
@@ -105,36 +171,6 @@ export function CreditCardList({ accounts }: Props) {
                     )}
                   </div>
                 )}
-
-                {(card.nextBillAmount != null && card.nextBillAmount > 0) ||
-                card.nextBillDueDate ? (
-                  <div className="flex justify-between gap-3 border-t border-white/10 pt-2 text-[11px]">
-                    {card.nextBillAmount != null && card.nextBillAmount > 0 ? (
-                      <span className="opacity-70">
-                        Próxima fatura
-                        {card.nextBillDueDate && (
-                          <span className="opacity-60">
-                            {" "}
-                            · vence {formatDate(card.nextBillDueDate)}
-                          </span>
-                        )}
-                      </span>
-                    ) : card.nextBillDueDate ? (
-                      <span className="opacity-70">Próximo vencimento</span>
-                    ) : null}
-                    {card.nextBillAmount != null && card.nextBillAmount > 0 && (
-                      <span className="shrink-0 font-bold">
-                        {formatCurrency(card.nextBillAmount, card.currencyCode)}
-                      </span>
-                    )}
-                    {(!card.nextBillAmount || card.nextBillAmount <= 0) &&
-                      card.nextBillDueDate && (
-                        <span className="shrink-0 font-bold">
-                          {formatDate(card.nextBillDueDate)}
-                        </span>
-                      )}
-                  </div>
-                ) : null}
               </div>
             </div>
           );

@@ -375,7 +375,15 @@ export interface AccountDTO {
   minimumPayment?: number | null;
   balanceCloseDate?: string | null;
   balanceDueDate?: string | null;
+  /** Fatura já fechada (Pluggy Bills). */
+  closedBillAmount?: number | null;
+  closedBillDueDate?: string | null;
+  /** Fatura em aberto — saldo Pluggy do ciclo atual. */
+  openBillAmount?: number | null;
+  openBillDueDate?: string | null;
+  /** @deprecated Use openBillAmount */
   nextBillAmount?: number | null;
+  /** @deprecated Use openBillDueDate */
   nextBillDueDate?: string | null;
 }
 
@@ -419,6 +427,14 @@ export interface DashboardPeriodSummary {
   committedExpenses?: number;
   /** Saldo disponível: net − committedExpenses. */
   availableNet?: number;
+  /** Salário previsto no pagamento (âncora end, ainda não recebido). */
+  pendingSalary?: number | null;
+  /** true se salário ainda não recebido e sem estimativa histórica. */
+  salaryPending?: boolean;
+  /** Até agora incluindo salário previsto: net + pendingSalary. */
+  balanceWithSalary?: number;
+  /** Até o pagamento: availableNet + pendingSalary. */
+  balanceAtPayday?: number;
   periodMode?: PeriodMode;
   from?: string;
   to?: string;
@@ -455,6 +471,14 @@ export interface DashboardCurrentCycle {
   net: number;
   /** Saldo disponível: net − committedExpenses. */
   availableNet: number;
+  /** Salário previsto no pagamento (âncora end, ainda não recebido). */
+  pendingSalary?: number | null;
+  /** true se salário ainda não recebido e sem estimativa histórica. */
+  salaryPending?: boolean;
+  /** Até agora incluindo salário previsto: net + pendingSalary. */
+  balanceWithSalary: number;
+  /** Até o pagamento: availableNet + pendingSalary. */
+  balanceAtPayday: number;
   salaryIncome: number;
   extraIncome: number;
 }

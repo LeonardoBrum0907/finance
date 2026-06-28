@@ -1,4 +1,4 @@
-import { isTransactionOutflow } from "@finance/shared";
+import { isCreditAccount, isTransactionOutflow } from "@finance/shared";
 
 export interface NextBillSummary {
   nextBillAmount: number | null;
@@ -88,16 +88,21 @@ export function computeNextBill(
 
   const closeAt = endOfDay(closeDate);
 
+  const refEnd = endOfDay(referenceDate);
+
   let amount = 0;
   for (const tx of transactions) {
     if (tx.accountId !== accountId) continue;
-    if (tx.date <= closeAt) continue;
-    if (!isTransactionOutflow(tx.amount, accountType)) continue;
-    amount += Math.abs(tx.amount);
+    if (tx.date <= closeAt || tx.date > refEnd) continue;
+    if (isTransactionOutflow(tx.amount, accountType)) {
+      amount += Math.abs(tx.amount);
+    } else if (isCreditAccount(accountType)) {
+      amount -= Math.abs(tx.amount);
+    }
   }
 
   return {
-    nextBillAmount: amount,
+    nextBillAmount: amount > 0 ? amount : null,
     nextBillDueDate: resolveNextDueDate(balanceDueDate, referenceDate),
   };
 }

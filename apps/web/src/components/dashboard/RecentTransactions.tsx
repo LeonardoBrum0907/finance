@@ -1,4 +1,4 @@
-import { useEffect, useState, type Ref, type RefObject } from "react";
+import { useEffect, useMemo, useState, type Ref, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
+  FlaskConical,
   Home,
   Layers,
   Search,
@@ -17,23 +18,41 @@ import {
 import type {
   CategoryChartSelection,
   DashboardMonths,
+  DashboardPeriodSummary,
+  PeriodMode,
+  SimulatedPurchase,
   TransactionTypeFilter,
   TransactionsListResponse,
 } from "@finance/shared";
-import { FINE_GRAINED_CATEGORIES, isTransactionOutflow, toSignedDisplayAmount } from "@finance/shared";
+import {
+  FINE_GRAINED_CATEGORIES,
+  flattenSimulatedRows,
+  isTransactionOutflow,
+  toSignedDisplayAmount,
+} from "@finance/shared";
 import { api } from "../../lib/api";
 import { formatCurrency } from "../../lib/format";
+import { CYCLE_COPY, formatCycleBalance, formatPlainAmount } from "../../lib/cycleLabels";
 import { cardLargeClass, fadeUp } from "./motion";
 import { PeriodSelector } from "./PeriodSelector";
 import type { PersonFilter } from "./PersonSelector";
+import { SimulatePurchaseModal } from "./SimulatePurchaseModal";
 import { TransactionDetailModal } from "./TransactionDetailModal";
 
 interface Props {
   personId: PersonFilter;
   dashboardMonths: DashboardMonths;
+  periodMode?: PeriodMode;
+  cycleKey?: string;
+  /** Resumo alinhado ao ciclo (modo payday); usado no rodapé sem filtros ativos. */
+  periodSummary?: DashboardPeriodSummary;
   categorySelection?: CategoryChartSelection | null;
   onClearCategorySelection?: () => void;
   sectionRef?: RefObject<HTMLElement | null>;
+  simulatedPurchases?: SimulatedPurchase[];
+  simulationEnabled?: boolean;
+  onAddSimulation?: (purchase: SimulatedPurchase) => void;
+  onRemoveSimulation?: (purchaseId: string) => void;
 }
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
@@ -89,6 +108,8 @@ function buildTransactionsUrl(
   category: string,
   typeFilter: TransactionTypeFilter,
   categorySelection: CategoryChartSelection | null | undefined,
+  periodMode?: PeriodMode,
+  cycleKey?: string,
 ): string {
   const params = new URLSearchParams({
     months: String(periodMonths),
@@ -98,6 +119,10 @@ function buildTransactionsUrl(
   });
   if (personId !== "all") params.set("personId", personId);
   if (search) params.set("search", search);
+  if (periodMode === "payday") {
+    params.set("periodMode", "payday");
+    if (cycleKey) params.set("cycleKey", cycleKey);
+  }
 
   if (categorySelection?.kind === "merged") {
     params.set("categoryGroups", categorySelection.groups.join(","));
@@ -115,9 +140,16 @@ function buildTransactionsUrl(
 export function RecentTransactions({
   personId,
   dashboardMonths,
+  periodMode = "calendar",
+  cycleKey,
+  periodSummary,
   categorySelection = null,
   onClearCategorySelection,
   sectionRef,
+  simulatedPurchases = [],
+  simulationEnabled = false,
+  onAddSimulation,
+  onRemoveSimulation,
 }: Props) {
   const [periodMonths, setPeriodMonths] = useState<DashboardMonths>(dashboardMonths);
   const [page, setPage] = useState(1);
@@ -127,6 +159,7 @@ export function RecentTransactions({
   const [typeFilter, setTypeFilter] = useState<TransactionTypeFilter>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [detailTxId, setDetailTxId] = useState<string | null>(null);
+  const [simulateModalOpen, setSimulateModalOpen] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -146,10 +179,11 @@ export function RecentTransactions({
 
   useEffect(() => {
     setPage(1);
-  }, [periodMonths, personId, debouncedSearch, categoryFilter, typeFilter, pageSize, categorySelection]);
+  }, [periodMonths, personId, debouncedSearch, categoryFilter, typeFilter, pageSize, categorySelection, periodMode, cycleKey]);
 
   const showPersonColumn = personId === "all";
   const syncedWithDashboard = periodMonths === dashboardMonths;
+  const hidePeriodSelector = periodMode === "payday" && cycleKey != null && syncedWithDashboard;
   const hasChartCategoryFilter = categorySelection != null;
 
   const handleClearChartFilter = () => {
@@ -178,6 +212,8 @@ export function RecentTransactions({
       categoryFilter,
       typeFilter,
       categorySelection,
+      periodMode,
+      cycleKey,
     ],
     queryFn: () =>
       api.get<TransactionsListResponse>(
@@ -190,6 +226,8 @@ export function RecentTransactions({
           categoryFilter,
           typeFilter,
           categorySelection,
+          periodMode,
+          cycleKey,
         ),
       ),
   });
@@ -200,6 +238,70 @@ export function RecentTransactions({
   const total = data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const currencyCode = items[0]?.currencyCode ?? "BRL";
+
+  const useCyclePeriodSummary = Boolean(
+    periodSummary &&
+      periodMode === "payday" &&
+      syncedWithDashboard &&
+      !debouncedSearch &&
+      categoryFilter === "all" &&
+      !hasChartCategoryFilter &&
+      typeFilter === "all",
+  );
+
+  const footerSummary = useCyclePeriodSummary
+    ? {
+        income: periodSummary!.income,
+        expenses: periodSummary!.expenses,
+        net: periodSummary!.net,
+        balanceWithSalary: periodSummary!.balanceWithSalary ?? periodSummary!.net,
+        availableNet: periodSummary!.availableNet,
+        balanceAtPayday: periodSummary!.balanceAtPayday,
+        committedExpenses: periodSummary!.committedExpenses ?? 0,
+        pendingSalary: periodSummary!.pendingSalary ?? 0,
+      }
+    : data?.summary
+      ? {
+          income: data.summary.income,
+          expenses: data.summary.expenses,
+          net: data.summary.net,
+        }
+      : null;
+
+  const filteredSimulatedRows = useMemo(() => {
+    const periodFrom = data?.period.from;
+    const periodTo = data?.period.to;
+    if (!periodFrom || !periodTo || simulatedPurchases.length === 0) return [];
+
+    return flattenSimulatedRows(simulatedPurchases).filter((row) => {
+      if (row.dueDate < periodFrom || row.dueDate > periodTo) return false;
+      if (typeFilter === "inflow") return false;
+      if (debouncedSearch && !row.title.toLowerCase().includes(debouncedSearch.toLowerCase())) {
+        return false;
+      }
+      if (categorySelection?.kind === "single") {
+        const group = row.category ?? "Outros";
+        if (group !== categorySelection.group) return false;
+      } else if (categorySelection?.kind === "merged") {
+        const group = row.category ?? "Outros";
+        if (!(categorySelection.groups as readonly string[]).includes(group)) return false;
+      } else if (categoryFilter !== "all" && (row.category ?? "Outros") !== categoryFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [
+    simulatedPurchases,
+    data?.period.from,
+    data?.period.to,
+    typeFilter,
+    debouncedSearch,
+    categoryFilter,
+    categorySelection,
+  ]);
+
+  const hasSimulatedRows = filteredSimulatedRows.length > 0;
+  const showEmptyState = !query.isLoading && !query.isError && items.length === 0 && !hasSimulatedRows;
 
   return (
     <section ref={sectionRef as Ref<HTMLElement>} className="scroll-mt-6">
@@ -219,7 +321,9 @@ export function RecentTransactions({
             <p className="text-[11px] text-muted-foreground">
               Histórico de saídas de débito e créditos recebidos
               {syncedWithDashboard && (
-                <span className="ml-1.5 text-slate-300">· Mesmo período do painel</span>
+                <span className="ml-1.5 text-slate-300">
+                  · {cycleKey ? "Mesmo ciclo do painel" : "Mesmo período do painel"}
+                </span>
               )}
             </p>
             {hasChartCategoryFilter && categorySelection && (
@@ -239,7 +343,19 @@ export function RecentTransactions({
               </div>
             )}
           </div>
-          <PeriodSelector value={periodMonths} onChange={setPeriodMonths} showModeToggle={false} />
+          {!hidePeriodSelector && (
+            <PeriodSelector value={periodMonths} onChange={setPeriodMonths} showModeToggle={false} />
+          )}
+          {simulationEnabled && onAddSimulation && (
+            <button
+              type="button"
+              onClick={() => setSimulateModalOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-semibold text-amber-900 transition hover:bg-amber-100"
+            >
+              <FlaskConical className="h-3.5 w-3.5" />
+              Simular compra
+            </button>
+          )}
         </div>
 
         <div className="flex flex-wrap gap-2.5">
@@ -293,7 +409,7 @@ export function RecentTransactions({
         <p className="px-6 py-8 text-center text-sm text-danger">
           Não foi possível carregar as transações. Tente novamente.
         </p>
-      ) : items.length === 0 ? (
+      ) : showEmptyState ? (
         <p className="px-6 py-8 text-center text-sm text-muted-foreground">
           Nenhuma transação encontrada com os filtros selecionados.
         </p>
@@ -311,6 +427,63 @@ export function RecentTransactions({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
+              {hasSimulatedRows && page === 1 && (
+                <>
+                  {filteredSimulatedRows.map((row) => {
+                    const Icon = categoryIcon(row.category ?? null);
+                    const label = categoryLabel(row.category ?? null);
+                    return (
+                      <tr
+                        key={row.id}
+                        className="border-l-2 border-l-amber-400 bg-amber-50/40"
+                      >
+                        <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs font-medium text-amber-800/80">
+                          {formatDateShort(`${row.dueDate}T12:00:00.000Z`)}
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className="block font-bold text-foreground">{row.title}</span>
+                          <span className="text-[10px] text-muted-foreground">Simulação</span>
+                          <span className="mt-1 inline-flex rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+                            Simulado · {row.sequence}/{row.totalInstallments}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3.5">
+                          <span className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                            <span className="rounded-md border border-amber-200/60 bg-amber-50 p-1">
+                              <Icon className="h-3.5 w-3.5 text-amber-700" />
+                            </span>
+                            {label}
+                          </span>
+                        </td>
+                        {showPersonColumn && (
+                          <td className="px-4 py-3.5 text-xs text-muted-foreground">—</td>
+                        )}
+                        <td className="whitespace-nowrap px-4 py-3.5 text-right text-sm font-bold text-foreground">
+                          -{formatCurrency(row.amount, currencyCode)}
+                        </td>
+                        <td className="px-4 py-3.5 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <span className="inline-block rounded-full border border-amber-200 bg-amber-100 px-3 py-1 text-[10px] font-bold leading-none text-amber-800">
+                              Saída
+                            </span>
+                            {onRemoveSimulation && (
+                              <button
+                                type="button"
+                                onClick={() => onRemoveSimulation(row.purchaseId)}
+                                className="rounded-full p-0.5 text-amber-700 hover:bg-amber-100"
+                                aria-label="Remover simulação"
+                                title="Remover simulação"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </>
+              )}
               {items.map((tx) => {
                 const label = categoryLabel(tx.category);
                 const Icon = categoryIcon(tx.category);
@@ -404,29 +577,73 @@ export function RecentTransactions({
       )}
 
       <div className="flex flex-col gap-4 border-t border-app-border/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
-        {data && (
+        {footerSummary && (
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
             <span>
               {total} transação{total !== 1 ? "ões" : ""}
             </span>
             <span>
-              Entradas:{" "}
-              <strong className="text-positive">
-                {formatCurrency(data.summary.income, currencyCode)}
-              </strong>
-            </span>
-            <span>
-              Saídas:{" "}
+              {CYCLE_COPY.income}:{" "}
               <strong className="text-foreground/90">
-                {formatCurrency(data.summary.expenses, currencyCode)}
+                {formatPlainAmount(footerSummary.income, currencyCode)}
               </strong>
             </span>
             <span>
-              Líquido:{" "}
-              <strong className={data.summary.net >= 0 ? "text-positive" : "text-negative"}>
-                {formatCurrency(data.summary.net, currencyCode)}
+              {CYCLE_COPY.spent}:{" "}
+              <strong className="text-foreground/90">
+                {formatPlainAmount(footerSummary.expenses, currencyCode)}
               </strong>
             </span>
+            <span>
+              {useCyclePeriodSummary ? CYCLE_COPY.untilNow : "Líquido"}:{" "}
+              <strong
+                className={
+                  (useCyclePeriodSummary
+                    ? (footerSummary.balanceWithSalary ?? footerSummary.net)
+                    : footerSummary.net) >= 0
+                    ? "text-positive"
+                    : "text-negative"
+                }
+              >
+                {useCyclePeriodSummary
+                  ? (() => {
+                      const untilNow = footerSummary.balanceWithSalary ?? footerSummary.net;
+                      const display = formatCycleBalance(untilNow, currencyCode);
+                      return `${display.status} ${formatPlainAmount(display.amount, currencyCode)}`;
+                    })()
+                  : formatCurrency(footerSummary.net, currencyCode)}
+              </strong>
+            </span>
+            {useCyclePeriodSummary &&
+              (footerSummary.committedExpenses ?? 0) > 0 &&
+              footerSummary.availableNet != null && (
+                <span>
+                  {CYCLE_COPY.afterScheduled}:{" "}
+                  <strong
+                    className={
+                      footerSummary.availableNet >= 0 ? "text-positive" : "text-negative"
+                    }
+                  >
+                    {formatCycleBalance(footerSummary.availableNet, currencyCode).status}{" "}
+                    {formatPlainAmount(Math.abs(footerSummary.availableNet), currencyCode)}
+                  </strong>
+                </span>
+              )}
+            {useCyclePeriodSummary &&
+              (footerSummary.pendingSalary ?? 0) > 0 &&
+              footerSummary.balanceAtPayday != null && (
+                <span>
+                  {CYCLE_COPY.atPayday}:{" "}
+                  <strong
+                    className={
+                      footerSummary.balanceAtPayday >= 0 ? "text-positive" : "text-negative"
+                    }
+                  >
+                    {formatCycleBalance(footerSummary.balanceAtPayday, currencyCode).status}{" "}
+                    {formatPlainAmount(Math.abs(footerSummary.balanceAtPayday), currencyCode)}
+                  </strong>
+                </span>
+              )}
           </div>
         )}
 
@@ -477,6 +694,15 @@ export function RecentTransactions({
         transactionId={detailTxId}
         onClose={() => setDetailTxId(null)}
       />
+
+      {simulationEnabled && onAddSimulation && (
+        <SimulatePurchaseModal
+          open={simulateModalOpen}
+          currencyCode={currencyCode}
+          onClose={() => setSimulateModalOpen(false)}
+          onAdd={onAddSimulation}
+        />
+      )}
     </section>
   );
 }

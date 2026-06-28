@@ -7,6 +7,7 @@ import { Target } from "lucide-react";
 import { formatCurrency } from "../../lib/format";
 import { AssistantSpotlightButton } from "../chat/AssistantSpotlightButton";
 import { cardClass } from "../dashboard/motion";
+import { SIMULATOR_TONE, type SimulatorTone } from "./tokens";
 import { ImpactChart } from "./ImpactChart";
 
 interface Props {
@@ -95,35 +96,41 @@ export function SimulationResults({
           <Metric
             label="Sobra antes"
             value={formatCurrency(result.baseline.surplus, currencyCode)}
+            tone="positive"
           />
           <Metric
             label="Sobra depois"
             value={formatCurrency(result.projected.surplusAfter, currencyCode)}
             delta={formatCurrency(result.projected.surplusDelta, currencyCode)}
             deltaNegative={result.projected.surplusDelta < 0}
+            tone={result.projected.surplusAfter >= 0 ? "positive" : "negative"}
           />
           {result.projected.bankBalanceAfter !== null && (
             <Metric
               label="Saldo após compra"
               value={formatCurrency(result.projected.bankBalanceAfter, currencyCode)}
+              tone="brand"
             />
           )}
           {result.projected.installmentAmount !== null && (
             <Metric
               label="Valor da parcela"
               value={formatCurrency(result.projected.installmentAmount, currencyCode)}
+              tone="brand"
             />
           )}
           {result.projected.monthlyNeeded !== null && (
             <Metric
               label="Aporte necessário/mês"
               value={formatCurrency(result.projected.monthlyNeeded, currencyCode)}
+              tone="brand"
             />
           )}
           {result.projected.estimatedMonths !== null && (
             <Metric
               label="Tempo estimado"
               value={`${result.projected.estimatedMonths} meses`}
+              tone="positive"
             />
           )}
         </div>
@@ -147,7 +154,9 @@ export function SimulationResults({
           <h3 className="font-display text-sm font-semibold text-foreground">
             Projeção mês a mês
           </h3>
-          <p className="mt-1 text-xs text-muted-foreground">Comparativo da sobra com e sem o cenário</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Comparativo da sobra com e sem o cenário
+          </p>
           <div className="mt-4">
             <ImpactChart data={result.projected.monthlySeries} currencyCode={currencyCode} />
           </div>
@@ -155,19 +164,21 @@ export function SimulationResults({
       )}
 
       {(result.goalImpact.monthsDelayed !== null || result.goalImpact.affectedGoals.length > 0) && (
-        <div className={cardClass}>
-          <h3 className="font-display text-sm font-semibold text-foreground">Impacto em metas</h3>
+        <div className={`${cardClass} border-brand/20 bg-brand/5`}>
+          <h3 className="font-display text-sm font-semibold text-brand">Impacto em metas</h3>
           {result.goalImpact.monthsDelayed !== null && (
             <p className="mt-2 text-sm text-muted-foreground">
               Suas metas podem atrasar cerca de{" "}
-              <strong>{result.goalImpact.monthsDelayed} meses</strong>.
+              <strong className="text-brand">{result.goalImpact.monthsDelayed} meses</strong>.
             </p>
           )}
           {result.goalImpact.affectedGoals.length > 0 && (
             <ul className="mt-3 space-y-1.5">
               {result.goalImpact.affectedGoals.slice(0, 5).map((goal) => (
                 <li key={goal.id} className="text-xs text-muted-foreground">
-                  {goal.name} — ~{goal.monthsDelayed} meses de atraso
+                  <span className="font-medium text-foreground">{goal.name}</span>
+                  {" — "}
+                  <span className="text-negative">~{goal.monthsDelayed} meses de atraso</span>
                 </li>
               ))}
             </ul>
@@ -176,7 +187,13 @@ export function SimulationResults({
       )}
 
       {result.budgetImpact && (
-        <div className={cardClass}>
+        <div className={`${cardClass} ${
+          result.budgetImpact.ratioAfter > 90
+            ? "border-negative/20 bg-negative/5"
+            : result.budgetImpact.ratioAfter > 75
+              ? "border-amber-200/80 bg-amber-50/60"
+              : "border-positive/20 bg-positive/5"
+        }`}>
           <h3 className="font-display text-sm font-semibold text-foreground">Impacto no orçamento</h3>
           <p className="mt-2 text-sm text-muted-foreground">
             Categoria <strong>{result.budgetImpact.category}</strong>:{" "}
@@ -188,13 +205,20 @@ export function SimulationResults({
       )}
 
       {result.creditImpact && (
-        <div className={cardClass}>
-          <h3 className="font-display text-sm font-semibold text-foreground">Impacto no cartão</h3>
+        <div className={`${cardClass} border-brand/20 bg-brand/5`}>
+          <h3 className="font-display text-sm font-semibold text-brand">Impacto no cartão</h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            {result.creditImpact.accountName}: fatura de{" "}
+            <span className="font-medium text-foreground">{result.creditImpact.accountName}</span>
+            : fatura de{" "}
             {formatCurrency(result.creditImpact.nextBillBefore, currencyCode)} para{" "}
-            {formatCurrency(result.creditImpact.nextBillAfter, currencyCode)} (+{" "}
-            {formatCurrency(result.creditImpact.billIncrease, currencyCode)})
+            <span className="font-semibold text-negative">
+              {formatCurrency(result.creditImpact.nextBillAfter, currencyCode)}
+            </span>{" "}
+            (
+            <span className="text-negative">
+              +{formatCurrency(result.creditImpact.billIncrease, currencyCode)}
+            </span>
+            )
           </p>
         </div>
       )}
@@ -204,7 +228,7 @@ export function SimulationResults({
           <button
             type="button"
             onClick={onConvertToGoal}
-            className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+            className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-brand/90"
           >
             <Target className="h-4 w-4" />
             Transformar em objetivo
@@ -221,16 +245,19 @@ function Metric({
   value,
   delta,
   deltaNegative,
+  tone = "neutral",
 }: {
   label: string;
   value: string;
   delta?: string;
   deltaNegative?: boolean;
+  tone?: SimulatorTone;
 }) {
+  const styles = SIMULATOR_TONE[tone];
   return (
-    <div className="rounded-xl border border-app-border/60 bg-app-bg/60 px-4 py-3">
-      <p className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">{label}</p>
-      <p className="mt-1 font-display text-lg font-semibold text-foreground">{value}</p>
+    <div className={`rounded-xl border px-4 py-3 ${styles.box}`}>
+      <p className={`text-[10px] font-bold tracking-wider uppercase ${styles.label}`}>{label}</p>
+      <p className={`mt-1 font-display text-lg font-semibold ${styles.value}`}>{value}</p>
       {delta && (
         <p
           className={`mt-0.5 text-xs font-medium ${deltaNegative ? "text-negative" : "text-positive"}`}

@@ -6,6 +6,7 @@ import {
   type SimulatorBaselineDTO,
 } from "@finance/shared";
 import { cardClass } from "../dashboard/motion";
+import { SCENARIO_TYPE_TONE, SIMULATOR_TONE, scenarioTypeButtonClass } from "./tokens";
 
 const SIMULATION_TYPES: { value: SimulationType; label: string; description: string }[] = [
   {
@@ -136,27 +137,34 @@ export function ScenarioForm({ baseline, loading, hasResult = false, onSubmit, o
 
   return (
     <section className={cardClass}>
-      <h2 className="font-display text-sm font-semibold text-foreground">Monte seu cenário</h2>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Simule o impacto antes de comprometer seu orçamento
-      </p>
+      <div className="mb-4 rounded-xl border border-brand/20 bg-brand/5 px-4 py-3">
+        <h2 className="font-display text-sm font-semibold text-foreground">Monte seu cenário</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Simule o impacto antes de comprometer seu orçamento
+        </p>
+      </div>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {SIMULATION_TYPES.map((item) => (
+        {SIMULATION_TYPES.map((item) => {
+          const selected = type === item.value;
+          const tone = SCENARIO_TYPE_TONE[item.value];
+          const styles = SIMULATOR_TONE[tone];
+          return (
           <button
             key={item.value}
             type="button"
             onClick={() => setType(item.value)}
-            className={`cursor-pointer rounded-xl border px-3 py-3 text-left transition ${
-              type === item.value
-                ? "border-positive/40 bg-positive/10 ring-1 ring-positive/20"
-                : "border-app-border bg-app-surface hover:border-app-border"
-            }`}
+            className={`cursor-pointer rounded-xl border px-3 py-3 text-left transition ${scenarioTypeButtonClass(item.value, selected)}`}
           >
-            <p className="text-xs font-semibold text-foreground">{item.label}</p>
-            <p className="mt-0.5 text-[10px] text-muted-foreground">{item.description}</p>
+            <p className={`text-xs font-semibold ${selected ? styles.value : "text-foreground"}`}>
+              {item.label}
+            </p>
+            <p className={`mt-0.5 text-[10px] ${selected ? styles.label : "text-muted-foreground"}`}>
+              {item.description}
+            </p>
           </button>
-        ))}
+          );
+        })}
       </div>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -198,7 +206,11 @@ export function ScenarioForm({ baseline, loading, hasResult = false, onSubmit, o
               key={preset}
               type="button"
               onClick={() => setAmount(String(preset))}
-              className="cursor-pointer rounded-lg border border-app-border px-2.5 py-1 text-[10px] font-semibold text-muted-foreground hover:border-positive/30 hover:text-positive"
+              className={`cursor-pointer rounded-lg border px-2.5 py-1 text-[10px] font-semibold transition ${
+                amount === String(preset)
+                  ? "border-positive/40 bg-positive/10 text-positive"
+                  : "border-app-border text-muted-foreground hover:border-positive/30 hover:bg-positive/5 hover:text-positive"
+              }`}
             >
               R$ {preset.toLocaleString("pt-BR")}
             </button>
