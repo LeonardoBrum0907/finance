@@ -15,15 +15,13 @@ import { prisma } from "../../prisma.js";
 import { effectiveTransactionCategory } from "../transactionCategory.js";
 import { resolveNextDueDate } from "./creditBill.js";
 import {
-  addMonthsToMonthKey,
-  buildGrowthMetrics,
+  buildCurrentCycleSummary,
   formatCurrency,
   getCycleSummary,
   getMonthlySummary,
   getRecentMonthKeys,
   getSpendingByCategory,
   monthKeysToDateRange,
-  resolvePeriodRanges,
   toLocalMonthKey,
 } from "./aggregates.js";
 import { loadGoalsSummaryForUser } from "./goalsContext.js";
@@ -230,35 +228,16 @@ function computeAverageIncomeExpenses(
   };
 }
 
-function computeProjectedNet(
-  ctx: SimulatorContext,
-): number | null {
+function computeCurrentSurplus(ctx: SimulatorContext): number {
   const { settings, txs, paydayDay, paydayCycleAnchor: anchor } = ctx;
   const periodMode = settings.defaultPeriodMode;
 
-  const periods = resolvePeriodRanges(1, periodMode, paydayDay, anchor);
-  const currentSummary =
-    periodMode === "payday" && paydayDay !== null
-      ? getCycleSummary(
-          txs,
-          getPaydayCycleRange(paydayDay, new Date(), anchor).cycleKey,
-          paydayDay,
-          anchor,
-        )
-      : getMonthlySummary(txs, toLocalMonthKey(new Date()));
+  if (periodMode === "payday" && paydayDay !== null) {
+    const cycle = buildCurrentCycleSummary(txs, paydayDay, anchor);
+    return cycle.committedExpenses > 0 ? cycle.availableNet : cycle.net;
+  }
 
-  const growth = buildGrowthMetrics({
-    period: currentSummary,
-    previousPeriod: { income: 0, expenses: 0, net: 0 },
-    currentRange: periods.currentRange,
-    previousRange: periods.previousRange,
-    txs,
-    paydayDay,
-    paydayCycleAnchor: anchor,
-    periodMode,
-  });
-
-  return growth.projection?.projectedNet ?? currentSummary.net;
+  return getMonthlySummary(txs, toLocalMonthKey(new Date())).net;
 }
 
 function computeInstallmentSchedule(
@@ -277,38 +256,17 @@ function computeInstallmentSchedule(
   return Array.from({ length: installments }, () => payment);
 }
 
-function buildMonthlySeries(
-  baselineSurplus: number,
-  monthlyImpacts: number[],
-  horizon = PROJECTION_HORIZON,
-): SimulationResultDTO["projected"]["monthlySeries"] {
-  const currentMonth = toLocalMonthKey(new Date());
-  const series: SimulationResultDTO["projected"]["monthlySeries"] = [];
-
-  for (let i = 0; i < horizon; i++) {
-    const impact = i < monthlyImpacts.length ? monthlyImpacts[i] : 0;
-    series.push({
-      month: addMonthsToMonthKey(currentMonth, i),
-      label: i === 0 ? "Hoje" : undefined,
-      baselineSurplus,
-      scenarioSurplus: baselineSurplus - impact,
-    });
-  }
-
-  return series;
-}
-
 function computeVerdict(params: {
-  monthlySeries: SimulationResultDTO["projected"]["monthlySeries"];
+  scenarioSurplus: number;
   monthsDelayed: number | null;
   bankBalanceAfter: number | null;
   savingsReductionRatio: number;
   budgetExceeded: boolean;
 }): SimulationVerdict {
-  const { monthlySeries, monthsDelayed, bankBalanceAfter, savingsReductionRatio, budgetExceeded } =
+  const { scenarioSurplus, monthsDelayed, bankBalanceAfter, savingsReductionRatio, budgetExceeded } =
     params;
 
-  const anyNegative = monthlySeries.some((p) => p.scenarioSurplus < 0);
+  const anyNegative = scenarioSurplus < 0;
   const insufficientBalance = bankBalanceAfter !== null && bankBalanceAfter < 0;
 
   if (anyNegative || insufficientBalance || (monthsDelayed ?? 0) > 3) {
@@ -338,7 +296,10 @@ function buildRecommendation(
   switch (verdict) {
     case "affordable":
       if (type === "save_for_goal") {
-        return "Com sua sobra atual, este objetivo parece alcançável dentro do prazo estimado.";
+        return "Com sua sobra atual, avalie se o aporte cabe no orçamento.";
+      }
+      if (type === "invest") {
+        return "Avalie se o aporte cabe na sua margem sem comprometer despesas e metas.";
       }
       return "Este cenário parece caber no seu orçamento sem comprometer significativamente suas metas.";
     case "caution":
@@ -412,7 +373,7 @@ export async function fetchSimulatorBaseline(
     ctx.paydayCycleAnchor,
   );
   const goalsSummary = await loadGoalsSummaryForUser(userId);
-  const projectedNet = computeProjectedNet(ctx);
+  const currentSurplus = computeCurrentSurplus(ctx);
 
   let periodLabel: string;
   if (ctx.paydayDay !== null) {
@@ -432,7 +393,7 @@ export async function fetchSimulatorBaseline(
     averageExpenses: expenses,
     bankBalance: ctx.bankBalance,
     monthlyContribution: goalsSummary.monthlyContribution,
-    projectedNet,
+    currentSurplus,
     creditAccounts: ctx.creditAccounts.map((acc) => ({
       id: acc.id,
       name: acc.name,
@@ -449,11 +410,13 @@ export async function runSimulation(
   input: SimulationInput,
 ): Promise<SimulationResultDTO> {
   const ctx = await loadSimulatorContext(userId, input.personId);
-  const { surplus: baselineSurplus } = resolveSurplus(
+  const { surplus: averageSurplus } = resolveSurplus(
     ctx.txs,
     ctx.paydayDay,
     ctx.paydayCycleAnchor,
   );
+  /** Sobra do ciclo/mês atual — alinhada ao painel e ao card "Sobra atual". */
+  const baselineSurplus = computeCurrentSurplus(ctx);
   const { income, expenses } = computeAverageIncomeExpenses(
     ctx.txs,
     ctx.paydayDay,
@@ -462,15 +425,13 @@ export async function runSimulation(
   const goalsSummary = await loadGoalsSummaryForUser(userId);
   const monthlyContribution = resolveMonthlyContribution(
     goalsSummary.plans,
-    baselineSurplus,
+    averageSurplus,
   );
   const savingsTarget = Math.max(baselineSurplus - monthlyContribution, 0);
 
   const warnings: string[] = [];
-  let monthlyImpacts: number[] = [];
   let surplusAfter = baselineSurplus;
   let bankBalanceAfter: number | null = null;
-  let estimatedMonths: number | null = null;
   let monthlyNeeded: number | null = null;
   let installmentAmount: number | null = null;
   let creditImpact: SimulationResultDTO["creditImpact"] = null;
@@ -481,7 +442,6 @@ export async function runSimulation(
       if (paymentMethod === "cash") {
         surplusAfter = baselineSurplus - input.amount;
         bankBalanceAfter = ctx.bankBalance - input.amount;
-        monthlyImpacts = [input.amount];
         if (bankBalanceAfter < 0) {
           warnings.push(
             `Saldo em conta insuficiente. Faltariam ${formatCurrency(Math.abs(bankBalanceAfter))}.`,
@@ -489,7 +449,6 @@ export async function runSimulation(
         }
       } else {
         surplusAfter = baselineSurplus;
-        monthlyImpacts = [0];
         const creditAcc =
           ctx.creditAccounts.find((a) => a.id === input.creditAccountId) ??
           ctx.creditAccounts[0];
@@ -511,9 +470,15 @@ export async function runSimulation(
         }
       }
       if (surplusAfter < 0) {
-        warnings.push(
-          `Esta compra deixaria o período com déficit de ${formatCurrency(Math.abs(surplusAfter))}.`,
-        );
+        if (baselineSurplus < 0) {
+          warnings.push(
+            `Você já está ${formatCurrency(Math.abs(baselineSurplus))} no vermelho neste período. Com esta compra de ${formatCurrency(input.amount)}, o déficit total seria ${formatCurrency(Math.abs(surplusAfter))}.`,
+          );
+        } else {
+          warnings.push(
+            `Esta compra deixaria o período com déficit de ${formatCurrency(Math.abs(surplusAfter))}.`,
+          );
+        }
       } else if (surplusAfter < savingsTarget * 0.5 && savingsTarget > 0) {
         warnings.push(
           `A compra reduziria sua capacidade de poupar de ${formatCurrency(savingsTarget)} para ${formatCurrency(Math.max(0, surplusAfter - monthlyContribution))}.`,
@@ -526,7 +491,6 @@ export async function runSimulation(
       const n = input.installments ?? 12;
       const schedule = computeInstallmentSchedule(input.amount, n, input.interestRate);
       installmentAmount = schedule[0] ?? input.amount / n;
-      monthlyImpacts = schedule;
       surplusAfter = baselineSurplus - installmentAmount;
       if (schedule.some((p) => baselineSurplus - p < 0)) {
         warnings.push("Algumas parcelas deixariam a sobra mensal negativa.");
@@ -536,7 +500,6 @@ export async function runSimulation(
 
     case "recurring_expense": {
       const duration = input.durationMonths ?? PROJECTION_HORIZON;
-      monthlyImpacts = Array.from({ length: duration }, () => input.amount);
       surplusAfter = baselineSurplus - input.amount;
       const totalImpact = input.amount * Math.min(duration, PROJECTION_HORIZON);
       warnings.push(
@@ -555,32 +518,49 @@ export async function runSimulation(
           Math.ceil((target.getTime() - now.getTime()) / (30 * 24 * 60 * 60 * 1000)),
         );
         monthlyNeeded = input.amount / monthsLeft;
-        estimatedMonths = monthsLeft;
         if (monthlyNeeded > availableSurplus) {
           warnings.push(
             `Seriam necessários ${formatCurrency(monthlyNeeded)}/mês, mas sua sobra disponível é ${formatCurrency(availableSurplus)}.`,
           );
         }
       } else {
-        estimatedMonths =
-          availableSurplus > 0 ? Math.ceil(input.amount / availableSurplus) : null;
         monthlyNeeded = availableSurplus;
-        if (estimatedMonths === null) {
+        if (availableSurplus <= 0) {
           warnings.push("Com a sobra atual, não há capacidade de poupança para este objetivo.");
         }
       }
       surplusAfter = availableSurplus - (monthlyNeeded ?? 0);
-      monthlyImpacts = Array.from({ length: PROJECTION_HORIZON }, () => monthlyNeeded ?? 0);
+      break;
+    }
+
+    case "invest": {
+      const investMode = input.investMode ?? "monthly";
+      const availableSurplus = Math.max(0, baselineSurplus - monthlyContribution);
+      if (investMode === "lump_sum") {
+        surplusAfter = baselineSurplus - input.amount;
+        bankBalanceAfter = ctx.bankBalance - input.amount;
+        if (bankBalanceAfter < 0) {
+          warnings.push(
+            `Saldo em conta insuficiente para o aporte. Faltariam ${formatCurrency(Math.abs(bankBalanceAfter))}.`,
+          );
+        }
+      } else {
+        monthlyNeeded = input.amount;
+        surplusAfter = availableSurplus - input.amount;
+        if (input.amount > availableSurplus) {
+          warnings.push(
+            `Aporte mensal de ${formatCurrency(input.amount)} excede sobra disponível (${formatCurrency(availableSurplus)}).`,
+          );
+        }
+      }
       break;
     }
   }
 
-  const monthlySeries = buildMonthlySeries(baselineSurplus, monthlyImpacts);
-
   let monthsDelayed: number | null = null;
   const affectedGoals: { id: string; name: string; monthsDelayed: number }[] = [];
 
-  if (input.type !== "save_for_goal" && monthlyContribution > 0) {
+  if (input.type !== "save_for_goal" && input.type !== "invest" && monthlyContribution > 0) {
     const totalImpact =
       input.type === "single_purchase"
         ? input.amount
@@ -615,7 +595,7 @@ export async function runSimulation(
     baselineSurplus > 0 ? Math.max(0, (baselineSurplus - surplusAfter) / baselineSurplus) : 0;
 
   const verdict = computeVerdict({
-    monthlySeries,
+    scenarioSurplus: surplusAfter,
     monthsDelayed,
     bankBalanceAfter,
     savingsReductionRatio,
@@ -640,8 +620,6 @@ export async function runSimulation(
       surplusAfter,
       surplusDelta: surplusAfter - baselineSurplus,
       bankBalanceAfter,
-      monthlySeries,
-      estimatedMonths,
       monthlyNeeded,
       installmentAmount,
     },

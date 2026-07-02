@@ -1,4 +1,19 @@
 import { z } from "zod";
+import {
+  getPaydayCycleRange,
+  type PaydayCycleAnchor,
+  DEFAULT_PAYDAY_CYCLE_ANCHOR,
+} from "./payday.js";
+import { computeCreditBillImpacts, type CreditAccountSnapshot, type CreditBillImpact } from "./creditBill.js";
+
+export const SIMULATED_PAYMENT_METHODS = [
+  "pix",
+  "debit",
+  "credit_single",
+  "credit_installments",
+] as const;
+
+export type SimulatedPaymentMethod = (typeof SIMULATED_PAYMENT_METHODS)[number];
 
 export interface SimulatedInstallment {
   id: string;
@@ -10,7 +25,12 @@ export interface SimulatedPurchase {
   id: string;
   title: string;
   category?: string;
+  paymentMethod: SimulatedPaymentMethod;
+  totalAmount: number;
+  purchaseDate: string;
+  creditAccountId?: string;
   installments: SimulatedInstallment[];
+  interestRate?: number;
   createdAt: string;
 }
 
@@ -23,6 +43,12 @@ export interface SimulationCycleImpact {
   realizedExpenses: number;
   committedExpenses: number;
   totalInPeriod: number;
+}
+
+export interface PaydayCycleImpact extends SimulationCycleImpact {
+  cycleKey: string;
+  from: string;
+  to: string;
 }
 
 export interface SimulationStatDelta {
@@ -43,17 +69,59 @@ export interface FlatSimulatedRow {
   amount: number;
   sequence: number;
   totalInstallments: number;
+  paymentMethod: SimulatedPaymentMethod;
 }
 
-export const simulatedPurchaseInputSchema = z.object({
-  title: z.string().min(1, "Informe a descrição").max(120),
-  category: z.string().max(80).optional(),
-  totalAmount: z.number().positive("Valor total deve ser positivo"),
-  totalInstallments: z.number().int().min(2, "Mínimo 2 parcelas").max(48),
-  firstDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida"),
-});
+export const simulatedPurchaseInputSchema = z
+  .object({
+    title: z.string().min(1, "Informe a descrição").max(120),
+    category: z.string().max(80).optional(),
+    paymentMethod: z.enum(SIMULATED_PAYMENT_METHODS),
+    totalAmount: z.number().positive("Valor total deve ser positivo"),
+    purchaseDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida"),
+    creditAccountId: z.string().optional(),
+    totalInstallments: z.number().int().min(1).max(48).optional(),
+    firstDueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida").optional(),
+    interestRate: z.number().min(0).max(100).optional(),
+  })
+  .superRefine((data, ctx) => {
+    const isCredit =
+      data.paymentMethod === "credit_single" || data.paymentMethod === "credit_installments";
+    if (isCredit && !data.creditAccountId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Selecione um cartão de crédito",
+        path: ["creditAccountId"],
+      });
+    }
+    if (data.paymentMethod === "credit_installments") {
+      if (!data.totalInstallments || data.totalInstallments < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Mínimo 2 parcelas",
+          path: ["totalInstallments"],
+        });
+      }
+      if (!data.firstDueDate) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Informe a data da 1ª parcela",
+          path: ["firstDueDate"],
+        });
+      }
+    }
+  });
 
 export type SimulatedPurchaseInput = z.infer<typeof simulatedPurchaseInputSchema>;
+
+/** @deprecated Use SimulatedPurchaseInput com paymentMethod. */
+export interface LegacySimulatedPurchaseInput {
+  title: string;
+  category?: string;
+  totalAmount: number;
+  totalInstallments: number;
+  firstDueDate: string;
+}
 
 function parseDateKey(key: string): { y: number; m: number; d: number } {
   const [y, m, d] = key.split("-").map(Number);
@@ -95,6 +163,38 @@ export function buildInstallmentSchedule(params: {
   return installments;
 }
 
+function buildInstallmentsForInput(
+  input: SimulatedPurchaseInput,
+  idPrefix: string,
+): SimulatedInstallment[] {
+  if (input.paymentMethod === "pix" || input.paymentMethod === "debit") {
+    return [
+      {
+        id: `${idPrefix}-inst-1`,
+        dueDate: input.purchaseDate,
+        amount: input.totalAmount,
+      },
+    ];
+  }
+
+  if (input.paymentMethod === "credit_single") {
+    return [
+      {
+        id: `${idPrefix}-inst-1`,
+        dueDate: input.purchaseDate,
+        amount: input.totalAmount,
+      },
+    ];
+  }
+
+  return buildInstallmentSchedule({
+    totalAmount: input.totalAmount,
+    totalInstallments: input.totalInstallments!,
+    firstDueDate: input.firstDueDate!,
+    idPrefix,
+  });
+}
+
 export function createSimulatedPurchase(
   input: SimulatedPurchaseInput,
   id = `sim-${Date.now()}`,
@@ -103,14 +203,41 @@ export function createSimulatedPurchase(
     id,
     title: input.title.trim(),
     category: input.category?.trim() || undefined,
-    installments: buildInstallmentSchedule({
-      totalAmount: input.totalAmount,
-      totalInstallments: input.totalInstallments,
-      firstDueDate: input.firstDueDate,
-      idPrefix: id,
-    }),
+    paymentMethod: input.paymentMethod,
+    totalAmount: input.totalAmount,
+    purchaseDate: input.purchaseDate,
+    creditAccountId: input.creditAccountId,
+    installments: buildInstallmentsForInput(input, id),
+    interestRate: input.interestRate,
     createdAt: new Date().toISOString(),
   };
+}
+
+/** Normaliza compras legadas (sem paymentMethod) para o modelo v2. */
+export function normalizeSimulatedPurchase(purchase: SimulatedPurchase | LegacySimulatedPurchase): SimulatedPurchase {
+  if ("paymentMethod" in purchase && purchase.paymentMethod) {
+    return purchase as SimulatedPurchase;
+  }
+
+  const legacy = purchase as LegacySimulatedPurchase;
+  return {
+    id: legacy.id,
+    title: legacy.title,
+    category: legacy.category,
+    paymentMethod: "credit_installments",
+    totalAmount: legacy.installments.reduce((s, i) => s + i.amount, 0),
+    purchaseDate: legacy.installments[0]?.dueDate ?? todayDateKeyInTimeZone(),
+    installments: legacy.installments,
+    createdAt: legacy.createdAt,
+  };
+}
+
+interface LegacySimulatedPurchase {
+  id: string;
+  title: string;
+  category?: string;
+  installments: SimulatedInstallment[];
+  createdAt: string;
 }
 
 function isDateInRange(date: string, range: SimulationCycleRange): boolean {
@@ -119,7 +246,7 @@ function isDateInRange(date: string, range: SimulationCycleRange): boolean {
   return true;
 }
 
-export function computeSimulationCycleImpact(
+function computeCycleImpactForPurchases(
   purchases: SimulatedPurchase[],
   cycleRange: SimulationCycleRange,
   today: string,
@@ -142,6 +269,58 @@ export function computeSimulationCycleImpact(
   return { realizedExpenses, committedExpenses, totalInPeriod };
 }
 
+export function computeSimulationCycleImpact(
+  purchases: SimulatedPurchase[],
+  cycleRange: SimulationCycleRange,
+  today: string,
+): SimulationCycleImpact {
+  const normalized = purchases.map(normalizeSimulatedPurchase);
+  return computeCycleImpactForPurchases(normalized, cycleRange, today);
+}
+
+export interface PaydayCycleInput {
+  cycleKey: string;
+  from: string;
+  to: string;
+}
+
+export function computePaydayCycleImpacts(
+  purchases: SimulatedPurchase[],
+  cycles: PaydayCycleInput[],
+  today: string,
+): PaydayCycleImpact[] {
+  const normalized = purchases.map(normalizeSimulatedPurchase);
+  return cycles.map((cycle) => ({
+    cycleKey: cycle.cycleKey,
+    from: cycle.from,
+    to: cycle.to,
+    ...computeCycleImpactForPurchases(normalized, { from: cycle.from, to: cycle.to }, today),
+  }));
+}
+
+/** Ciclo atual + N ciclos futuros para projeção de simulação. */
+export function buildSimulationPaydayCycles(
+  currentCycle: PaydayCycleInput,
+  paydayDay: number,
+  anchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
+  futureCount = 3,
+): PaydayCycleInput[] {
+  const cycles: PaydayCycleInput[] = [currentCycle];
+  let ref = new Date(`${currentCycle.to}T12:00:00.000Z`);
+  ref.setUTCDate(ref.getUTCDate() + 1);
+
+  for (let i = 1; i < futureCount; i++) {
+    const range = getPaydayCycleRange(paydayDay, ref, anchor);
+    cycles.push({ cycleKey: range.cycleKey, from: range.from, to: range.to });
+    ref = new Date(`${range.to}T12:00:00.000Z`);
+    ref.setUTCDate(ref.getUTCDate() + 1);
+  }
+
+  return cycles;
+}
+
+export { computeCreditBillImpacts, type CreditAccountSnapshot, type CreditBillImpact };
+
 export function computeSimulationStatDelta(impact: SimulationCycleImpact): SimulationStatDelta {
   return {
     expenses: impact.realizedExpenses,
@@ -152,7 +331,7 @@ export function computeSimulationStatDelta(impact: SimulationCycleImpact): Simul
 
 export function flattenSimulatedRows(purchases: SimulatedPurchase[]): FlatSimulatedRow[] {
   const rows: FlatSimulatedRow[] = [];
-  for (const purchase of purchases) {
+  for (const purchase of purchases.map(normalizeSimulatedPurchase)) {
     const total = purchase.installments.length;
     purchase.installments.forEach((inst, index) => {
       rows.push({
@@ -164,10 +343,24 @@ export function flattenSimulatedRows(purchases: SimulatedPurchase[]): FlatSimula
         amount: inst.amount,
         sequence: index + 1,
         totalInstallments: total,
+        paymentMethod: purchase.paymentMethod,
       });
     });
   }
   return rows.sort((a, b) => b.dueDate.localeCompare(a.dueDate));
+}
+
+export function paymentMethodLabel(method: SimulatedPaymentMethod): string {
+  switch (method) {
+    case "pix":
+      return "PIX";
+    case "debit":
+      return "Débito";
+    case "credit_single":
+      return "Crédito 1x";
+    case "credit_installments":
+      return "Crédito parcelado";
+  }
 }
 
 export function todayDateKeyInTimeZone(timeZone = "America/Sao_Paulo"): string {

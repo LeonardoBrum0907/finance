@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { CreditCard } from "lucide-react";
-import type { DashboardSummary } from "@finance/shared";
+import type { CreditBillImpact, DashboardSummary } from "@finance/shared";
 import { isCreditAccount } from "@finance/shared";
 import { formatCurrency, formatDate } from "../../lib/format";
 import { cardLargeClass, creditCardDarkClass, creditCardEcoClass, fadeUp } from "./motion";
@@ -9,6 +9,7 @@ type Account = DashboardSummary["accounts"][number];
 
 interface Props {
   accounts: Account[];
+  creditBillImpacts?: CreditBillImpact[];
 }
 
 function usagePercent(
@@ -26,11 +27,15 @@ function maskedNumber(number: string | null): string {
   return `**** **** **** ${last4}`;
 }
 
-export function CreditCardList({ accounts }: Props) {
+export function CreditCardList({ accounts, creditBillImpacts }: Props) {
   const cards = accounts.filter(
     (acc) => isCreditAccount(acc.type) && (acc.creditLimit ?? 0) > 0,
   );
   if (cards.length === 0) return null;
+
+  const impactByAccount = new Map(
+    (creditBillImpacts ?? []).map((impact) => [impact.accountId, impact]),
+  );
 
   return (
     <motion.section
@@ -51,6 +56,7 @@ export function CreditCardList({ accounts }: Props) {
 
       <div className="flex flex-col gap-4">
         {cards.map((card, index) => {
+          const simImpact = impactByAccount.get(card.id);
           const openBill = card.openBillAmount ?? card.nextBillAmount;
           const openBillDue = card.openBillDueDate ?? card.nextBillDueDate;
           const closedBill = card.closedBillAmount;
@@ -60,6 +66,17 @@ export function CreditCardList({ accounts }: Props) {
           const showClosedOnly = hasClosedBill && (!hasOpenBill || openBill === closedBill);
           const showBothBills = hasClosedBill && hasOpenBill && openBill !== closedBill;
 
+          const displayOpenBill =
+            simImpact != null ? simImpact.openBillAfter : openBill;
+          const displayClosedBill =
+            simImpact != null && simImpact.closedBillAfter !== simImpact.closedBillBefore
+              ? simImpact.closedBillAfter
+              : closedBill;
+          const hasSimOpen =
+            simImpact != null && simImpact.openBillAfter !== simImpact.openBillBefore;
+          const hasSimClosed =
+            simImpact != null && simImpact.closedBillAfter !== simImpact.closedBillBefore;
+
           const hasLimitData =
             card.creditLimit != null &&
             card.creditLimit > 0 &&
@@ -67,13 +84,14 @@ export function CreditCardList({ accounts }: Props) {
           const usedFromLimit = hasLimitData
             ? card.creditLimit! - card.availableCreditLimit!
             : null;
-          const usedPercent = usagePercent(card.creditLimit, card.availableCreditLimit);
+          const simUsedPercent = simImpact?.limitUsedPercentAfter ?? null;
+          const usedPercent = simUsedPercent ?? usagePercent(card.creditLimit, card.availableCreditLimit);
           const isEco = index % 2 === 1;
 
           return (
             <div
               key={card.id}
-              className={isEco ? creditCardEcoClass : creditCardDarkClass}
+              className={`${isEco ? creditCardEcoClass : creditCardDarkClass}${hasSimOpen || hasSimClosed ? " ring-2 ring-amber-400/60" : ""}`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-2.5">
@@ -102,7 +120,12 @@ export function CreditCardList({ accounts }: Props) {
                         )}
                       </span>
                       <span className="font-bold">
-                        {formatCurrency(closedBill!, card.currencyCode)}
+                        {formatCurrency(displayClosedBill!, card.currencyCode)}
+                        {hasSimClosed && (
+                          <span className="ml-1 text-[10px] font-normal text-amber-300">
+                            sim.
+                          </span>
+                        )}
                       </span>
                     </div>
                     <div className="flex justify-between text-[11px]">
@@ -116,7 +139,12 @@ export function CreditCardList({ accounts }: Props) {
                         )}
                       </span>
                       <span className="font-bold">
-                        {formatCurrency(openBill!, card.currencyCode)}
+                        {formatCurrency(displayOpenBill ?? openBill!, card.currencyCode)}
+                        {hasSimOpen && (
+                          <span className="ml-1 text-[10px] font-normal text-amber-300">
+                            sim.
+                          </span>
+                        )}
                       </span>
                     </div>
                   </>
@@ -132,10 +160,15 @@ export function CreditCardList({ accounts }: Props) {
                       )}
                     </span>
                     <span className="font-bold">
-                      {formatCurrency(closedBill!, card.currencyCode)}
+                      {formatCurrency(displayClosedBill!, card.currencyCode)}
+                      {hasSimClosed && (
+                        <span className="ml-1 text-[10px] font-normal text-amber-300">
+                          sim.
+                        </span>
+                      )}
                     </span>
                   </div>
-                ) : hasOpenBill ? (
+                ) : hasOpenBill || hasSimOpen ? (
                   <div className="flex justify-between text-[11px]">
                     <span className="opacity-70">
                       Fatura aberta
@@ -147,7 +180,12 @@ export function CreditCardList({ accounts }: Props) {
                       )}
                     </span>
                     <span className="font-bold">
-                      {formatCurrency(openBill!, card.currencyCode)}
+                      {formatCurrency(displayOpenBill ?? openBill ?? 0, card.currencyCode)}
+                      {hasSimOpen && (
+                        <span className="ml-1 text-[10px] font-normal text-amber-300">
+                          sim.
+                        </span>
+                      )}
                     </span>
                   </div>
                 ) : null}

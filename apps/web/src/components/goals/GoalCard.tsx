@@ -1,6 +1,4 @@
 import {
-  AlertCircle,
-  CheckCircle2,
   Link2,
   Pencil,
   PiggyBank,
@@ -115,28 +113,8 @@ export function GoalCard({ goal, currencyCode, onEdit, onAddFunds }: Props) {
 
           {goal.targetDate && (
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Meta: {formatDate(goal.targetDate)}
+              Prazo desejado: {formatDate(goal.targetDate)}
             </p>
-          )}
-
-          {goal.onTrack !== null && (
-            <div className="mt-3 flex items-center gap-1.5">
-              {goal.onTrack ? (
-                <>
-                  <CheckCircle2 className="h-3.5 w-3.5 text-positive" />
-                  <span className="text-[10px] font-bold uppercase text-positive">
-                    No caminho certo
-                  </span>
-                </>
-              ) : (
-                <>
-                  <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
-                  <span className="text-[10px] font-bold uppercase text-amber-600">
-                    Atrasado na projeção
-                  </span>
-                </>
-              )}
-            </div>
           )}
         </div>
       </div>

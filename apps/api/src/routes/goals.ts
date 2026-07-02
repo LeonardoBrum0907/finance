@@ -20,9 +20,7 @@ import {
   monthKeysToDateRange,
 } from "../services/finance/aggregates.js";
 import {
-  buildSavingsPath,
   computeGoalsTotals,
-  computeProjectedCompletionMonth,
   resolveMonthlyContribution,
   resolveSurplus,
   serializeGoal,
@@ -140,10 +138,7 @@ async function fetchGoalsSummary(userId: string): Promise<GoalsSummaryDTO> {
 
   const goals = goalRows.map((goal) => {
     const computedAmount = resolveGoalCurrentAmount(goal, balanceContext);
-    const serialized = serializeGoal(
-      { ...goal, currentAmount: computedAmount },
-      monthlySurplus,
-    );
+    const serialized = serializeGoal({ ...goal, currentAmount: computedAmount });
     return {
       ...serialized,
       trackingMode: (goal.trackingMode === "linked" ? "linked" : "manual") as "manual" | "linked",
@@ -176,14 +171,8 @@ async function fetchGoalsSummary(userId: string): Promise<GoalsSummaryDTO> {
     monthlyContribution,
     totalCurrent,
     totalTarget,
-    projectedCompletionMonth: computeProjectedCompletionMonth(
-      totalCurrent,
-      totalTarget,
-      monthlyContribution,
-    ),
     goals,
     plans,
-    savingsPath: buildSavingsPath(goals, plans, monthlySurplus),
     hasAccounts: accountCount > 0,
     surplusPeriodMode,
     surplusLabel,

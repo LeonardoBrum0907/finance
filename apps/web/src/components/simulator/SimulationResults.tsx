@@ -8,7 +8,6 @@ import { formatCurrency } from "../../lib/format";
 import { AssistantSpotlightButton } from "../chat/AssistantSpotlightButton";
 import { cardClass } from "../dashboard/motion";
 import { SIMULATOR_TONE, type SimulatorTone } from "./tokens";
-import { ImpactChart } from "./ImpactChart";
 
 interface Props {
   result: SimulationResultDTO;
@@ -37,6 +36,7 @@ const TYPE_LABELS: Record<SimulationType, string> = {
   installments: "Compra parcelada",
   recurring_expense: "Despesa recorrente",
   save_for_goal: "Poupar para objetivo",
+  invest: "Investimento",
 };
 
 function buildAssistantMessage(result: SimulationResultDTO): string {
@@ -64,7 +64,14 @@ export function SimulationResults({
   const showConvertButton =
     result.type === "single_purchase" ||
     result.type === "installments" ||
-    result.type === "save_for_goal";
+    result.type === "save_for_goal" ||
+    result.type === "invest" ||
+    result.type === "recurring_expense";
+
+  const purchaseAddsToExistingDeficit =
+    result.baseline.surplus < 0 &&
+    result.projected.surplusAfter < 0 &&
+    result.projected.surplusDelta < 0;
 
   return (
     <section className="space-y-4">
@@ -94,14 +101,14 @@ export function SimulationResults({
         <h3 className="font-display text-sm font-semibold text-foreground">Resumo do impacto</h3>
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Metric
-            label="Sobra antes"
+            label="Sobra atual do ciclo"
             value={formatCurrency(result.baseline.surplus, currencyCode)}
-            tone="positive"
+            tone={result.baseline.surplus >= 0 ? "positive" : "negative"}
           />
           <Metric
-            label="Sobra depois"
+            label="Sobra após cenário"
             value={formatCurrency(result.projected.surplusAfter, currencyCode)}
-            delta={formatCurrency(result.projected.surplusDelta, currencyCode)}
+            delta={`${result.projected.surplusDelta >= 0 ? "+" : ""}${formatCurrency(result.projected.surplusDelta, currencyCode)} (impacto da compra)`}
             deltaNegative={result.projected.surplusDelta < 0}
             tone={result.projected.surplusAfter >= 0 ? "positive" : "negative"}
           />
@@ -126,14 +133,25 @@ export function SimulationResults({
               tone="brand"
             />
           )}
-          {result.projected.estimatedMonths !== null && (
-            <Metric
-              label="Tempo estimado"
-              value={`${result.projected.estimatedMonths} meses`}
-              tone="positive"
-            />
-          )}
         </div>
+
+        {purchaseAddsToExistingDeficit && (
+          <p className="mt-3 rounded-lg border border-app-border/60 bg-app-bg/50 px-3 py-2 text-xs text-muted-foreground">
+            Você já estava{" "}
+            <strong className="text-negative">
+              {formatCurrency(Math.abs(result.baseline.surplus), currencyCode)}
+            </strong>{" "}
+            no vermelho neste ciclo. A compra adiciona{" "}
+            <strong className="text-foreground">
+              {formatCurrency(Math.abs(result.projected.surplusDelta), currencyCode)}
+            </strong>
+            , totalizando{" "}
+            <strong className="text-negative">
+              {formatCurrency(Math.abs(result.projected.surplusAfter), currencyCode)}
+            </strong>{" "}
+            de déficit.
+          </p>
+        )}
 
         {result.warnings.length > 0 && (
           <ul className="mt-4 space-y-1.5">
@@ -148,20 +166,6 @@ export function SimulationResults({
           </ul>
         )}
       </div>
-
-      {result.projected.monthlySeries.length > 0 && (
-        <div className={cardClass}>
-          <h3 className="font-display text-sm font-semibold text-foreground">
-            Projeção mês a mês
-          </h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Comparativo da sobra com e sem o cenário
-          </p>
-          <div className="mt-4">
-            <ImpactChart data={result.projected.monthlySeries} currencyCode={currencyCode} />
-          </div>
-        </div>
-      )}
 
       {(result.goalImpact.monthsDelayed !== null || result.goalImpact.affectedGoals.length > 0) && (
         <div className={`${cardClass} border-brand/20 bg-brand/5`}>

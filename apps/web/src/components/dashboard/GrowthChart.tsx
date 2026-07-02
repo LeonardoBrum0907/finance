@@ -44,12 +44,8 @@ interface Props {
   onCategorySelect?: (selection: CategoryChartSelection) => void;
   className?: string;
   personId?: string;
-  /** Até agora (com salário previsto quando aplicável). */
-  balanceWithSalary?: number;
-  /** Depois dos agendamentos (sem salário previsto). */
+  /** Depois dos agendamentos (compromissos com data futura). */
   availableNet?: number;
-  /** Até o pagamento (com salário previsto e contas a pagar). */
-  balanceAtPayday?: number;
 }
 
 function LegendDot({ color, label }: { color: string; label: string }) {
@@ -74,9 +70,7 @@ export function GrowthChart({
   onCategorySelect,
   className,
   personId,
-  balanceWithSalary,
   availableNet,
-  balanceAtPayday,
 }: Props) {
   const [view, setView] = useState<GrowthView>("flow");
   const isSingleMonth = months === 1;
@@ -268,9 +262,7 @@ export function GrowthChart({
             view={view}
             periodMode={periodMode}
             hideIncomeBreakdown={hideIncomeBreakdown}
-            balanceWithSalary={balanceWithSalary}
             availableNet={availableNet}
-            balanceAtPayday={balanceAtPayday}
           />
         ) : (
           <div className="h-56 w-full">

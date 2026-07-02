@@ -1,42 +1,57 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Calculator } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 import type {
-  CreateGoalInput,
-  GoalsSummaryDTO,
+  AggregateSimulationImpactDTO,
+  CreateSimulationScenarioInput,
   PersonDTO,
-  SimulationInput,
   SimulationResultDTO,
+  SimulationScenarioDTO,
   SimulatorBaselineDTO,
+  UpdateSimulationScenarioInput,
 } from "@finance/shared";
 import { api } from "../lib/api";
 import { AssistantSpotlightButton } from "../components/chat/AssistantSpotlightButton";
 import { PersonSelector, type PersonFilter } from "../components/dashboard/PersonSelector";
-import { CreateGoalModal } from "../components/goals/CreateGoalModal";
 import { BaselineCard } from "../components/simulator/BaselineCard";
-import { ScenarioForm } from "../components/simulator/ScenarioForm";
 import { SimulationResults } from "../components/simulator/SimulationResults";
+import { ScenarioList, type ScenarioListTab } from "../components/simulator/ScenarioList";
+import { AggregateImpactPanel } from "../components/simulator/AggregateImpactPanel";
+import { CompleteScenarioModal } from "../components/simulator/CompleteScenarioModal";
+import { ScenarioEditorModal } from "../components/simulator/ScenarioEditorModal";
 
 function baselineUrl(personId: PersonFilter): string {
   return personId === "all" ? "/api/simulator/baseline" : `/api/simulator/baseline?personId=${personId}`;
 }
 
-function addMonthsToDate(months: number): string {
-  const d = new Date();
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
+function scenariosUrl(personId: PersonFilter, tab: ScenarioListTab): string {
+  const params = new URLSearchParams();
+  if (personId !== "all") params.set("personId", personId);
+  if (tab === "active") params.set("status", "active");
+  else if (tab === "draft") params.set("status", "draft");
+  else params.set("status", "completed_history");
+  const qs = params.toString();
+  return qs ? `/api/simulations?${qs}` : "/api/simulations";
+}
+
+function impactUrl(personId: PersonFilter): string {
+  return personId === "all" ? "/api/simulations/impact" : `/api/simulations/impact?personId=${personId}`;
 }
 
 export function SimulatorPage() {
+  const [searchParams] = useSearchParams();
+  const highlightId = searchParams.get("highlight");
+
   const [personId, setPersonId] = useState<PersonFilter>("all");
-  const [result, setResult] = useState<SimulationResultDTO | null>(null);
-  const [createGoalOpen, setCreateGoalOpen] = useState(false);
-  const [goalInitial, setGoalInitial] = useState<{
-    name?: string;
-    type?: CreateGoalInput["type"];
-    targetAmount?: number;
-    targetDate?: string;
-  }>();
+  const [tab, setTab] = useState<ScenarioListTab>("active");
+  const [analysisResult, setAnalysisResult] = useState<SimulationResultDTO | null>(null);
+  const [detailScenarioId, setDetailScenarioId] = useState<string | null>(null);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editingScenario, setEditingScenario] = useState<SimulationScenarioDTO | null>(null);
+  const [completeScenario, setCompleteScenario] = useState<SimulationScenarioDTO | null>(null);
+  const [convertScenarioId, setConvertScenarioId] = useState<string | null>(null);
+
   const queryClient = useQueryClient();
 
   const people = useQuery({
@@ -49,63 +64,118 @@ export function SimulatorPage() {
     queryFn: () => api.get<SimulatorBaselineDTO>(baselineUrl(personId)),
   });
 
-  const goals = useQuery({
-    queryKey: ["goals"],
-    queryFn: () => api.get<GoalsSummaryDTO>("/api/goals"),
+  const scenarios = useQuery({
+    queryKey: ["simulations", personId, tab],
+    queryFn: () => api.get<SimulationScenarioDTO[]>(scenariosUrl(personId, tab)),
   });
 
-  const simulate = useMutation({
-    mutationFn: (input: SimulationInput) => {
-      const body: SimulationInput = {
-        ...input,
-        personId: personId === "all" ? undefined : personId,
-      };
-      return api.post<SimulationResultDTO>("/api/simulator/run", body);
+  const impact = useQuery({
+    queryKey: ["simulations-impact", personId],
+    queryFn: () => api.get<AggregateSimulationImpactDTO>(impactUrl(personId)),
+  });
+
+  const invalidateAll = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["simulations"] });
+    queryClient.invalidateQueries({ queryKey: ["simulations-impact"] });
+  }, [queryClient]);
+
+  const runScenario = useMutation({
+    mutationFn: (id: string) => api.post<SimulationResultDTO>(`/api/simulations/${id}/run`),
+    onSuccess: (data, id) => {
+      setAnalysisResult(data);
+      setDetailScenarioId(id);
+      invalidateAll();
     },
-    onSuccess: (data) => setResult(data),
   });
 
-  const createGoal = useMutation({
-    mutationFn: (body: CreateGoalInput) => api.post<GoalsSummaryDTO>("/api/goals", body),
-    onSuccess: (data) => {
-      queryClient.setQueryData(["goals"], data);
-      setCreateGoalOpen(false);
+  const createScenario = useMutation({
+    mutationFn: (body: CreateSimulationScenarioInput) =>
+      api.post<SimulationScenarioDTO>("/api/simulations", body),
+    onSuccess: (created) => {
+      invalidateAll();
+      setEditorOpen(false);
+      setEditingScenario(null);
+      setTab("active");
+      setDetailScenarioId(created.id);
+      runScenario.mutate(created.id);
     },
   });
 
-  const handleConvertFixed = useCallback(() => {
-    if (!result) return;
-    const lastInput = simulate.variables;
-    const amount = lastInput?.amount ?? 0;
+  const updateScenario = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpdateSimulationScenarioInput }) =>
+      api.patch<SimulationScenarioDTO>(`/api/simulations/${id}`, body),
+    onSuccess: (updated) => {
+      invalidateAll();
+      setEditorOpen(false);
+      setEditingScenario(null);
+      runScenario.mutate(updated.id);
+    },
+  });
 
-    setGoalInitial({
-      name: result.name ?? "Nova compra",
-      type: result.type === "save_for_goal" ? "savings" : "purchase",
-      targetAmount: amount,
-      targetDate:
-        result.projected.estimatedMonths != null
-          ? addMonthsToDate(result.projected.estimatedMonths)
-          : result.goalImpact.monthsDelayed
-            ? addMonthsToDate(result.goalImpact.monthsDelayed + 3)
-            : undefined,
-    });
-    setCreateGoalOpen(true);
-  }, [result, simulate.variables]);
+  const completeScenarioMutation = useMutation({
+    mutationFn: ({
+      id,
+      body,
+    }: {
+      id: string;
+      body: { transactionId?: string; note?: string };
+    }) => api.post<SimulationScenarioDTO>(`/api/simulations/${id}/complete`, body),
+    onSuccess: () => {
+      invalidateAll();
+      setCompleteScenario(null);
+      setAnalysisResult(null);
+      setDetailScenarioId(null);
+      setTab("history");
+    },
+  });
 
-  const handleCreateGoal = async (payload: {
-    name: string;
-    description?: string;
-    type: CreateGoalInput["type"];
-    targetAmount: number;
-    targetDate?: string;
-  }) => {
-    await createGoal.mutateAsync(payload);
-  };
+  const convertToGoal = useMutation({
+    mutationFn: (id: string) =>
+      api.post<{ scenario: SimulationScenarioDTO; goalId: string }>(
+        `/api/simulations/${id}/convert-to-goal`,
+        {},
+      ),
+    onSuccess: () => {
+      invalidateAll();
+      queryClient.invalidateQueries({ queryKey: ["goals"] });
+      setConvertScenarioId(null);
+      setAnalysisResult(null);
+      setDetailScenarioId(null);
+      setTab("history");
+    },
+  });
 
-  const handleClearSimulation = useCallback(() => {
-    setResult(null);
-    simulate.reset();
-  }, [simulate]);
+  const archiveScenario = useMutation({
+    mutationFn: (id: string) =>
+      api.patch<SimulationScenarioDTO>(`/api/simulations/${id}`, { status: "archived" }),
+    onSuccess: invalidateAll,
+  });
+
+  const deleteScenario = useMutation({
+    mutationFn: (id: string) => api.delete(`/api/simulations/${id}`),
+    onSuccess: invalidateAll,
+  });
+
+  const detailScenario = useMemo(
+    () => scenarios.data?.find((s) => s.id === detailScenarioId) ?? null,
+    [scenarios.data, detailScenarioId],
+  );
+
+  const handleConvertScenario = useCallback(
+    (scenario: SimulationScenarioDTO) => {
+      setConvertScenarioId(scenario.id);
+      convertToGoal.mutate(scenario.id);
+    },
+    [convertToGoal],
+  );
+
+  const handleToggleActive = useCallback(
+    (scenario: SimulationScenarioDTO) => {
+      const nextStatus = scenario.status === "active" ? "draft" : "active";
+      updateScenario.mutate({ id: scenario.id, body: { status: nextStatus } });
+    },
+    [updateScenario],
+  );
 
   const effectivePersonId = personId === "all" ? undefined : personId;
 
@@ -118,7 +188,7 @@ export function SimulatorPage() {
             <h1 className="font-display text-2xl font-bold text-foreground">Simulador</h1>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Simule compras e objetivos considerando sua saúde financeira atual
+            Planeje compras, despesas, poupança e investimentos — veja o impacto nos ciclos
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -128,7 +198,8 @@ export function SimulatorPage() {
               people={people.data}
               onChange={(next) => {
                 setPersonId(next);
-                setResult(null);
+                setAnalysisResult(null);
+                setDetailScenarioId(null);
               }}
             />
           )}
@@ -157,40 +228,85 @@ export function SimulatorPage() {
       {baseline.data && (
         <>
           <BaselineCard baseline={baseline.data} />
-          <ScenarioForm
-            baseline={baseline.data}
-            loading={simulate.isPending}
-            hasResult={result !== null}
-            onSubmit={(input) => simulate.mutate(input)}
-            onClear={handleClearSimulation}
-          />
+
+          <div className="grid gap-6 lg:grid-cols-2">
+            <ScenarioList
+              scenarios={scenarios.data ?? []}
+              currencyCode={baseline.data.currencyCode}
+              tab={tab}
+              highlightId={highlightId}
+              onTabChange={setTab}
+              onNew={() => {
+                setEditingScenario(null);
+                setEditorOpen(true);
+              }}
+              onRun={(id) => runScenario.mutate(id)}
+              onEdit={(scenario) => {
+                setEditingScenario(scenario);
+                setEditorOpen(true);
+              }}
+              onToggleActive={handleToggleActive}
+              onComplete={setCompleteScenario}
+              onConvert={handleConvertScenario}
+              onArchive={(id) => archiveScenario.mutate(id)}
+              onDelete={(id) => deleteScenario.mutate(id)}
+            />
+
+            <AggregateImpactPanel impact={impact.data} loading={impact.isLoading} />
+          </div>
+
+          {runScenario.isError && (
+            <div className="rounded-2xl border border-negative/20 bg-negative/10 p-4 text-sm text-negative">
+              Erro ao analisar cenário. Tente novamente.
+            </div>
+          )}
+
+          {analysisResult && detailScenario && baseline.data && (
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-foreground">
+                Análise: <span className="text-brand">{detailScenario.name}</span>
+              </p>
+              <SimulationResults
+                result={analysisResult}
+                baseline={baseline.data}
+                onConvertToGoal={() => handleConvertScenario(detailScenario)}
+                personId={effectivePersonId}
+              />
+            </div>
+          )}
         </>
       )}
 
-      {simulate.isError && (
-        <div className="rounded-2xl border border-negative/20 bg-negative/10 p-4 text-sm text-negative">
-          Erro ao simular. Verifique os dados e tente novamente.
-        </div>
-      )}
-
-      {result && baseline.data && (
-        <SimulationResults
-          result={result}
+      {baseline.data && editorOpen && (
+        <ScenarioEditorModal
+          open={editorOpen}
           baseline={baseline.data}
-          onConvertToGoal={handleConvertFixed}
-          personId={effectivePersonId}
+          editing={editingScenario}
+          saving={createScenario.isPending || updateScenario.isPending}
+          onClose={() => {
+            setEditorOpen(false);
+            setEditingScenario(null);
+          }}
+          onCreate={(input) => createScenario.mutate({ ...input, personId: effectivePersonId })}
+          onUpdate={(id, body) => updateScenario.mutate({ id, body })}
         />
       )}
 
-      <CreateGoalModal
-        open={createGoalOpen}
-        saving={createGoal.isPending}
-        availableSources={goals.data?.availableSources ?? []}
-        currencyCode={goals.data?.currencyCode ?? baseline.data?.currencyCode}
-        initialValues={goalInitial}
-        onClose={() => setCreateGoalOpen(false)}
-        onSave={handleCreateGoal}
+      <CompleteScenarioModal
+        open={!!completeScenario}
+        scenario={completeScenario}
+        currencyCode={baseline.data?.currencyCode ?? "BRL"}
+        saving={completeScenarioMutation.isPending}
+        onClose={() => setCompleteScenario(null)}
+        onConfirm={(params) => {
+          if (!completeScenario) return;
+          completeScenarioMutation.mutate({ id: completeScenario.id, body: params });
+        }}
       />
+
+      {convertToGoal.isPending && convertScenarioId && (
+        <p className="text-xs text-muted-foreground">Convertendo cenário em meta...</p>
+      )}
     </div>
   );
 }

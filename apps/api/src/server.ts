@@ -14,6 +14,7 @@ import { goalRoutes } from "./routes/goals.js";
 import { investmentRoutes } from "./routes/investments.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { simulatorRoutes } from "./routes/simulator.js";
+import { simulationsRoutes } from "./routes/simulations.js";
 
 async function main() {
   const app = Fastify({
@@ -45,6 +46,7 @@ async function main() {
   await app.register(investmentRoutes);
   await app.register(settingsRoutes);
   await app.register(simulatorRoutes);
+  await app.register(simulationsRoutes);
 
   await app.listen({ port: env.port, host: "0.0.0.0" });
 }

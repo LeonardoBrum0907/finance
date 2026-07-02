@@ -30,6 +30,7 @@ model User {
   chatActionProposals ChatActionProposal[]
   categoryMappings    CategoryMapping[]
   paymentCommitments  PaymentCommitment[]
+  simulationScenarios SimulationScenario[]
 }
 
 model Person {
@@ -42,8 +43,9 @@ model Person {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  connections BankConnection[]
+  user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  connections         BankConnection[]
+  simulationScenarios SimulationScenario[]
 
   @@index([userId])
 }
@@ -112,6 +114,7 @@ model Transaction {
   account            Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
   anchorCommitment   PaymentCommitment?   @relation("AnchorTransaction")
   installmentPayment PaymentInstallment?
+  linkedScenarios    SimulationScenario[]
 
   @@index([accountId])
   @@index([date])
@@ -308,15 +311,18 @@ model Goal {
   targetDate        DateTime?
   status            String    @default("active")
   trackingMode      String    @default("manual")
-  lastSyncedBalance Float?
-  linkedAccountId   String?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  lastSyncedBalance  Float?
+  linkedAccountId    String?
+  sourceSimulationId String?   @unique
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  contributions GoalContribution[]
-  planGoals     PlanGoal[]
-  sources       GoalSource[]
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contributions    GoalContribution[]
+  planGoals        PlanGoal[]
+  sources          GoalSource[]
+  sourceSimulation SimulationScenario? @relation("GoalFromSimulation", fields: [sourceSimulationId], references: [id], onDelete: SetNull)
+  convertedFrom    SimulationScenario? @relation("ConvertedToGoal")
 
   @@index([userId])
 }
@@ -384,6 +390,37 @@ model PlanGoal {
   @@unique([planId, goalId])
   @@index([planId])
   @@index([goalId])
+}
+
+model SimulationScenario {
+  id                   String    @id @default(cuid())
+  userId               String
+  personId             String?
+  name                 String
+  description          String?
+  type                 String
+  status               String    @default("draft")
+  payload              Json
+  priority             Int       @default(0)
+  linkedTransactionId  String?
+  linkedInvestmentTxId String?
+  linkedGoalId         String?   @unique
+  linkedCommitmentId   String?
+  lastVerdict          String?
+  lastImpactSnapshot   Json?
+  completedAt          DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  person            Person?                @relation(fields: [personId], references: [id], onDelete: SetNull)
+  linkedTransaction Transaction?           @relation(fields: [linkedTransactionId], references: [id], onDelete: SetNull)
+  linkedGoal        Goal?                  @relation("ConvertedToGoal", fields: [linkedGoalId], references: [id], onDelete: SetNull)
+  goalOrigin        Goal?                  @relation("GoalFromSimulation")
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([personId])
 }
 
 model ChatActionProposal {

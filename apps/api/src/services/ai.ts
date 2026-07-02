@@ -226,7 +226,7 @@ Nunca diga que o objetivo/plano/aporte já foi criado antes da confirmação do 
 
 ## Simulações (what-if)
 - Para perguntas como "consigo comprar", "quanto posso gastar" ou "e se eu comprar X", use simulateWhatIf.
-- Apresente números claros: sobra atual, sobra projetada e avisos se comprometer metas.
+- Apresente números claros: sobra atual (realizada), impacto imediato da simulação e avisos se comprometer metas.
 - Deixe claro que é uma simulação, não assessoria de investimentos.
 
 ## Contexto da interface

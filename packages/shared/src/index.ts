@@ -48,21 +48,78 @@ export {
   type UpdateCommitmentInput,
 } from "./commitments";
 export {
+  SIMULATED_PAYMENT_METHODS,
   simulatedPurchaseInputSchema,
   buildInstallmentSchedule,
   createSimulatedPurchase,
+  normalizeSimulatedPurchase,
   computeSimulationCycleImpact,
+  computePaydayCycleImpacts,
+  buildSimulationPaydayCycles,
+  computeCreditBillImpacts,
   computeSimulationStatDelta,
   flattenSimulatedRows,
+  paymentMethodLabel,
   todayDateKeyInTimeZone,
+  type SimulatedPaymentMethod,
   type SimulatedInstallment,
   type SimulatedPurchase,
   type SimulatedPurchaseInput,
   type SimulationCycleRange,
   type SimulationCycleImpact,
+  type PaydayCycleImpact,
+  type PaydayCycleInput,
   type SimulationStatDelta,
   type FlatSimulatedRow,
+  type CreditAccountSnapshot,
+  type CreditBillImpact,
 } from "./simulation";
+export {
+  SIMULATION_SCENARIO_STATUSES,
+  SCENARIO_SIMULATION_TYPES,
+  INVEST_MODES,
+  DETAILED_PAYMENT_METHODS,
+  simulationPayloadSchema,
+  createSimulationScenarioSchema,
+  updateSimulationScenarioSchema,
+  completeSimulationSchema,
+  convertScenarioToGoalSchema,
+  payloadToSimulationInput,
+  simulatedPurchaseInputToPayload,
+  payloadToSimulatedPurchase,
+  scenariosToSimulatedPurchases,
+  computeAggregateCycleImpact,
+  suggestTransactionMatches,
+  toTransactionMatchCandidate,
+  scenarioTypeLabel,
+  scenarioStatusLabel,
+  type SimulationScenarioStatus,
+  type ScenarioSimulationType,
+  type InvestMode,
+  type DetailedPaymentMethod,
+  type SimulationPayload,
+  type CreateSimulationScenarioInput,
+  type UpdateSimulationScenarioInput,
+  type CompleteSimulationInput,
+  type ConvertScenarioToGoalInput,
+  type SimulationScenarioDTO,
+  type TransactionMatchCandidate,
+  type TransactionMatchesResponse,
+  type ScenarioCycleBreakdown,
+  type AggregateSimulationImpactDTO,
+  type TransactionMatchInput,
+} from "./simulationScenario";
+export {
+  CLOSE_DAYS_BEFORE_DUE,
+  resolveBillingCloseDate,
+  resolveNextDueDate,
+  resolveBillForChargeDate,
+  toDate,
+  toDateKey,
+  type BillBucket,
+  type BillAssignment,
+  type CreditBillSimulatedCharge,
+} from "./creditBill";
 export {
   PERIOD_MODES,
   periodModeSchema,
@@ -427,14 +484,6 @@ export interface DashboardPeriodSummary {
   committedExpenses?: number;
   /** Saldo disponível: net − committedExpenses. */
   availableNet?: number;
-  /** Salário previsto no pagamento (âncora end, ainda não recebido). */
-  pendingSalary?: number | null;
-  /** true se salário ainda não recebido e sem estimativa histórica. */
-  salaryPending?: boolean;
-  /** Até agora incluindo salário previsto: net + pendingSalary. */
-  balanceWithSalary?: number;
-  /** Até o pagamento: availableNet + pendingSalary. */
-  balanceAtPayday?: number;
   periodMode?: PeriodMode;
   from?: string;
   to?: string;
@@ -471,14 +520,6 @@ export interface DashboardCurrentCycle {
   net: number;
   /** Saldo disponível: net − committedExpenses. */
   availableNet: number;
-  /** Salário previsto no pagamento (âncora end, ainda não recebido). */
-  pendingSalary?: number | null;
-  /** true se salário ainda não recebido e sem estimativa histórica. */
-  salaryPending?: boolean;
-  /** Até agora incluindo salário previsto: net + pendingSalary. */
-  balanceWithSalary: number;
-  /** Até o pagamento: availableNet + pendingSalary. */
-  balanceAtPayday: number;
   salaryIncome: number;
   extraIncome: number;
 }
@@ -522,19 +563,7 @@ export interface DashboardGrowthMetrics {
     salary: number;
     extra: number;
   } | null;
-  projection: {
-    dailyAvgExpense: number;
-    /** Gasto real até hoje no ciclo/período. */
-    expensesToDate: number;
-    /** Cobranças já agendadas com data futura no ciclo (ex.: parcelas no cartão). */
-    committedExpenses: number;
-    committedExpensesManual?: number;
-    committedExpensesBank?: number;
-    projectedExpense: number;
-    projectedIncome: number;
-    projectedNet: number;
-    pendingSalary: number | null;
-    salaryPending: boolean;
+  cycleProgress: {
     daysElapsed: number;
     daysTotal: number;
     daysRemaining: number;
@@ -640,8 +669,6 @@ export interface GoalDTO {
   linkedAccountId: string | null;
   sources: GoalSourceDTO[];
   progress: number;
-  projectedCompletionDate: string | null;
-  onTrack: boolean | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -666,26 +693,15 @@ export interface PlanDTO {
   updatedAt: string;
 }
 
-export interface SavingsPathPoint {
-  month: string;
-  projectedAmount: number;
-  cumulativeContributions: number;
-  /** Rótulo curto no eixo X (ex.: "Hoje", "T2 2026", "Meta atingida") */
-  label?: string | null;
-  targetAmount?: number;
-}
-
 export interface GoalsSummaryDTO {
   currencyCode: string;
   monthlySurplus: number;
-  /** Aporte mensal efetivo usado na projeção (plano ou sobra) */
+  /** Aporte mensal efetivo dos planos ativos (ou sobra média quando não há plano). */
   monthlyContribution: number;
   totalCurrent: number;
   totalTarget: number;
-  projectedCompletionMonth: string | null;
   goals: GoalDTO[];
   plans: PlanDTO[];
-  savingsPath: SavingsPathPoint[];
   hasAccounts: boolean;
   surplusPeriodMode: PeriodMode;
   surplusLabel: string;
@@ -913,6 +929,7 @@ export const SIMULATION_TYPES = [
   "installments",
   "recurring_expense",
   "save_for_goal",
+  "invest",
 ] as const;
 
 export type SimulationType = (typeof SIMULATION_TYPES)[number];
@@ -931,6 +948,8 @@ export const simulationInputSchema = z.object({
   creditAccountId: z.string().optional(),
   categoryGroup: dashboardCategoryGroupSchema.optional(),
   personId: z.string().cuid().optional(),
+  investMode: z.enum(["monthly", "lump_sum"]).optional(),
+  investmentId: z.string().optional(),
 });
 
 export type SimulationInput = z.infer<typeof simulationInputSchema>;
@@ -953,7 +972,8 @@ export interface SimulatorBaselineDTO {
   averageExpenses: number;
   bankBalance: number;
   monthlyContribution: number;
-  projectedNet: number | null;
+  /** Sobra real do ciclo/período atual (net ou availableNet). */
+  currentSurplus: number;
   creditAccounts: SimulatorCreditAccountDTO[];
   hasAccounts: boolean;
 }
@@ -1002,8 +1022,6 @@ export interface SimulationResultDTO {
     surplusAfter: number;
     surplusDelta: number;
     bankBalanceAfter: number | null;
-    monthlySeries: SimulationMonthlyPoint[];
-    estimatedMonths: number | null;
     monthlyNeeded: number | null;
     installmentAmount: number | null;
   };

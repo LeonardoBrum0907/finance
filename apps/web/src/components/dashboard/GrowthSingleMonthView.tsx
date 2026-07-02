@@ -23,12 +23,8 @@ interface Props {
   view: GrowthView;
   periodMode?: PeriodMode;
   hideIncomeBreakdown?: boolean;
-  /** Até agora (com salário previsto quando aplicável). */
-  balanceWithSalary?: number;
-  /** Depois dos agendamentos. */
+  /** Depois dos agendamentos (compromissos com data futura). */
   availableNet?: number;
-  /** Até o pagamento. */
-  balanceAtPayday?: number;
 }
 
 function ChangeChip({
@@ -86,6 +82,26 @@ function HorizontalBar({
   );
 }
 
+function BalanceChip({
+  label,
+  balance,
+}: {
+  label: string;
+  balance: ReturnType<typeof formatCycleBalance>;
+}) {
+  return (
+    <div className="min-w-0 flex-1 rounded-lg border border-app-border/60 bg-app-bg/80 px-3 py-2">
+      <p className="truncate text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-0.5 truncate text-xs font-semibold text-foreground">
+        <span className={toneTextClass(balance.tone)}>{balance.status}</span>{" "}
+        <span className={toneTextClass(balance.tone)}>{balance.formattedAmount}</span>
+      </p>
+    </div>
+  );
+}
+
 export function GrowthSingleMonthView({
   point,
   growthMetrics,
@@ -93,32 +109,25 @@ export function GrowthSingleMonthView({
   view,
   periodMode = "calendar",
   hideIncomeBreakdown = false,
-  balanceWithSalary,
   availableNet,
-  balanceAtPayday,
 }: Props) {
   const { theme } = useTheme();
   const chartColors = useMemo(() => getChartColors(), [theme]);
   const { income, expenses, net: pointNet } = point;
-  const displayUntilNow = balanceWithSalary ?? pointNet;
+  const displayUntilNow = pointNet;
   const untilNowBalance = formatCycleBalance(displayUntilNow, currencyCode);
   const afterScheduledBalance =
     availableNet !== undefined ? formatCycleBalance(availableNet, currencyCode) : null;
-  const atPaydayBalance =
-    balanceAtPayday !== undefined ? formatCycleBalance(balanceAtPayday, currencyCode) : null;
-  const { savingsRate, expenseRatio, vsPrevious, incomeBreakdown, projection } = growthMetrics;
+  const { savingsRate, expenseRatio, vsPrevious, incomeBreakdown, cycleProgress } =
+    growthMetrics;
   const maxFlow = Math.max(income, expenses, 1);
   const compareLabel = periodMode === "payday" ? "vs ciclo anterior" : "vs mês anterior";
   const showAfterScheduled =
     availableNet !== undefined &&
-    projection?.isPartialPeriod &&
+    cycleProgress?.isPartialPeriod &&
     availableNet !== displayUntilNow;
-  const showAtPayday =
-    balanceAtPayday !== undefined &&
-    projection?.isPartialPeriod &&
-    balanceAtPayday !== availableNet;
   const balanceLabel =
-    periodMode === "payday" && projection?.isPartialPeriod
+    periodMode === "payday" && cycleProgress?.isPartialPeriod
       ? CYCLE_COPY.untilNow
       : "Saldo";
 
@@ -167,7 +176,7 @@ export function GrowthSingleMonthView({
   const doughnutOptions = useMemo(
     () => ({
       ...baseChartOptions(),
-      cutout: "72%",
+      cutout: "78%",
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -184,6 +193,44 @@ export function GrowthSingleMonthView({
     [currencyCode],
   );
 
+  const heroCenter = (
+    <>
+      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        {balanceLabel}
+      </span>
+      <span
+        className={`text-[11px] font-bold uppercase tracking-wide ${toneTextClass(untilNowBalance.tone)}`}
+      >
+        {untilNowBalance.status}
+      </span>
+      <span
+        className={`font-display text-lg font-bold leading-tight ${toneTextClass(untilNowBalance.tone)}`}
+      >
+        {untilNowBalance.formattedAmount}
+      </span>
+    </>
+  );
+
+  const secondaryBalances =
+    showAfterScheduled ? (
+      <div className="flex flex-col gap-2 sm:col-span-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {afterScheduledBalance && (
+            <BalanceChip label={CYCLE_COPY.afterScheduled} balance={afterScheduledBalance} />
+          )}
+        </div>
+        {savingsRate !== null && view === "flow" && (
+          <p className="text-center text-[11px] font-medium text-muted-foreground sm:text-left">
+            {savingsRate.toFixed(0)}% da renda poupada neste período
+          </p>
+        )}
+      </div>
+    ) : savingsRate !== null && view === "flow" ? (
+      <p className="text-center text-[11px] font-medium text-muted-foreground sm:col-span-2 sm:text-left">
+        {savingsRate.toFixed(0)}% da renda poupada neste período
+      </p>
+    ) : null;
+
   const hasVsPrevious =
     vsPrevious.incomeChange !== null ||
     vsPrevious.expenseChange !== null ||
@@ -194,84 +241,13 @@ export function GrowthSingleMonthView({
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="relative mx-auto h-40 w-full max-w-[180px]">
+        <div className="relative mx-auto aspect-square h-44 w-44 max-w-full sm:mx-0">
           <Doughnut
             data={view === "flow" ? flowDoughnutData : balanceDoughnutData}
             options={doughnutOptions}
           />
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-2 text-center">
-            {view === "flow" ? (
-              <>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                  {balanceLabel}
-                </span>
-                <span
-                  className={`text-[10px] font-bold uppercase tracking-wide ${toneTextClass(untilNowBalance.tone)}`}
-                >
-                  {untilNowBalance.status}
-                </span>
-                <span
-                  className={`font-display text-sm font-bold ${toneTextClass(untilNowBalance.tone)}`}
-                >
-                  {untilNowBalance.formattedAmount}
-                </span>
-                {showAfterScheduled && afterScheduledBalance && (
-                  <span className="mt-0.5 text-[9px] font-medium text-muted-foreground">
-                    {CYCLE_COPY.afterScheduled}:{" "}
-                    <span className={toneTextClass(afterScheduledBalance.tone)}>
-                      {afterScheduledBalance.status}{" "}
-                      {afterScheduledBalance.formattedAmount}
-                    </span>
-                  </span>
-                )}
-                {showAtPayday && atPaydayBalance && (
-                  <span className="mt-0.5 text-[9px] font-medium text-muted-foreground">
-                    {CYCLE_COPY.atPayday}:{" "}
-                    <span className={toneTextClass(atPaydayBalance.tone)}>
-                      {atPaydayBalance.status} {atPaydayBalance.formattedAmount}
-                    </span>
-                  </span>
-                )}
-                {savingsRate !== null && (
-                  <span className="mt-0.5 text-[10px] font-semibold text-muted-foreground">
-                    {savingsRate.toFixed(0)}% poupança
-                  </span>
-                )}
-              </>
-            ) : (
-              <>
-                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                  {balanceLabel}
-                </span>
-                <span
-                  className={`text-[10px] font-bold uppercase tracking-wide ${toneTextClass(untilNowBalance.tone)}`}
-                >
-                  {untilNowBalance.status}
-                </span>
-                <span
-                  className={`font-display text-sm font-bold ${toneTextClass(untilNowBalance.tone)}`}
-                >
-                  {untilNowBalance.formattedAmount}
-                </span>
-                {showAfterScheduled && afterScheduledBalance && (
-                  <span className="mt-0.5 text-[9px] font-medium text-muted-foreground">
-                    {CYCLE_COPY.afterScheduled}:{" "}
-                    <span className={toneTextClass(afterScheduledBalance.tone)}>
-                      {afterScheduledBalance.status}{" "}
-                      {afterScheduledBalance.formattedAmount}
-                    </span>
-                  </span>
-                )}
-                {showAtPayday && atPaydayBalance && (
-                  <span className="mt-0.5 text-[9px] font-medium text-muted-foreground">
-                    {CYCLE_COPY.atPayday}:{" "}
-                    <span className={toneTextClass(atPaydayBalance.tone)}>
-                      {atPaydayBalance.status} {atPaydayBalance.formattedAmount}
-                    </span>
-                  </span>
-                )}
-              </>
-            )}
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
+            {heroCenter}
           </div>
         </div>
 
@@ -314,6 +290,8 @@ export function GrowthSingleMonthView({
         </div>
       </div>
 
+      {secondaryBalances}
+
       <div
         className={`grid gap-2 ${showBreakdown ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}
       >
@@ -349,7 +327,7 @@ export function GrowthSingleMonthView({
         )}
       </div>
 
-      {(hasVsPrevious || projection?.isPartialPeriod) && (
+      {(hasVsPrevious || cycleProgress?.isPartialPeriod) && (
         <div className="space-y-2 rounded-xl border border-app-border/60 bg-app-bg/60 px-3 py-2.5">
           {hasVsPrevious && (
             <div className="flex flex-wrap items-center gap-1.5">
@@ -361,125 +339,21 @@ export function GrowthSingleMonthView({
               <ChangeChip label="saldo" change={vsPrevious.netChange} />
             </div>
           )}
-          {projection?.isPartialPeriod && (
-            <div className="space-y-1 text-xs text-muted-foreground">
-              {periodMode === "payday" ? (
+          {cycleProgress?.isPartialPeriod && (
+            <p className="text-xs text-muted-foreground">
+              <span className="font-semibold text-foreground/90">
+                {periodMode === "payday" ? "Ciclo em andamento" : "Período em andamento"}
+              </span>
+              {" · "}
+              dia {cycleProgress.daysElapsed}/{cycleProgress.daysTotal}
+              {cycleProgress.daysRemaining > 0 && (
                 <>
-                  <p>
-                    <span className="font-semibold text-foreground/90">
-                      Fechamento do ciclo
-                    </span>{" "}
-                    <span className="text-muted-foreground">
-                      (faltam {projection.daysRemaining}{" "}
-                      {projection.daysRemaining === 1 ? "dia" : "dias"} ·{" "}
-                      {projection.daysElapsed}/{projection.daysTotal})
-                    </span>
-                  </p>
-                  <p>
-                    Despesas estimadas no ciclo:{" "}
-                    <span className="font-semibold text-foreground">
-                      ~{formatCurrency(projection.projectedExpense, currencyCode)}
-                    </span>
-                  </p>
-                  {((projection.expensesToDate ?? 0) > 0 || (projection.committedExpenses ?? 0) > 0) && (
-                    <p className="text-muted-foreground">
-                      {(projection.expensesToDate ?? 0) > 0 && (
-                        <>
-                          Já gasto:{" "}
-                          <span className="font-medium text-foreground/90">
-                            {formatCurrency(projection.expensesToDate ?? 0, currencyCode)}
-                          </span>
-                        </>
-                      )}
-                      {(projection.expensesToDate ?? 0) > 0 &&
-                        (projection.committedExpenses ?? 0) > 0 &&
-                        " · "}
-                      {(projection.committedExpenses ?? 0) > 0 && (
-                        <>
-                          Comprometido:{" "}
-                          <span className="font-medium text-foreground/90">
-                            {formatCurrency(projection.committedExpenses ?? 0, currencyCode)}
-                          </span>
-                          {(projection.committedExpensesManual ?? 0) > 0 &&
-                            (projection.committedExpensesBank ?? 0) > 0 && (
-                              <span className="text-muted-foreground">
-                                {" "}
-                                (cartão{" "}
-                                {formatCurrency(projection.committedExpensesBank ?? 0, currencyCode)}{" "}
-                                · manual{" "}
-                                {formatCurrency(
-                                  projection.committedExpensesManual ?? 0,
-                                  currencyCode,
-                                )}
-                                )
-                              </span>
-                            )}
-                        </>
-                      )}
-                    </p>
-                  )}
-                  {projection.pendingSalary != null && projection.pendingSalary > 0 && (
-                    <p>
-                      Salário previsto:{" "}
-                      <span className="font-semibold text-positive">
-                        ~{formatCurrency(projection.pendingSalary, currencyCode)}
-                      </span>
-                    </p>
-                  )}
-                  {projection.pendingSalary != null && projection.pendingSalary > 0 ? (
-                    <p>
-                      Sobra estimada após pagamento:{" "}
-                      <span
-                        className={`font-semibold ${
-                          projection.projectedNet >= 0 ? "text-positive" : "text-negative"
-                        }`}
-                      >
-                        {projection.projectedNet >= 0 ? "+" : ""}
-                        {formatCurrency(projection.projectedNet, currencyCode)}
-                      </span>
-                    </p>
-                  ) : projection.salaryPending ? (
-                    <p className="text-amber-700">
-                      Salário ainda não recebido neste ciclo. Marque a entrada como
-                      categoria &quot;Salário&quot; (ou aguarde o pagamento) para ver a
-                      sobra estimada.
-                    </p>
-                  ) : (
-                    <p>
-                      Sobra estimada:{" "}
-                      <span
-                        className={`font-semibold ${
-                          projection.projectedNet >= 0 ? "text-positive" : "text-negative"
-                        }`}
-                      >
-                        {projection.projectedNet >= 0 ? "+" : ""}
-                        {formatCurrency(projection.projectedNet, currencyCode)}
-                      </span>
-                    </p>
-                  )}
+                  {" "}
+                  · faltam {cycleProgress.daysRemaining}{" "}
+                  {cycleProgress.daysRemaining === 1 ? "dia" : "dias"}
                 </>
-              ) : (
-                <p>
-                  Projeção até fim do período:{" "}
-                  <span className="font-semibold text-foreground">
-                    ~{formatCurrency(projection.projectedExpense, currencyCode)} em despesas
-                  </span>
-                  {" · "}
-                  saldo estimado{" "}
-                  <span
-                    className={`font-semibold ${
-                      projection.projectedNet >= 0 ? "text-positive" : "text-negative"
-                    }`}
-                  >
-                    {projection.projectedNet >= 0 ? "+" : ""}
-                    {formatCurrency(projection.projectedNet, currencyCode)}
-                  </span>{" "}
-                  <span className="text-muted-foreground">
-                    (dia {projection.daysElapsed}/{projection.daysTotal})
-                  </span>
-                </p>
               )}
-            </div>
+            </p>
           )}
         </div>
       )}

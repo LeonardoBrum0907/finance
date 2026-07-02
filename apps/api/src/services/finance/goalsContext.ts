@@ -33,11 +33,10 @@ export async function buildGoalsContextBlock(
       const deadline = goal.targetDate
         ? formatLocalDate(new Date(goal.targetDate))
         : "sem prazo";
-      const track =
-        goal.onTrack === true ? "no prazo" : goal.onTrack === false ? "atrasado" : "—";
       const mode = goal.trackingMode === "linked" ? "automático" : "manual";
+      const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
       lines.push(
-        `- id=${goal.id} | "${goal.name}" | ${formatCurrency(goal.currentAmount)} de ${formatCurrency(goal.targetAmount)} (${goal.progress.toFixed(0)}%) | modo: ${mode} | prazo: ${deadline} | ${track}`,
+        `- id=${goal.id} | "${goal.name}" | ${formatCurrency(goal.currentAmount)} de ${formatCurrency(goal.targetAmount)} (${goal.progress.toFixed(0)}%) | faltam ${formatCurrency(remaining)} | modo: ${mode} | prazo: ${deadline}`,
       );
     }
   }
@@ -82,7 +81,6 @@ export function formatGoalsForTool(
     totalTarget: summary.totalTarget,
     monthlySurplus: summary.monthlySurplus,
     monthlyContribution: summary.monthlyContribution,
-    projectedCompletionMonth: summary.projectedCompletionMonth,
     goals: summary.goals.map((goal) => ({
       id: goal.id,
       name: goal.name,
@@ -93,8 +91,6 @@ export function formatGoalsForTool(
       currentAmount: goal.currentAmount,
       progress: goal.progress,
       targetDate: goal.targetDate,
-      onTrack: goal.onTrack,
-      projectedCompletionDate: goal.projectedCompletionDate,
       sources: goal.sources,
     })),
     plans: summary.plans.map((plan) => ({

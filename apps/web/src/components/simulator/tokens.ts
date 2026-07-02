@@ -41,6 +41,7 @@ export const SCENARIO_TYPE_TONE: Record<SimulationType, SimulatorTone> = {
   installments: "brand",
   recurring_expense: "negative",
   save_for_goal: "brand",
+  invest: "positive",
 };
 
 export function scenarioTypeButtonClass(type: SimulationType, selected: boolean): string {

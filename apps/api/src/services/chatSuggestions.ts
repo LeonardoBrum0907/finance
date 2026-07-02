@@ -83,7 +83,10 @@ export async function buildChatSuggestions(
       intent: "plan",
     });
   } else {
-    const behind = activeGoals.find((g) => g.onTrack === false);
+    const behind = activeGoals.find((g) => {
+      if (!g.targetDate || g.progress >= 100) return false;
+      return new Date(g.targetDate) < new Date();
+    });
     if (behind) {
       suggestions.push({
         label: `Recuperar "${behind.name}"`,

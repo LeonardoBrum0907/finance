@@ -1,4 +1,6 @@
-import { isCreditAccount, isTransactionOutflow } from "@finance/shared";
+import { isCreditAccount, isTransactionOutflow, resolveBillingCloseDate, resolveNextDueDate } from "@finance/shared";
+
+export { resolveBillingCloseDate, resolveNextDueDate } from "@finance/shared";
 
 export interface NextBillSummary {
   nextBillAmount: number | null;
@@ -11,62 +13,10 @@ interface TxLike {
   amount: number;
 }
 
-/** Fechamento costuma ocorrer alguns dias antes do vencimento. */
-const CLOSE_DAYS_BEFORE_DUE = 7;
-
-function startOfDay(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
 function endOfDay(date: Date): Date {
   const d = new Date(date);
   d.setHours(23, 59, 59, 999);
   return d;
-}
-
-/**
- * Resolve a data de fechamento do ciclo aberto.
- * Usa balanceCloseDate do Pluggy quando disponível; caso contrário estima a partir do vencimento.
- */
-export function resolveBillingCloseDate(
-  balanceCloseDate: Date | null,
-  balanceDueDate: Date | null,
-  referenceDate: Date = new Date(),
-): Date | null {
-  if (balanceCloseDate) return balanceCloseDate;
-  if (!balanceDueDate) return null;
-
-  const ref = startOfDay(referenceDate);
-  const due = startOfDay(balanceDueDate);
-  let close = new Date(due);
-  close.setDate(close.getDate() - CLOSE_DAYS_BEFORE_DUE);
-
-  while (close > ref) {
-    due.setMonth(due.getMonth() - 1);
-    close = new Date(due);
-    close.setDate(close.getDate() - CLOSE_DAYS_BEFORE_DUE);
-  }
-
-  return close;
-}
-
-/** Próximo vencimento após a data de referência, mantendo o dia do mês. */
-export function resolveNextDueDate(
-  balanceDueDate: Date | null,
-  referenceDate: Date = new Date(),
-): Date | null {
-  if (!balanceDueDate) return null;
-
-  const ref = startOfDay(referenceDate);
-  const due = startOfDay(balanceDueDate);
-
-  while (due <= ref) {
-    due.setMonth(due.getMonth() + 1);
-  }
-
-  return due;
 }
 
 /**
@@ -87,7 +37,6 @@ export function computeNextBill(
   }
 
   const closeAt = endOfDay(closeDate);
-
   const refEnd = endOfDay(referenceDate);
 
   let amount = 0;

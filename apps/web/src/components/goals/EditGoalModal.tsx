@@ -243,7 +243,7 @@ export function EditGoalModal({
                 />
                 {sources.length > 0 && (
                   <p className="mt-2 text-xs text-positive">
-                    Progresso estimado:{" "}
+                    Progresso atual:{" "}
                     <strong>{formatCurrency(previewTotal, currencyCode)}</strong>
                   </p>
                 )}

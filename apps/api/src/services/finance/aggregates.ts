@@ -201,10 +201,6 @@ export interface PeriodSummary {
   net: number;
   committedExpenses?: number;
   availableNet?: number;
-  pendingSalary?: number | null;
-  salaryPending?: boolean;
-  balanceWithSalary?: number;
-  balanceAtPayday?: number;
 }
 
 export function summarizeTransactions(
@@ -343,11 +339,10 @@ export function buildDashboardInsights(params: {
   }
 
   if (period.income > 0 || period.expenses > 0) {
-    const untilNowBalance = period.balanceWithSalary ?? period.net;
     insights.push(
-      untilNowBalance >= 0
-        ? `Sobra de ${formatCurrency(untilNowBalance, currencyCode)} até agora neste ${periodLabel}.`
-        : `Faltam ${formatCurrency(Math.abs(untilNowBalance), currencyCode)} até agora neste ${periodLabel}.`,
+      period.net >= 0
+        ? `Sobra de ${formatCurrency(period.net, currencyCode)} até agora neste ${periodLabel}.`
+        : `Faltam ${formatCurrency(Math.abs(period.net), currencyCode)} até agora neste ${periodLabel}.`,
     );
     const committed = period.committedExpenses ?? 0;
     if (committed > 0 && period.availableNet !== undefined) {
@@ -356,18 +351,6 @@ export function buildDashboardInsights(params: {
           ? `Depois dos agendamentos (${formatCurrency(committed, currencyCode)} a pagar), sobra de ${formatCurrency(period.availableNet, currencyCode)}.`
           : `Depois dos agendamentos (${formatCurrency(committed, currencyCode)} a pagar), faltam ${formatCurrency(Math.abs(period.availableNet), currencyCode)}.`,
       );
-    }
-    if (period.pendingSalary != null && period.pendingSalary > 0) {
-      insights.push(
-        `Salário previsto de ${formatCurrency(period.pendingSalary, currencyCode)} no pagamento.`,
-      );
-      if (period.balanceAtPayday !== undefined) {
-        insights.push(
-          period.balanceAtPayday >= 0
-            ? `Até o pagamento, sobra de ${formatCurrency(period.balanceAtPayday, currencyCode)}.`
-            : `Até o pagamento, faltam ${formatCurrency(Math.abs(period.balanceAtPayday), currencyCode)}.`,
-        );
-      }
     }
   }
 
@@ -485,10 +468,6 @@ export function buildCycleSummary(
   committedExpensesManual: number;
   net: number;
   availableNet: number;
-  pendingSalary: number | null;
-  salaryPending: boolean;
-  balanceWithSalary: number;
-  balanceAtPayday: number;
   salaryIncome: number;
   extraIncome: number;
 } {
@@ -511,36 +490,6 @@ export function buildCycleSummary(
   const totalCommitted = bankCommitted + manualCommitted;
   const availableNet = totals.net - totalCommitted;
 
-  let pendingSalary: number | null = null;
-  let salaryPending = false;
-  if (
-    !meta.isComplete &&
-    paydayCycleAnchor === "end" &&
-    incomeBreakdown.salary === 0
-  ) {
-    const endOffset =
-      getPaydayCycleEndOffset(meta.cycleKey, paydayDay, paydayCycleAnchor) ?? 0;
-    const prevKeys = getRecentPaydayCycles(
-      1,
-      paydayDay,
-      endOffset + 1,
-      paydayCycleAnchor,
-    );
-    const previousRange = paydayCyclesToDateRange(prevKeys, paydayDay, paydayCycleAnchor);
-    pendingSalary = estimatePendingCycleSalary(
-      txs,
-      previousRange,
-      paydayDay,
-      0,
-      paydayCycleAnchor,
-    );
-    salaryPending = pendingSalary === null;
-  }
-
-  const pendingAmount = pendingSalary ?? 0;
-  const balanceWithSalary = totals.net + pendingAmount;
-  const balanceAtPayday = availableNet + pendingAmount;
-
   return {
     cycleKey: meta.cycleKey,
     from: meta.from,
@@ -556,10 +505,6 @@ export function buildCycleSummary(
     committedExpensesManual: manualCommitted,
     net: totals.net,
     availableNet,
-    pendingSalary,
-    salaryPending,
-    balanceWithSalary,
-    balanceAtPayday,
     salaryIncome: incomeBreakdown.salary,
     extraIncome: incomeBreakdown.extra,
   };
@@ -581,10 +526,6 @@ export function buildCyclePeriodSummary(
     net: cycle.net,
     committedExpenses: cycle.committedExpenses,
     availableNet: cycle.availableNet,
-    pendingSalary: cycle.pendingSalary,
-    salaryPending: cycle.salaryPending,
-    balanceWithSalary: cycle.balanceWithSalary,
-    balanceAtPayday: cycle.balanceAtPayday,
     periodMode,
     from: cycle.from,
     to: cycle.to,
@@ -637,77 +578,12 @@ export interface GrowthMetrics {
     netChange: number | null;
   };
   incomeBreakdown: { salary: number; extra: number } | null;
-  projection: {
-    dailyAvgExpense: number;
-    expensesToDate: number;
-    committedExpenses: number;
-    committedExpensesManual?: number;
-    committedExpensesBank?: number;
-    projectedExpense: number;
-    projectedIncome: number;
-    projectedNet: number;
-    pendingSalary: number | null;
-    salaryPending: boolean;
+  cycleProgress: {
     daysElapsed: number;
     daysTotal: number;
     daysRemaining: number;
     isPartialPeriod: boolean;
   } | null;
-}
-
-const PACE_MIN_DAYS = 5;
-
-const SALARY_CATEGORY = "Salário";
-
-function sumCategoryInflowInRange(
-  txs: FinancialTransaction[],
-  range: DateRange,
-  category: string,
-): number {
-  let total = 0;
-  for (const tx of txs) {
-    if (!countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description, tx.personName)) {
-      continue;
-    }
-    if (isTransactionOutflow(tx.amount, tx.accountType)) continue;
-    if (tx.category !== category) continue;
-
-    const dateKey = toLocalDateKey(tx.date);
-    if (range.from && dateKey < range.from) continue;
-    if (range.to && dateKey > range.to) continue;
-    total += Math.abs(tx.amount);
-  }
-  return total;
-}
-
-function estimatePendingCycleSalary(
-  txs: FinancialTransaction[],
-  previousRange: DateRange,
-  paydayDay: number,
-  receivedSalary: number,
-  paydayCycleAnchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
-): number | null {
-  if (receivedSalary > 0) return null;
-
-  let estimate = classifyIncome(txs, previousRange, paydayDay).salary;
-  if (estimate <= 0) {
-    estimate = sumCategoryInflowInRange(txs, previousRange, SALARY_CATEGORY);
-  }
-
-  if (estimate <= 0) {
-    for (let offset = 2; offset <= 6; offset++) {
-      const keys = getRecentPaydayCycles(1, paydayDay, offset, paydayCycleAnchor);
-      if (keys.length === 0) break;
-      const range = paydayCyclesToDateRange(keys, paydayDay, paydayCycleAnchor);
-      estimate = classifyIncome(txs, range, paydayDay).salary;
-      if (estimate <= 0) {
-        estimate = sumCategoryInflowInRange(txs, range, SALARY_CATEGORY);
-      }
-      if (estimate > 0) break;
-    }
-  }
-
-  return estimate > 0 ? estimate : null;
 }
 
 export function buildGrowthMetrics(params: {
@@ -768,118 +644,36 @@ export function buildGrowthMetrics(params: {
         })()
       : null;
 
-  let projection: GrowthMetrics["projection"] = null;
-
-  const buildProjection = (
-    projectionIncome: number,
-    expensesToDate: number,
-    committedExpensesBank: number,
-    committedExpensesManual: number,
-    daysElapsed: number,
-    daysTotal: number,
-    receivedSalary: number,
-  ) => {
-    if (daysElapsed <= 0 || daysElapsed >= daysTotal) return null;
-
-    const committedExpenses = committedExpensesBank + committedExpensesManual;
-    const daysRemaining = daysTotal - daysElapsed;
-    const dailyAvgExpense = expensesToDate / daysElapsed;
-
-    const previousExpenseTotal = summarizeTransactions(txs, previousRange).expenses;
-    const previousDays =
-      previousRange.from && previousRange.to
-        ? diffDateKeys(previousRange.from, previousRange.to) + 1
-        : daysTotal;
-    const previousDailyAvg = previousDays > 0 ? previousExpenseTotal / previousDays : 0;
-
-    const variableProjection =
-      daysElapsed >= PACE_MIN_DAYS
-        ? dailyAvgExpense * daysRemaining
-        : previousDailyAvg * daysRemaining;
-
-    const projectedExpense = expensesToDate + committedExpenses + variableProjection;
-
-    let pendingSalary: number | null = null;
-    if (periodMode === "payday" && paydayDay !== null) {
-      pendingSalary = estimatePendingCycleSalary(
-        txs,
-        previousRange,
-        paydayDay,
-        receivedSalary,
-        paydayCycleAnchor,
-      );
-    }
-
-    const projectedIncome = projectionIncome + (pendingSalary ?? 0);
-    const salaryPending =
-      periodMode === "payday" &&
-      paydayDay !== null &&
-      receivedSalary === 0 &&
-      pendingSalary === null;
-
-    return {
-      dailyAvgExpense,
-      expensesToDate,
-      committedExpenses,
-      committedExpensesBank,
-      committedExpensesManual,
-      projectedExpense,
-      projectedIncome,
-      projectedNet: projectedIncome - projectedExpense,
-      pendingSalary,
-      salaryPending,
-      daysElapsed,
-      daysTotal,
-      daysRemaining,
-      isPartialPeriod: true,
-    };
-  };
+  let cycleProgress: GrowthMetrics["cycleProgress"] = null;
 
   if (periodMode === "payday" && paydayDay !== null) {
     const meta = focusCycleKey
       ? getPaydayCycleRangeByKey(focusCycleKey, paydayDay, paydayCycleAnchor)
       : getPaydayCycleRange(paydayDay, new Date(), paydayCycleAnchor);
     if (!meta.isComplete && today >= meta.from && today <= meta.to) {
-      const cycleCash = summarizeCycleCashFlow(
-        txs,
-        { from: meta.from, to: meta.to },
-        today,
-      );
-      const incomeRange = { from: meta.from, to: today };
-      const salaryReceived = classifyIncome(txs, incomeRange, paydayDay).salary;
-      projection = buildProjection(
-        cycleCash.income,
-        cycleCash.expenses,
-        cycleCash.committedExpenses,
-        manualCommittedExpenses,
-        meta.dayIndex,
-        meta.totalDays,
-        salaryReceived,
-      );
+      cycleProgress = {
+        daysElapsed: meta.dayIndex,
+        daysTotal: meta.totalDays,
+        daysRemaining: meta.daysRemaining,
+        isPartialPeriod: true,
+      };
     }
   } else {
     const { from, to } = currentRange;
     if (from && to && today >= from && today <= to) {
       const daysTotal = diffDateKeys(from, to) + 1;
       const daysElapsed = diffDateKeys(from, today) + 1;
-      const toDateTotals = summarizeTransactions(txs, { from, to: today });
-      const committedFrom = addDaysToDateKey(today, 1);
-      let bankCommitted = 0;
-      if (committedFrom <= to) {
-        bankCommitted = summarizeTransactions(txs, { from: committedFrom, to }).expenses;
+      if (daysElapsed > 0 && daysElapsed < daysTotal) {
+        cycleProgress = {
+          daysElapsed,
+          daysTotal,
+          daysRemaining: daysTotal - daysElapsed,
+          isPartialPeriod: true,
+        };
       }
-      projection = buildProjection(
-        toDateTotals.income,
-        toDateTotals.expenses,
-        bankCommitted,
-        manualCommittedExpenses,
-        daysElapsed,
-        daysTotal,
-        0,
-      );
     }
   }
 
-  return { savingsRate, expenseRatio, vsPrevious, incomeBreakdown, projection };
+  return { savingsRate, expenseRatio, vsPrevious, incomeBreakdown, cycleProgress };
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type Ref, type RefObject } from "react";
+import { useEffect, useState, type Ref, type RefObject } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
@@ -17,16 +17,16 @@ import {
 } from "lucide-react";
 import type {
   CategoryChartSelection,
+  CreditAccountSnapshot,
   DashboardMonths,
   DashboardPeriodSummary,
   PeriodMode,
-  SimulatedPurchase,
+  SimulatedPurchaseInput,
   TransactionTypeFilter,
   TransactionsListResponse,
 } from "@finance/shared";
 import {
   FINE_GRAINED_CATEGORIES,
-  flattenSimulatedRows,
   isTransactionOutflow,
   toSignedDisplayAmount,
 } from "@finance/shared";
@@ -49,10 +49,14 @@ interface Props {
   categorySelection?: CategoryChartSelection | null;
   onClearCategorySelection?: () => void;
   sectionRef?: RefObject<HTMLElement | null>;
-  simulatedPurchases?: SimulatedPurchase[];
   simulationEnabled?: boolean;
-  onAddSimulation?: (purchase: SimulatedPurchase) => void;
-  onRemoveSimulation?: (purchaseId: string) => void;
+  onSaveSimulations?: (inputs: SimulatedPurchaseInput[]) => Promise<void>;
+  savingSimulation?: boolean;
+  simulateModalOpen?: boolean;
+  onSimulateModalOpenChange?: (open: boolean) => void;
+  creditAccounts?: CreditAccountSnapshot[];
+  bankBalance?: number;
+  currentCycle?: { from: string; to: string; cycleKey: string };
 }
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
@@ -146,10 +150,14 @@ export function RecentTransactions({
   categorySelection = null,
   onClearCategorySelection,
   sectionRef,
-  simulatedPurchases = [],
   simulationEnabled = false,
-  onAddSimulation,
-  onRemoveSimulation,
+  onSaveSimulations,
+  savingSimulation = false,
+  simulateModalOpen: simulateModalOpenProp,
+  onSimulateModalOpenChange,
+  creditAccounts = [],
+  bankBalance,
+  currentCycle,
 }: Props) {
   const [periodMonths, setPeriodMonths] = useState<DashboardMonths>(dashboardMonths);
   const [page, setPage] = useState(1);
@@ -159,7 +167,9 @@ export function RecentTransactions({
   const [typeFilter, setTypeFilter] = useState<TransactionTypeFilter>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [detailTxId, setDetailTxId] = useState<string | null>(null);
-  const [simulateModalOpen, setSimulateModalOpen] = useState(false);
+  const [simulateModalOpenLocal, setSimulateModalOpenLocal] = useState(false);
+  const simulateModalOpen = simulateModalOpenProp ?? simulateModalOpenLocal;
+  const setSimulateModalOpen = onSimulateModalOpenChange ?? setSimulateModalOpenLocal;
 
   const queryClient = useQueryClient();
 
@@ -254,11 +264,8 @@ export function RecentTransactions({
         income: periodSummary!.income,
         expenses: periodSummary!.expenses,
         net: periodSummary!.net,
-        balanceWithSalary: periodSummary!.balanceWithSalary ?? periodSummary!.net,
         availableNet: periodSummary!.availableNet,
-        balanceAtPayday: periodSummary!.balanceAtPayday,
         committedExpenses: periodSummary!.committedExpenses ?? 0,
-        pendingSalary: periodSummary!.pendingSalary ?? 0,
       }
     : data?.summary
       ? {
@@ -268,40 +275,7 @@ export function RecentTransactions({
         }
       : null;
 
-  const filteredSimulatedRows = useMemo(() => {
-    const periodFrom = data?.period.from;
-    const periodTo = data?.period.to;
-    if (!periodFrom || !periodTo || simulatedPurchases.length === 0) return [];
-
-    return flattenSimulatedRows(simulatedPurchases).filter((row) => {
-      if (row.dueDate < periodFrom || row.dueDate > periodTo) return false;
-      if (typeFilter === "inflow") return false;
-      if (debouncedSearch && !row.title.toLowerCase().includes(debouncedSearch.toLowerCase())) {
-        return false;
-      }
-      if (categorySelection?.kind === "single") {
-        const group = row.category ?? "Outros";
-        if (group !== categorySelection.group) return false;
-      } else if (categorySelection?.kind === "merged") {
-        const group = row.category ?? "Outros";
-        if (!(categorySelection.groups as readonly string[]).includes(group)) return false;
-      } else if (categoryFilter !== "all" && (row.category ?? "Outros") !== categoryFilter) {
-        return false;
-      }
-      return true;
-    });
-  }, [
-    simulatedPurchases,
-    data?.period.from,
-    data?.period.to,
-    typeFilter,
-    debouncedSearch,
-    categoryFilter,
-    categorySelection,
-  ]);
-
-  const hasSimulatedRows = filteredSimulatedRows.length > 0;
-  const showEmptyState = !query.isLoading && !query.isError && items.length === 0 && !hasSimulatedRows;
+  const showEmptyState = !query.isLoading && !query.isError && items.length === 0;
 
   return (
     <section ref={sectionRef as Ref<HTMLElement>} className="scroll-mt-6">
@@ -346,7 +320,7 @@ export function RecentTransactions({
           {!hidePeriodSelector && (
             <PeriodSelector value={periodMonths} onChange={setPeriodMonths} showModeToggle={false} />
           )}
-          {simulationEnabled && onAddSimulation && (
+          {simulationEnabled && onSaveSimulations && (
             <button
               type="button"
               onClick={() => setSimulateModalOpen(true)}
@@ -427,63 +401,6 @@ export function RecentTransactions({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {hasSimulatedRows && page === 1 && (
-                <>
-                  {filteredSimulatedRows.map((row) => {
-                    const Icon = categoryIcon(row.category ?? null);
-                    const label = categoryLabel(row.category ?? null);
-                    return (
-                      <tr
-                        key={row.id}
-                        className="border-l-2 border-l-amber-400 bg-amber-50/40"
-                      >
-                        <td className="whitespace-nowrap px-4 py-3.5 font-mono text-xs font-medium text-amber-800/80">
-                          {formatDateShort(`${row.dueDate}T12:00:00.000Z`)}
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className="block font-bold text-foreground">{row.title}</span>
-                          <span className="text-[10px] text-muted-foreground">Simulação</span>
-                          <span className="mt-1 inline-flex rounded-full border border-amber-200 bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-800">
-                            Simulado · {row.sequence}/{row.totalInstallments}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3.5">
-                          <span className="inline-flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                            <span className="rounded-md border border-amber-200/60 bg-amber-50 p-1">
-                              <Icon className="h-3.5 w-3.5 text-amber-700" />
-                            </span>
-                            {label}
-                          </span>
-                        </td>
-                        {showPersonColumn && (
-                          <td className="px-4 py-3.5 text-xs text-muted-foreground">—</td>
-                        )}
-                        <td className="whitespace-nowrap px-4 py-3.5 text-right text-sm font-bold text-foreground">
-                          -{formatCurrency(row.amount, currencyCode)}
-                        </td>
-                        <td className="px-4 py-3.5 text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <span className="inline-block rounded-full border border-amber-200 bg-amber-100 px-3 py-1 text-[10px] font-bold leading-none text-amber-800">
-                              Saída
-                            </span>
-                            {onRemoveSimulation && (
-                              <button
-                                type="button"
-                                onClick={() => onRemoveSimulation(row.purchaseId)}
-                                className="rounded-full p-0.5 text-amber-700 hover:bg-amber-100"
-                                aria-label="Remover simulação"
-                                title="Remover simulação"
-                              >
-                                <X className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </>
-              )}
               {items.map((tx) => {
                 const label = categoryLabel(tx.category);
                 const Icon = categoryIcon(tx.category);
@@ -598,17 +515,12 @@ export function RecentTransactions({
               {useCyclePeriodSummary ? CYCLE_COPY.untilNow : "Líquido"}:{" "}
               <strong
                 className={
-                  (useCyclePeriodSummary
-                    ? (footerSummary.balanceWithSalary ?? footerSummary.net)
-                    : footerSummary.net) >= 0
-                    ? "text-positive"
-                    : "text-negative"
+                  footerSummary.net >= 0 ? "text-positive" : "text-negative"
                 }
               >
                 {useCyclePeriodSummary
                   ? (() => {
-                      const untilNow = footerSummary.balanceWithSalary ?? footerSummary.net;
-                      const display = formatCycleBalance(untilNow, currencyCode);
+                      const display = formatCycleBalance(footerSummary.net, currencyCode);
                       return `${display.status} ${formatPlainAmount(display.amount, currencyCode)}`;
                     })()
                   : formatCurrency(footerSummary.net, currencyCode)}
@@ -626,21 +538,6 @@ export function RecentTransactions({
                   >
                     {formatCycleBalance(footerSummary.availableNet, currencyCode).status}{" "}
                     {formatPlainAmount(Math.abs(footerSummary.availableNet), currencyCode)}
-                  </strong>
-                </span>
-              )}
-            {useCyclePeriodSummary &&
-              (footerSummary.pendingSalary ?? 0) > 0 &&
-              footerSummary.balanceAtPayday != null && (
-                <span>
-                  {CYCLE_COPY.atPayday}:{" "}
-                  <strong
-                    className={
-                      footerSummary.balanceAtPayday >= 0 ? "text-positive" : "text-negative"
-                    }
-                  >
-                    {formatCycleBalance(footerSummary.balanceAtPayday, currencyCode).status}{" "}
-                    {formatPlainAmount(Math.abs(footerSummary.balanceAtPayday), currencyCode)}
                   </strong>
                 </span>
               )}
@@ -695,12 +592,16 @@ export function RecentTransactions({
         onClose={() => setDetailTxId(null)}
       />
 
-      {simulationEnabled && onAddSimulation && (
+      {simulationEnabled && onSaveSimulations && currentCycle && (
         <SimulatePurchaseModal
           open={simulateModalOpen}
           currencyCode={currencyCode}
+          creditAccounts={creditAccounts}
+          bankBalance={bankBalance}
+          currentCycle={currentCycle}
           onClose={() => setSimulateModalOpen(false)}
-          onAdd={onAddSimulation}
+          onSave={onSaveSimulations}
+          saving={savingSimulation}
         />
       )}
     </section>

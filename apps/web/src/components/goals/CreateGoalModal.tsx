@@ -208,7 +208,7 @@ export function CreateGoalModal({
                 />
                 {sources.length > 0 && (
                   <p className="mt-2 text-xs text-positive">
-                    Progresso inicial estimado:{" "}
+                    Progresso inicial:{" "}
                     <strong>{formatCurrency(previewTotal, currencyCode)}</strong>
                   </p>
                 )}

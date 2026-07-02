@@ -18,7 +18,7 @@ import { CreatePlanModal } from "../components/goals/CreatePlanModal";
 import { EditGoalModal } from "../components/goals/EditGoalModal";
 import { GoalCard } from "../components/goals/GoalCard";
 import { PlanCard } from "../components/goals/PlanCard";
-import { SavingsPathChart } from "../components/goals/SavingsPathChart";
+import { GoalsProgressSummary } from "../components/goals/GoalsProgressSummary";
 
 export function GoalsPage() {
   const [createGoalOpen, setCreateGoalOpen] = useState(false);
@@ -175,15 +175,13 @@ export function GoalsPage() {
         </div>
       ) : (
         <>
-          <SavingsPathChart
-            data={data?.savingsPath ?? []}
+          <GoalsProgressSummary
             currencyCode={data?.currencyCode ?? "BRL"}
             monthlySurplus={data?.monthlySurplus ?? 0}
             monthlyContribution={data?.monthlyContribution ?? data?.monthlySurplus ?? 0}
             surplusLabel={data?.surplusLabel}
             totalCurrent={data?.totalCurrent ?? 0}
             totalTarget={data?.totalTarget ?? 0}
-            projectedCompletionMonth={data?.projectedCompletionMonth ?? null}
           />
 
           {!data?.hasAccounts && (
@@ -192,7 +190,7 @@ export function GoalsPage() {
               <Link to="/contas" className="font-medium text-amber-900 underline">
                 Contas
               </Link>{" "}
-              para calcular a sobra mensal e projeções mais precisas.
+              para calcular a sobra média com base em transações reais.
             </div>
           )}
 

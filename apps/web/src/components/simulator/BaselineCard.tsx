@@ -55,15 +55,13 @@ export function BaselineCard({ baseline }: Props) {
     },
   ];
 
-  if (baseline.projectedNet !== null) {
-    metrics.push({
-      label: "Projeção do período",
-      value: formatCurrency(baseline.projectedNet, baseline.currencyCode),
-      hint: baseline.periodLabel,
-      tone: baseline.projectedNet >= 0 ? "positive" : "negative",
-      icon: baseline.projectedNet >= 0 ? TrendingUp : TrendingDown,
-    });
-  }
+  metrics.push({
+    label: "Sobra atual",
+    value: formatCurrency(baseline.currentSurplus, baseline.currencyCode),
+    hint: baseline.periodLabel,
+    tone: baseline.currentSurplus >= 0 ? "positive" : "negative",
+    icon: baseline.currentSurplus >= 0 ? TrendingUp : TrendingDown,
+  });
 
   return (
     <section className={cardClass}>

@@ -1,10 +1,21 @@
+import { type ReactNode, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowDownRight,
   ArrowUpRight,
   type LucideIcon,
 } from "lucide-react";
-import type { DashboardNetWorth, DashboardPeriodSummary, PeriodMode } from "@finance/shared";
+import type {
+  DashboardNetWorth,
+  DashboardPeriodSummary,
+  DashboardSummary,
+  PeriodMode,
+} from "@finance/shared";
+import {
+  accountNetWorthContribution,
+  isCreditAccount,
+  isInvestmentAccount,
+} from "@finance/shared";
 import { formatCurrency, formatPercent } from "../../lib/format";
 import { formatCycleBalance } from "../../lib/cycleLabels";
 import { AssistantSpotlightButton } from "../chat/AssistantSpotlightButton";
@@ -56,7 +67,7 @@ interface CardProps {
   iconClassName: string;
   iconBoxClassName: string;
   badgeTone?: "positive" | "negative";
-  subtitle?: string;
+  subtitle?: ReactNode;
   periodMode?: PeriodMode;
   spotlightMessage?: string;
   spotlightContext?: string;
@@ -106,9 +117,9 @@ function StatCard({
         <AnimatedValue value={value} format={format} />
       </p>
       {subtitle && (
-        <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground" title={subtitle}>
+        <div className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
           {subtitle}
-        </p>
+        </div>
       )}
       {change !== undefined && (
         <div className="mt-2">
@@ -131,8 +142,65 @@ function StatCard({
   );
 }
 
+type DashboardAccount = DashboardSummary["accounts"][number];
+
+function formatNetWorthContribution(
+  contribution: number,
+  currencyCode: string,
+): string {
+  if (contribution < 0) {
+    return `−${formatCurrency(Math.abs(contribution), currencyCode)}`;
+  }
+  return formatCurrency(contribution, currencyCode);
+}
+
+function buildNetWorthLegend(
+  accounts: DashboardAccount[],
+  netWorth: DashboardNetWorth,
+  currencyCode: string,
+): ReactNode {
+  const showPersonNames = new Set(accounts.map((acc) => acc.personName)).size > 1;
+  const lines: ReactNode[] = [];
+
+  for (const acc of accounts) {
+    if (isInvestmentAccount(acc.type)) continue;
+
+    const contribution = accountNetWorthContribution(acc.balance, acc.type);
+    if (contribution === 0) continue;
+
+    const label = showPersonNames
+      ? `${acc.personName} · ${acc.name}`
+      : acc.name;
+    const suffix = isCreditAccount(acc.type) ? " (cartão)" : "";
+
+    lines.push(
+      <span key={acc.id} className="block">
+        {label}
+        {suffix}: {formatNetWorthContribution(contribution, currencyCode)}
+      </span>,
+    );
+  }
+
+  if (netWorth.investmentsIncluded && netWorth.investmentBalance !== 0) {
+    lines.push(
+      <span key="investments" className="block">
+        Investimentos: {formatCurrency(netWorth.investmentBalance, currencyCode)}
+      </span>,
+    );
+  } else if (!netWorth.investmentsIncluded && netWorth.investmentBalance !== 0) {
+    lines.push(
+      <span key="investments-excluded" className="block opacity-70">
+        Invest. excluído: {formatCurrency(netWorth.investmentBalance, currencyCode)}
+      </span>,
+    );
+  }
+
+  return lines.length > 0 ? lines : null;
+}
+
 interface StatCardsProps {
   netWorth: DashboardNetWorth;
+  accounts: DashboardAccount[];
   currencyCode: string;
   period: DashboardPeriodSummary;
   previousPeriod: DashboardPeriodSummary;
@@ -145,6 +213,7 @@ interface StatCardsProps {
 
 export function StatCards({
   netWorth,
+  accounts,
   currencyCode,
   period,
   previousPeriod,
@@ -162,9 +231,10 @@ export function StatCards({
   const netBalance = formatCycleBalance(displayNet, currencyCode);
   const netPositive = displayNet >= 0;
 
-  const netWorthBreakdown = netWorth.investmentsIncluded
-    ? `Contas ${formatCurrency(netWorth.bankBalance, currencyCode)} · Invest. ${formatCurrency(netWorth.investmentBalance, currencyCode)} · Cartão −${formatCurrency(netWorth.creditDebt, currencyCode)}`
-    : `Contas ${formatCurrency(netWorth.bankBalance, currencyCode)} · Cartão −${formatCurrency(netWorth.creditDebt, currencyCode)} · Invest. excluído (${formatCurrency(netWorth.investmentBalance, currencyCode)})`;
+  const netWorthLegend = useMemo(
+    () => buildNetWorthLegend(accounts, netWorth, currencyCode),
+    [accounts, netWorth, currencyCode],
+  );
 
   return (
     <div
@@ -183,7 +253,7 @@ export function StatCards({
         icon={ArrowUpRight}
         iconClassName="text-positive"
         iconBoxClassName="border border-positive/10 bg-positive/10"
-        subtitle={netWorthBreakdown}
+        subtitle={netWorthLegend}
       />
       {!compactCycleMode && (
         <>

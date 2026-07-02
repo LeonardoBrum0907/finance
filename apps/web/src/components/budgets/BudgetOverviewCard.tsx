@@ -83,7 +83,7 @@ export function BudgetOverviewCard({ data }: Props) {
           <span className="mt-1 font-display text-lg font-bold text-positive">
             {formatCurrency(data.potentialSavings, data.currencyCode)}
           </span>
-          <span className="mt-0.5 text-[10px] text-muted-foreground">Sobra projetada restante</span>
+          <span className="mt-0.5 text-[10px] text-muted-foreground">Margem restante</span>
         </div>
       </div>
     </div>

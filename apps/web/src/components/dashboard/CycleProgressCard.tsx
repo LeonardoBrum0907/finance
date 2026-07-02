@@ -86,8 +86,7 @@ function committedBreakdown(
   return null;
 }
 
-function heroGridClass(showAfterScheduled: boolean, showAtPayday: boolean): string {
-  if (showAtPayday) return "sm:grid-cols-3";
+function heroGridClass(showAfterScheduled: boolean): string {
   if (showAfterScheduled) return "sm:grid-cols-2";
   return "max-w-md";
 }
@@ -118,14 +117,9 @@ export function CycleProgressCard({
   const displayIncome = cycle.income;
   const displayExpenses = cycle.expenses + simRealized;
   const displayCommitted = (cycle.committedExpenses ?? 0) + simCommitted;
-  const pendingSalary = cycle.pendingSalary ?? 0;
-  const displayBalanceWithSalary = cycle.balanceWithSalary - simRealized;
+  const displayNet = cycle.net - simRealized;
   const displayAvailableNet = cycle.availableNet - simRealized - simCommitted;
-  const displayBalanceAtPayday = cycle.balanceAtPayday - simRealized - simCommitted;
   const showAfterScheduled = isCurrentCycle && displayCommitted > 0;
-  const showAtPayday = pendingSalary > 0;
-  const showSalaryPending =
-    isCurrentCycle && paydayCycleAnchor === "end" && cycle.salaryPending === true;
 
   const dueBreakdown = committedBreakdown(
     cycle,
@@ -137,17 +131,10 @@ export function CycleProgressCard({
 
   const untilNowDetails = [
     `${CYCLE_COPY.income} ${formatPlainAmount(displayIncome, currencyCode)}`,
-    ...(pendingSalary > 0
-      ? [`${CYCLE_COPY.pendingSalary} ${formatPlainAmount(pendingSalary, currencyCode)}`]
-      : []),
     `${CYCLE_COPY.spent} ${formatPlainAmount(displayExpenses, currencyCode)}`,
   ];
 
   const afterScheduledDetails = showAfterScheduled
-    ? [`${CYCLE_COPY.dueInCycle} ${formatPlainAmount(displayCommitted, currencyCode)}`]
-    : undefined;
-
-  const atPaydayDetails = showAtPayday
     ? [`${CYCLE_COPY.dueInCycle} ${formatPlainAmount(displayCommitted, currencyCode)}`]
     : undefined;
 
@@ -214,16 +201,10 @@ export function CycleProgressCard({
         </span>
       </div>
 
-      {showSalaryPending && (
-        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
-          {CYCLE_COPY.salaryPendingHint}
-        </p>
-      )}
-
-      <div className={`mb-4 grid gap-3 ${heroGridClass(showAfterScheduled, showAtPayday)}`}>
+      <div className={`mb-4 grid gap-3 ${heroGridClass(showAfterScheduled)}`}>
         <BalanceHeroBox
           title={CYCLE_COPY.untilNow}
-          balance={displayBalanceWithSalary}
+          balance={displayNet}
           currencyCode={currencyCode}
           detailLines={untilNowDetails}
         />
@@ -233,14 +214,6 @@ export function CycleProgressCard({
             balance={displayAvailableNet}
             currencyCode={currencyCode}
             detailLines={afterScheduledDetails}
-          />
-        ) : null}
-        {showAtPayday ? (
-          <BalanceHeroBox
-            title={CYCLE_COPY.atPayday}
-            balance={displayBalanceAtPayday}
-            currencyCode={currencyCode}
-            detailLines={atPaydayDetails}
           />
         ) : null}
       </div>
@@ -291,12 +264,6 @@ export function CycleProgressCard({
               <p>
                 {CYCLE_COPY.extraIncome}{" "}
                 {formatPlainAmount(cycle.extraIncome, currencyCode)}
-              </p>
-            )}
-            {pendingSalary > 0 && (
-              <p>
-                {CYCLE_COPY.pendingSalary}{" "}
-                {formatPlainAmount(pendingSalary, currencyCode)}
               </p>
             )}
           </div>
