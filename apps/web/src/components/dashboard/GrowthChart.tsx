@@ -46,6 +46,7 @@ interface Props {
   personId?: string;
   /** Depois dos agendamentos (compromissos com data futura). */
   availableNet?: number;
+  projectedSalaryIncome?: number;
 }
 
 function LegendDot({ color, label }: { color: string; label: string }) {
@@ -71,6 +72,7 @@ export function GrowthChart({
   className,
   personId,
   availableNet,
+  projectedSalaryIncome,
 }: Props) {
   const [view, setView] = useState<GrowthView>("flow");
   const isSingleMonth = months === 1;
@@ -263,6 +265,7 @@ export function GrowthChart({
             periodMode={periodMode}
             hideIncomeBreakdown={hideIncomeBreakdown}
             availableNet={availableNet}
+            projectedSalaryIncome={projectedSalaryIncome}
           />
         ) : (
           <div className="h-56 w-full">

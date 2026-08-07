@@ -11,15 +11,26 @@ export interface CycleBalanceDisplay {
 }
 
 export const CYCLE_COPY = {
-  untilNow: "Até agora",
-  afterScheduled: "Depois dos agendamentos",
+  realizedUntilNow: "Realizado até hoje",
+  closingThisCycle: "Fechamento deste ciclo",
+  nextCycle: "Próximo ciclo",
+  /** @deprecated use realizedUntilNow */
+  untilNow: "Realizado até hoje",
+  /** @deprecated use closingThisCycle */
+  afterScheduled: "Fechamento deste ciclo",
   income: "Já entrou",
   spent: "Já gastei",
   dueInCycle: "A pagar neste ciclo",
+  dueNextCycle: "A pagar no próximo ciclo",
   salary: "Salário",
+  projectedSalary: "Salário previsto",
+  expectedSalary: "Salário esperado",
   extraIncome: "Renda extra",
+  salaryUnknown: "Salário desconhecido",
   heroTooltip:
-    "Até agora: entradas realizadas menos o que já saiu. Depois dos agendamentos: desconta contas e parcelas com data futura já registradas.",
+    "Realizado até hoje: só entradas e saídas que já aconteceram. Fechamento deste ciclo: inclui salário previsto e contas com vencimento neste ciclo. Próximo ciclo: projeção com salário e contas conhecidas.",
+  nextCycleTooltip:
+    "Projeção do próximo ciclo com salário esperado (último recebido) e contas com vencimento definido.",
 } as const;
 
 export function formatCycleBalance(
@@ -54,14 +65,19 @@ export function toneBorderClass(tone: CycleBalanceTone): string {
   return "border-app-border/60 bg-app-bg/80";
 }
 
-/** Mesma referência de “sobra” usada no hero principal do card de ciclo. */
+/** Referência de fechamento do ciclo atual (salário previsto + contas pendentes). */
 export function cycleSurplusBaseline(cycle: {
   net: number;
   availableNet: number;
+  realizedNet?: number;
   committedExpenses?: number;
+  projectedSalaryIncome?: number;
 }): { label: string; amount: number } {
-  if ((cycle.committedExpenses ?? 0) > 0) {
-    return { label: CYCLE_COPY.afterScheduled, amount: cycle.availableNet };
-  }
-  return { label: CYCLE_COPY.untilNow, amount: cycle.net };
+  return { label: CYCLE_COPY.closingThisCycle, amount: cycle.availableNet };
+}
+
+export function formatCycleImpactLabel(cycleKey: string, index: number): string {
+  if (index === 0) return `Este ciclo (${cycleKey})`;
+  if (index === 1) return `Próximo ciclo (${cycleKey})`;
+  return cycleKey;
 }

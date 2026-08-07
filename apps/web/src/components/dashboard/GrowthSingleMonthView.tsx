@@ -25,6 +25,7 @@ interface Props {
   hideIncomeBreakdown?: boolean;
   /** Depois dos agendamentos (compromissos com data futura). */
   availableNet?: number;
+  projectedSalaryIncome?: number;
 }
 
 function ChangeChip({
@@ -110,6 +111,7 @@ export function GrowthSingleMonthView({
   periodMode = "calendar",
   hideIncomeBreakdown = false,
   availableNet,
+  projectedSalaryIncome,
 }: Props) {
   const { theme } = useTheme();
   const chartColors = useMemo(() => getChartColors(), [theme]);
@@ -304,6 +306,11 @@ export function GrowthSingleMonthView({
               <p className="mt-0.5 text-sm font-semibold text-positive">
                 +{formatCurrency(incomeBreakdown.salary, currencyCode)}
               </p>
+              {(projectedSalaryIncome ?? 0) > 0 && (
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  incl. {formatCurrency(projectedSalaryIncome!, currencyCode)} previsto
+                </p>
+              )}
             </div>
             <div className="rounded-lg border border-app-border/60 bg-app-bg/80 px-3 py-2.5">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">

@@ -2,7 +2,7 @@ import { FlaskConical, Plus, ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { AggregateSimulationImpactDTO, DashboardCurrentCycle } from "@finance/shared";
 import { scenarioTypeLabel } from "@finance/shared";
-import { cycleSurplusBaseline, formatCycleBalance } from "../../lib/cycleLabels";
+import { cycleSurplusBaseline, formatCycleBalance, formatCycleImpactLabel } from "../../lib/cycleLabels";
 import { formatCurrency } from "../../lib/format";
 
 interface Props {
@@ -11,24 +11,19 @@ interface Props {
   onAddAnother: () => void;
 }
 
-function formatCycleLabel(cycleKey: string, index: number): string {
-  if (index === 0) return `Atual (${cycleKey})`;
-  if (index === 1) return `Próximo (${cycleKey})`;
-  return cycleKey;
-}
-
 export function SimulationImpactPanel({ impact, cycle, onAddAnother }: Props) {
   if (impact.activeCount === 0) return null;
 
   const { currencyCode, cycleImpacts, scenarios, alerts } = impact;
-  const currentImpact = cycleImpacts[0];
-  const totalCycleImpact = cycleImpacts.reduce((s, c) => s + c.totalInPeriod, 0);
+  const visibleImpacts = cycleImpacts.filter((c) => c.totalInPeriod > 0).slice(0, 2);
+  const totalCycleImpact = cycleImpacts.slice(0, 2).reduce((s, c) => s + c.totalInPeriod, 0);
 
   const panelAlerts = [...alerts];
-  if (cycle && currentImpact && currentImpact.totalInPeriod > 0) {
+  const simulationImpact = impact.simulationOnlyCycleImpacts[0];
+  if (cycle && simulationImpact && simulationImpact.totalInPeriod > 0) {
     const { label, amount: surplusBefore } = cycleSurplusBaseline(cycle);
-    const surplusAfter = surplusBefore - currentImpact.totalInPeriod;
-    const impactLabel = formatCurrency(currentImpact.totalInPeriod, currencyCode);
+    const surplusAfter = surplusBefore - simulationImpact.totalInPeriod;
+    const impactLabel = formatCurrency(simulationImpact.totalInPeriod, currencyCode);
     const beforeLabel = formatCycleBalance(surplusBefore, currencyCode).formattedAmount;
     const afterDisplay = formatCycleBalance(surplusAfter, currencyCode);
 
@@ -54,7 +49,7 @@ export function SimulationImpactPanel({ impact, cycle, onAddAnother }: Props) {
               {impact.activeCount === 1 ? "cenário ativo" : "cenários ativos"}
             </p>
             <p className="text-xs text-amber-800/80">
-              +{formatCurrency(totalCycleImpact, currencyCode)} nos ciclos
+              +{formatCurrency(totalCycleImpact, currencyCode)} neste e no próximo ciclo
               {impact.creditBillIncrease > 0
                 ? ` · +${formatCurrency(impact.creditBillIncrease, currencyCode)} na fatura`
                 : ""}
@@ -94,29 +89,26 @@ export function SimulationImpactPanel({ impact, cycle, onAddAnother }: Props) {
         ))}
       </ul>
 
-      {cycleImpacts.some((c) => c.totalInPeriod > 0) && (
+      {visibleImpacts.length > 0 && (
         <div className="mt-3 border-t border-amber-200/60 pt-3">
           <p className="text-[10px] font-bold tracking-wider text-amber-800 uppercase">
-            Impacto por ciclo (payday)
+            Impacto por ciclo
           </p>
           <ul className="mt-1.5 space-y-1">
-            {cycleImpacts
-              .filter((c) => c.totalInPeriod > 0)
-              .slice(0, 4)
-              .map((cycleImpact, index) => (
-                <li key={cycleImpact.cycleKey} className="flex flex-wrap justify-between gap-x-4 text-xs">
-                  <span>{formatCycleLabel(cycleImpact.cycleKey, index)}</span>
-                  <span className="font-medium">
-                    {cycleImpact.realizedExpenses > 0 && (
-                      <span>−{formatCurrency(cycleImpact.realizedExpenses, currencyCode)} real.</span>
-                    )}
-                    {cycleImpact.realizedExpenses > 0 && cycleImpact.committedExpenses > 0 && " · "}
-                    {cycleImpact.committedExpenses > 0 && (
-                      <span>−{formatCurrency(cycleImpact.committedExpenses, currencyCode)} comp.</span>
-                    )}
-                  </span>
-                </li>
-              ))}
+            {visibleImpacts.map((cycleImpact, index) => (
+              <li key={cycleImpact.cycleKey} className="flex flex-wrap justify-between gap-x-4 text-xs">
+                <span>{formatCycleImpactLabel(cycleImpact.cycleKey, index)}</span>
+                <span className="font-medium">
+                  {cycleImpact.realizedExpenses > 0 && (
+                    <span>−{formatCurrency(cycleImpact.realizedExpenses, currencyCode)} real.</span>
+                  )}
+                  {cycleImpact.realizedExpenses > 0 && cycleImpact.committedExpenses > 0 && " · "}
+                  {cycleImpact.committedExpenses > 0 && (
+                    <span>−{formatCurrency(cycleImpact.committedExpenses, currencyCode)} comp.</span>
+                  )}
+                </span>
+              </li>
+            ))}
           </ul>
         </div>
       )}

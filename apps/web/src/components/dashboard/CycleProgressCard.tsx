@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Calendar, ChevronDown, HelpCircle } from "lucide-react";
-import type { DashboardCurrentCycle, PaydayCycleAnchor } from "@finance/shared";
+import type { CycleForecastBlock, DashboardCurrentCycle, PaydayCycleAnchor } from "@finance/shared";
 import { formatPaydayCycleLabel } from "../../lib/format";
 import {
   CYCLE_COPY,
@@ -19,11 +19,13 @@ interface Props {
   paydayCycleAnchor: PaydayCycleAnchor;
   selectedCycleKey: string;
   onSelectCycle: (cycleKey: string) => void;
+  nextCycleForecast?: CycleForecastBlock | null;
   simulationOverlay?: {
     realizedExpenses: number;
     committedExpenses: number;
   };
-  onClearSimulation?: () => void;
+  includeSimulation?: boolean;
+  onIncludeSimulationChange?: (value: boolean) => void;
 }
 
 function BalanceHeroBox({
@@ -86,9 +88,24 @@ function committedBreakdown(
   return null;
 }
 
-function heroGridClass(showAfterScheduled: boolean): string {
-  if (showAfterScheduled) return "sm:grid-cols-2";
+function heroGridClass(showClosing: boolean): string {
+  if (showClosing) return "sm:grid-cols-2";
   return "max-w-md";
+}
+
+function formatExpenseKind(kind: CycleForecastBlock["expenseItems"][number]["kind"]): string {
+  switch (kind) {
+    case "recurring":
+      return "fixa";
+    case "installments":
+      return "parcela";
+    case "simulations":
+      return "simulação";
+    case "bank":
+      return "cartão";
+    default:
+      return kind;
+  }
 }
 
 export function CycleProgressCard({
@@ -99,27 +116,36 @@ export function CycleProgressCard({
   paydayCycleAnchor,
   selectedCycleKey,
   onSelectCycle,
+  nextCycleForecast,
   simulationOverlay,
-  onClearSimulation,
+  includeSimulation = true,
+  onIncludeSimulationChange,
 }: Props) {
   const progressPercent = Math.min(100, (cycle.dayIndex / cycle.totalDays) * 100);
   const periodLabel = formatPaydayCycleLabel(cycle.from, cycle.to);
   const isCurrentCycle = !cycle.isComplete;
   const sortedCycles = [...cycles].sort((a, b) => b.cycleKey.localeCompare(a.cycleKey));
 
-  const hasSimulation =
+  const simulationAvailable =
     isCurrentCycle &&
     simulationOverlay &&
     (simulationOverlay.realizedExpenses > 0 || simulationOverlay.committedExpenses > 0);
 
+  const hasSimulation = simulationAvailable && includeSimulation;
+
   const simRealized = hasSimulation ? simulationOverlay!.realizedExpenses : 0;
   const simCommitted = hasSimulation ? simulationOverlay!.committedExpenses : 0;
-  const displayIncome = cycle.income;
-  const displayExpenses = cycle.expenses + simRealized;
+  const realizedIncome = cycle.realizedIncome ?? cycle.income;
+  const realizedExpenses = (cycle.realizedExpenses ?? cycle.expenses) + simRealized;
+  const displayRealizedNet = (cycle.realizedNet ?? cycle.net) - simRealized;
   const displayCommitted = (cycle.committedExpenses ?? 0) + simCommitted;
-  const displayNet = cycle.net - simRealized;
-  const displayAvailableNet = cycle.availableNet - simRealized - simCommitted;
-  const showAfterScheduled = isCurrentCycle && displayCommitted > 0;
+  const displayClosing = cycle.availableNet - simRealized - simCommitted;
+  const hasProjectedSalary = (cycle.projectedSalaryIncome ?? 0) > 0;
+  const showClosing =
+    isCurrentCycle &&
+    (displayCommitted > 0 ||
+      hasProjectedSalary ||
+      Math.abs(displayClosing - displayRealizedNet) > 0.001);
 
   const dueBreakdown = committedBreakdown(
     cycle,
@@ -129,14 +155,28 @@ export function CycleProgressCard({
     currencyCode,
   );
 
-  const untilNowDetails = [
-    `${CYCLE_COPY.income} ${formatPlainAmount(displayIncome, currencyCode)}`,
-    `${CYCLE_COPY.spent} ${formatPlainAmount(displayExpenses, currencyCode)}`,
+  const realizedDetails = [
+    `${CYCLE_COPY.income} ${formatPlainAmount(realizedIncome, currencyCode)}`,
+    `${CYCLE_COPY.spent} ${formatPlainAmount(realizedExpenses, currencyCode)}`,
   ];
 
-  const afterScheduledDetails = showAfterScheduled
-    ? [`${CYCLE_COPY.dueInCycle} ${formatPlainAmount(displayCommitted, currencyCode)}`]
+  const closingDetails = showClosing
+    ? [
+        ...(hasProjectedSalary
+          ? [
+              `${CYCLE_COPY.projectedSalary} ${formatPlainAmount(cycle.projectedSalaryIncome!, currencyCode)}`,
+            ]
+          : []),
+        ...(displayCommitted > 0
+          ? [`${CYCLE_COPY.dueInCycle} ${formatPlainAmount(displayCommitted, currencyCode)}`]
+          : []),
+      ]
     : undefined;
+
+  const topNextExpenses = nextCycleForecast?.expenseItems
+    .slice()
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 5);
 
   return (
     <motion.div
@@ -201,34 +241,91 @@ export function CycleProgressCard({
         </span>
       </div>
 
-      <div className={`mb-4 grid gap-3 ${heroGridClass(showAfterScheduled)}`}>
+      <div className={`mb-4 grid gap-3 ${heroGridClass(showClosing)}`}>
         <BalanceHeroBox
-          title={CYCLE_COPY.untilNow}
-          balance={displayNet}
+          title={CYCLE_COPY.realizedUntilNow}
+          balance={displayRealizedNet}
           currencyCode={currencyCode}
-          detailLines={untilNowDetails}
+          detailLines={realizedDetails}
         />
-        {showAfterScheduled ? (
+        {showClosing ? (
           <BalanceHeroBox
-            title={CYCLE_COPY.afterScheduled}
-            balance={displayAvailableNet}
+            title={CYCLE_COPY.closingThisCycle}
+            balance={displayClosing}
             currencyCode={currencyCode}
-            detailLines={afterScheduledDetails}
+            detailLines={closingDetails}
           />
         ) : null}
       </div>
 
-      {hasSimulation && (
-        <p className="mb-4 text-[11px] text-amber-700">
-          Inclui simulação ·{" "}
+      {isCurrentCycle && nextCycleForecast && (
+        <div
+          className="mb-4 rounded-xl border border-brand/20 bg-brand/5 px-4 py-3"
+          title={CYCLE_COPY.nextCycleTooltip}
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {CYCLE_COPY.nextCycle}
+          </p>
+          <p className="mt-0.5 text-sm font-medium text-foreground">
+            {formatPaydayCycleLabel(nextCycleForecast.from, nextCycleForecast.to)}
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <BalanceHeroBox
+              title="Sobra prevista"
+              balance={nextCycleForecast.closingBalance}
+              currencyCode={currencyCode}
+              detailLines={[
+                nextCycleForecast.salaryKnown
+                  ? `${CYCLE_COPY.expectedSalary} ${formatPlainAmount(nextCycleForecast.pendingIncome, currencyCode)}`
+                  : CYCLE_COPY.salaryUnknown,
+                `${CYCLE_COPY.dueNextCycle} ${formatPlainAmount(nextCycleForecast.pendingExpenses, currencyCode)}`,
+              ]}
+            />
+          </div>
+          {topNextExpenses && topNextExpenses.length > 0 && (
+            <ul className="mt-3 space-y-1 border-t border-brand/15 pt-3 text-[11px] text-muted-foreground">
+              {topNextExpenses.map((item) => (
+                <li key={item.id} className="flex justify-between gap-2">
+                  <span className="truncate">
+                    {item.title}
+                    <span className="ml-1 opacity-70">({formatExpenseKind(item.kind)})</span>
+                  </span>
+                  <span className="shrink-0 font-medium text-foreground">
+                    {formatPlainAmount(item.amount, currencyCode)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {simulationAvailable && (
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2">
+          <span className="text-[11px] font-medium text-amber-900">
+            Incluir simulação no ciclo
+          </span>
           <button
             type="button"
-            onClick={onClearSimulation}
-            className="font-semibold underline hover:no-underline"
+            role="switch"
+            aria-checked={includeSimulation}
+            onClick={() => onIncludeSimulationChange?.(!includeSimulation)}
+            className={`relative inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full transition ${
+              includeSimulation ? "bg-amber-600" : "bg-slate-300"
+            }`}
           >
-            Limpar
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition ${
+                includeSimulation ? "translate-x-5" : "translate-x-1"
+              }`}
+            />
+            <span className="sr-only">
+              {includeSimulation
+                ? "Simulação incluída nos valores do ciclo"
+                : "Simulação excluída dos valores do ciclo"}
+            </span>
           </button>
-        </p>
+        </div>
       )}
 
       <div className="mb-4">
@@ -252,12 +349,22 @@ export function CycleProgressCard({
             {CYCLE_COPY.income}
           </p>
           <p className="mt-0.5 text-sm font-semibold text-foreground">
-            {formatPlainAmount(displayIncome, currencyCode)}
+            {formatPlainAmount(realizedIncome, currencyCode)}
           </p>
           <div className="mt-1.5 space-y-0.5 text-[10px] text-muted-foreground">
-            {cycle.salaryIncome > 0 && (
+            {cycle.salaryIncome - (cycle.projectedSalaryIncome ?? 0) > 0 && (
               <p>
-                {CYCLE_COPY.salary} {formatPlainAmount(cycle.salaryIncome, currencyCode)}
+                {CYCLE_COPY.salary}{" "}
+                {formatPlainAmount(
+                  cycle.salaryIncome - (cycle.projectedSalaryIncome ?? 0),
+                  currencyCode,
+                )}
+              </p>
+            )}
+            {hasProjectedSalary && (
+              <p>
+                {CYCLE_COPY.projectedSalary}{" "}
+                {formatPlainAmount(cycle.projectedSalaryIncome!, currencyCode)}
               </p>
             )}
             {cycle.extraIncome > 0 && (
@@ -273,7 +380,7 @@ export function CycleProgressCard({
             {CYCLE_COPY.spent}
           </p>
           <p className="mt-0.5 text-sm font-semibold text-foreground">
-            {formatPlainAmount(displayExpenses, currencyCode)}
+            {formatPlainAmount(realizedExpenses, currencyCode)}
           </p>
         </div>
         <div className="rounded-lg border border-app-border/60 bg-app-bg/80 px-3 py-2.5">
