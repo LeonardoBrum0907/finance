@@ -15,6 +15,8 @@ import { investmentRoutes } from "./routes/investments.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { simulatorRoutes } from "./routes/simulator.js";
 import { simulationsRoutes } from "./routes/simulations.js";
+import { recurringBillRoutes } from "./routes/recurringBills.js";
+import { managedAccountRoutes } from "./routes/managedAccounts.js";
 
 async function main() {
   const app = Fastify({
@@ -47,6 +49,8 @@ async function main() {
   await app.register(settingsRoutes);
   await app.register(simulatorRoutes);
   await app.register(simulationsRoutes);
+  await app.register(recurringBillRoutes);
+  await app.register(managedAccountRoutes);
 
   await app.listen({ port: env.port, host: "0.0.0.0" });
 }

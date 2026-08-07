@@ -7,7 +7,7 @@ import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
 import {
   createCommitmentFromTransaction,
-  listActiveCommitments,
+  listUserCommitments,
   matchCommitmentInstallments,
   updateCommitment,
 } from "../services/finance/commitments.js";
@@ -15,8 +15,9 @@ import {
 export async function commitmentRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
 
+  /** @deprecated Prefer GET /api/accounts?kind=installment_plan */
   app.get("/api/commitments", async (request, reply) => {
-    const items = await listActiveCommitments(request.user!.sub);
+    const items = await listUserCommitments(request.user!.sub);
     return reply.send({ items });
   });
 

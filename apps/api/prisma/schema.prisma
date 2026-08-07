@@ -31,6 +31,8 @@ model User {
   categoryMappings    CategoryMapping[]
   paymentCommitments  PaymentCommitment[]
   simulationScenarios SimulationScenario[]
+  recurringBills      RecurringBill[]
+  managedAccounts     ManagedAccount[]
 }
 
 model Person {
@@ -46,6 +48,8 @@ model Person {
   user                User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   connections         BankConnection[]
   simulationScenarios SimulationScenario[]
+  recurringBills      RecurringBill[]
+  managedAccounts     ManagedAccount[]
 
   @@index([userId])
 }
@@ -88,9 +92,11 @@ model Account {
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
 
-  connection   BankConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
-  goalSources  GoalSource[]
+  connection      BankConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  transactions    Transaction[]
+  goalSources     GoalSource[]
+  recurringBills  RecurringBill[]
+  managedAccounts ManagedAccount[]
 
   @@index([connectionId])
 }
@@ -112,9 +118,12 @@ model Transaction {
   createdAt           DateTime @default(now())
 
   account            Account              @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  anchorCommitment   PaymentCommitment?   @relation("AnchorTransaction")
-  installmentPayment PaymentInstallment?
-  linkedScenarios    SimulationScenario[]
+  anchorCommitment           PaymentCommitment?        @relation("AnchorTransaction")
+  installmentPayment         PaymentInstallment?
+  linkedScenarios            SimulationScenario[]
+  recurringBillOccurrence      RecurringBillOccurrence?
+  managedAccountAnchor         ManagedAccount?           @relation("ManagedAccountAnchor")
+  managedAccountEntryPayment   ManagedAccountEntry?
 
   @@index([accountId])
   @@index([date])
@@ -160,6 +169,124 @@ model PaymentInstallment {
 
   @@unique([commitmentId, sequence])
   @@index([commitmentId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model RecurringBill {
+  id                 String    @id @default(cuid())
+  userId             String
+  personId           String?
+  accountId          String?
+  title              String
+  payeeName          String?
+  matchSignature     String
+  category           String?
+  expectedAmount     Float
+  dayOfMonth         Int
+  status             String    @default("active")
+  source             String    @default("auto_detected")
+  lastOccurrenceDate DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user        User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  person      Person?                   @relation(fields: [personId], references: [id], onDelete: SetNull)
+  account     Account?                  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  occurrences RecurringBillOccurrence[]
+
+  @@unique([userId, matchSignature, accountId])
+  @@index([userId])
+  @@index([status])
+}
+
+model RecurringBillOccurrence {
+  id            String    @id @default(cuid())
+  billId        String
+  cycleKey      String
+  dueDate       DateTime
+  amount        Float
+  status        String    @default("pending")
+  transactionId String?   @unique
+  paidAt        DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  bill        RecurringBill @relation(fields: [billId], references: [id], onDelete: Cascade)
+  transaction Transaction?  @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@unique([billId, cycleKey])
+  @@index([billId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model ManagedAccount {
+  id                       String    @id @default(cuid())
+  userId                   String
+  personId                 String?
+  title                    String
+  payeeName                String?
+  category                 String?
+  notes                    String?
+  kind                     String
+  simulationType           String?
+  source                   String
+  status                   String    @default("active")
+  expectedAmount           Float
+  totalAmount              Float?
+  totalInstallments        Int?
+  dayOfMonth               Int?
+  matchSignature           String?
+  anchorTransactionId      String?   @unique
+  bankAccountId            String?
+  linkedGoalId             String?   @unique
+  linkedTransactionId      String?
+  simulationPayload        Json?
+  lastVerdict              String?
+  lastImpactSnapshot       Json?
+  priority                 Int       @default(0)
+  description              String?
+  lastOccurrenceDate       DateTime?
+  completedAt              DateTime?
+  legacyRecurringBillId    String?   @unique
+  legacyCommitmentId       String?   @unique
+  legacySimulationScenarioId String? @unique
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  user              User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  person            Person?               @relation(fields: [personId], references: [id], onDelete: SetNull)
+  bankAccount       Account?              @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
+  anchorTransaction Transaction?          @relation("ManagedAccountAnchor", fields: [anchorTransactionId], references: [id], onDelete: SetNull)
+  linkedGoal        Goal?                   @relation("ManagedAccountConvertedGoal", fields: [linkedGoalId], references: [id], onDelete: SetNull)
+  entries           ManagedAccountEntry[]
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([personId])
+  @@index([kind])
+}
+
+model ManagedAccountEntry {
+  id               String    @id @default(cuid())
+  managedAccountId String
+  sequence         Int?
+  cycleKey         String?
+  dueDate          DateTime
+  amount           Float
+  status           String    @default("pending")
+  transactionId    String?   @unique
+  paidAt           DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  managedAccount ManagedAccount @relation(fields: [managedAccountId], references: [id], onDelete: Cascade)
+  transaction    Transaction?   @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@unique([managedAccountId, cycleKey])
+  @@unique([managedAccountId, sequence])
+  @@index([managedAccountId])
   @@index([status])
   @@index([dueDate])
 }
@@ -323,6 +450,7 @@ model Goal {
   sources          GoalSource[]
   sourceSimulation SimulationScenario? @relation("GoalFromSimulation", fields: [sourceSimulationId], references: [id], onDelete: SetNull)
   convertedFrom    SimulationScenario? @relation("ConvertedToGoal")
+  managedAccount   ManagedAccount?     @relation("ManagedAccountConvertedGoal")
 
   @@index([userId])
 }

@@ -36,6 +36,8 @@ export interface PaymentCommitmentDTO {
   dayOfMonth: number | null;
   status: CommitmentStatus;
   anchorTransactionId: string | null;
+  personId?: string | null;
+  personName?: string | null;
   paidCount: number;
   pendingCount: number;
   installments: PaymentInstallmentDTO[];

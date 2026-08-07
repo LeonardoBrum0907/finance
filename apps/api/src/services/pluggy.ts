@@ -5,6 +5,10 @@ import { prisma } from "../prisma.js";
 import { reconcileGoalsForUser } from "./finance/goalTracking.js";
 import { matchCommitmentInstallments } from "./finance/commitments.js";
 import {
+  detectRecurringBills,
+  matchRecurringBillOccurrences,
+} from "./finance/recurringBills.js";
+import {
   normalizePluggyTransaction,
   processSyncedTransactions,
 } from "./categoryPipeline.js";
@@ -204,6 +208,8 @@ export async function syncConnection(connectionId: string): Promise<void> {
   if (person?.person.userId) {
     await reconcileGoalsForUser(person.person.userId);
     await matchCommitmentInstallments(person.person.userId);
+    await detectRecurringBills(person.person.userId);
+    await matchRecurringBillOccurrences(person.person.userId);
   }
 }
 

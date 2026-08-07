@@ -13,6 +13,7 @@ import {
 } from "@finance/shared";
 import type { PaymentCommitment, PaymentInstallment, Transaction } from "@prisma/client";
 import { prisma } from "../../prisma.js";
+import { syncFromCommitment } from "./managedAccounts.js";
 
 const AMOUNT_TOLERANCE = 0.01;
 const DATE_TOLERANCE_DAYS = 3;
@@ -103,17 +104,21 @@ async function refreshCommitmentStatus(commitmentId: string): Promise<void> {
     where: { id: commitmentId },
     include: { installments: true },
   });
-  if (!commitment || commitment.status === "cancelled") return;
+  if (!commitment) return;
 
-  const allPaid = commitment.installments.every(
-    (i) => i.status === "paid" || i.status === "skipped",
-  );
-  if (allPaid && commitment.installments.length > 0) {
-    await prisma.paymentCommitment.update({
-      where: { id: commitmentId },
-      data: { status: "completed" },
-    });
+  if (commitment.status !== "cancelled") {
+    const allPaid = commitment.installments.every(
+      (i) => i.status === "paid" || i.status === "skipped",
+    );
+    if (allPaid && commitment.installments.length > 0) {
+      await prisma.paymentCommitment.update({
+        where: { id: commitmentId },
+        data: { status: "completed" },
+      });
+    }
   }
+
+  await syncFromCommitment(commitmentId);
 }
 
 export interface CreateCommitmentParams {
@@ -360,16 +365,38 @@ export async function updateCommitment(
     include: { installments: true },
   });
 
+  await syncFromCommitment(commitmentId);
   return serializeCommitment(updated);
 }
 
-export async function listActiveCommitments(userId: string): Promise<PaymentCommitmentDTO[]> {
+export async function listUserCommitments(userId: string): Promise<PaymentCommitmentDTO[]> {
   const commitments = await prisma.paymentCommitment.findMany({
-    where: { userId, status: { in: ["active", "completed"] } },
-    include: { installments: true },
+    where: { userId, status: { in: ["active", "completed", "cancelled"] } },
+    include: {
+      installments: true,
+      anchorTx: {
+        include: {
+          account: {
+            include: {
+              connection: { include: { person: { select: { id: true, name: true } } } },
+            },
+          },
+        },
+      },
+    },
     orderBy: { updatedAt: "desc" },
   });
-  return commitments.map(serializeCommitment);
+  return commitments.map((commitment) => ({
+    ...serializeCommitment(commitment),
+    personId: commitment.anchorTx?.account.connection.person.id ?? null,
+    personName: commitment.anchorTx?.account.connection.person.name ?? null,
+  }));
+}
+
+/** @deprecated Use listUserCommitments */
+export async function listActiveCommitments(userId: string): Promise<PaymentCommitmentDTO[]> {
+  const items = await listUserCommitments(userId);
+  return items.filter((item) => item.status === "active" || item.status === "completed");
 }
 
 export function extractPayeeFromDescription(description: string): string | null {
