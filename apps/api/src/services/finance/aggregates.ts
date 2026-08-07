@@ -2,6 +2,7 @@ import type { FinancialConnection, FinancialTransaction } from "./types.js";
 import {
   classifyIncome,
   DEFAULT_PAYDAY_CYCLE_ANCHOR,
+  estimateUpcomingCycleSalary,
   formatPaydayCycleShortLabel,
   getPaydayCycleBounds,
   getPaydayCycleRange,
@@ -468,8 +469,12 @@ export function buildCycleSummary(
   committedExpensesManual: number;
   net: number;
   availableNet: number;
+  realizedNet: number;
+  realizedIncome: number;
+  realizedExpenses: number;
   salaryIncome: number;
   extraIncome: number;
+  projectedSalaryIncome: number;
 } {
   const meta = cycleKey
     ? getPaydayCycleRangeByKey(cycleKey, paydayDay, paydayCycleAnchor)
@@ -485,10 +490,27 @@ export function buildCycleSummary(
     meta.isComplete || today > meta.to ? range : { from: meta.from, to: today };
   const incomeBreakdown = classifyIncome(txs, incomeRange, paydayDay);
 
+  const projectedSalaryIncome = meta.isComplete
+    ? 0
+    : estimateUpcomingCycleSalary(
+        txs,
+        paydayDay,
+        paydayCycleAnchor,
+        {
+          cycleKey: meta.cycleKey,
+          from: meta.from,
+          to: meta.to,
+          isComplete: meta.isComplete,
+        },
+      );
+
   const bankCommitted = meta.isComplete ? 0 : totals.committedExpenses;
   const manualCommitted = meta.isComplete ? 0 : manualCommittedExpenses;
   const totalCommitted = bankCommitted + manualCommitted;
-  const availableNet = totals.net - totalCommitted;
+  const realizedIncome = totals.income;
+  const realizedExpenses = totals.expenses;
+  const realizedNet = totals.net;
+  const availableNet = realizedNet - totalCommitted + projectedSalaryIncome;
 
   return {
     cycleKey: meta.cycleKey,
@@ -498,15 +520,19 @@ export function buildCycleSummary(
     totalDays: meta.totalDays,
     daysRemaining: meta.daysRemaining,
     isComplete: meta.isComplete,
-    income: totals.income,
-    expenses: totals.expenses,
+    income: realizedIncome,
+    expenses: realizedExpenses,
     committedExpenses: totalCommitted,
     committedExpensesBank: bankCommitted,
     committedExpensesManual: manualCommitted,
-    net: totals.net,
+    net: realizedNet,
+    realizedNet,
+    realizedIncome,
+    realizedExpenses,
     availableNet,
-    salaryIncome: incomeBreakdown.salary,
+    salaryIncome: incomeBreakdown.salary + projectedSalaryIncome,
     extraIncome: incomeBreakdown.extra,
+    projectedSalaryIncome,
   };
 }
 
@@ -640,7 +666,26 @@ export function buildGrowthMetrics(params: {
                 })()
               : currentRange;
           const b = classifyIncome(txs, range, paydayDay);
-          return { salary: b.salary, extra: b.extra };
+          let projected = 0;
+          if (periodMode === "payday") {
+            const meta = focusCycleKey
+              ? getPaydayCycleRangeByKey(focusCycleKey, paydayDay, paydayCycleAnchor)
+              : getPaydayCycleRange(paydayDay, new Date(), paydayCycleAnchor);
+            if (!meta.isComplete && today <= meta.to) {
+              projected = estimateUpcomingCycleSalary(
+                txs,
+                paydayDay,
+                paydayCycleAnchor,
+                {
+                  cycleKey: meta.cycleKey,
+                  from: meta.from,
+                  to: meta.to,
+                  isComplete: meta.isComplete,
+                },
+              );
+            }
+          }
+          return { salary: b.salary + projected, extra: b.extra };
         })()
       : null;
 

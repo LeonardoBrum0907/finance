@@ -756,3 +756,91 @@ export function classifyIncome(
 
 }
 
+const SALARY_HISTORY_CYCLES = 6;
+
+export interface CycleSalaryProjectionMeta {
+  cycleKey: string;
+  from: string;
+  to: string;
+  isComplete: boolean;
+}
+
+export interface CycleSalaryProjection {
+  projectedSalary: number;
+  realizedSalary: number;
+}
+
+/**
+ * Estima o salário que ainda cairá no ciclo atual quando a âncora é "end"
+ * (pagamento no último dia) e o salário ainda não foi recebido.
+ */
+export function estimateUpcomingCycleSalary(
+  txs: TransactionLike[],
+  paydayDay: number,
+  anchor: PaydayCycleAnchor,
+  cycleMeta: CycleSalaryProjectionMeta,
+  referenceDate: Date = new Date(),
+): number {
+  return estimateSalaryForCycle(txs, paydayDay, anchor, cycleMeta, referenceDate);
+}
+
+/**
+ * Estima o salário pendente/esperado em um ciclo com base no último salário recebido.
+ */
+export function estimateSalaryForCycle(
+  txs: TransactionLike[],
+  paydayDay: number,
+  anchor: PaydayCycleAnchor,
+  cycleMeta: CycleSalaryProjectionMeta,
+  referenceDate: Date = new Date(),
+): number {
+  if (cycleMeta.isComplete) return 0;
+
+  const today = toLocalDateKey(referenceDate);
+  const incomeRange =
+    today > cycleMeta.to
+      ? { from: cycleMeta.from, to: cycleMeta.to }
+      : today < cycleMeta.from
+        ? { from: cycleMeta.from, to: cycleMeta.from }
+        : { from: cycleMeta.from, to: today };
+
+  const partialBreakdown = classifyIncome(txs, incomeRange, paydayDay);
+  if (partialBreakdown.salary > 0) return 0;
+
+  for (let offset = 1; offset <= SALARY_HISTORY_CYCLES; offset++) {
+    const prevKey = offsetCycleKey(cycleMeta.cycleKey, paydayDay, offset);
+    const bounds = getPaydayCycleBounds(prevKey, paydayDay, anchor);
+    const { salary } = classifyIncome(txs, bounds, paydayDay);
+    if (salary > 0) return salary;
+  }
+
+  return 0;
+}
+
+export function resolveCycleSalaryProjection(
+  txs: TransactionLike[],
+  paydayDay: number,
+  anchor: PaydayCycleAnchor,
+  cycleMeta: CycleSalaryProjectionMeta,
+  referenceDate: Date = new Date(),
+): CycleSalaryProjection {
+  const today = toLocalDateKey(referenceDate);
+  const incomeRange =
+    cycleMeta.isComplete || today > cycleMeta.to
+      ? { from: cycleMeta.from, to: cycleMeta.to }
+      : { from: cycleMeta.from, to: today };
+  const partialBreakdown = classifyIncome(txs, incomeRange, paydayDay);
+  const projectedSalary = estimateUpcomingCycleSalary(
+    txs,
+    paydayDay,
+    anchor,
+    cycleMeta,
+    referenceDate,
+  );
+
+  return {
+    projectedSalary,
+    realizedSalary: partialBreakdown.salary,
+  };
+}
+
