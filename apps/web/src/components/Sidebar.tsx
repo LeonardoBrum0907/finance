@@ -23,7 +23,7 @@ const navItems: NavItem[] = [
    { label: "Investimentos", icon: LineChart, to: "/investimentos" },
    { label: "Assistente", icon: MessageSquare, to: "/chat" },
    { label: "Orçamentos", icon: PieChart, to: "/orcamentos" },
-   { label: "Simulador", icon: Calculator, to: "/simulador" },
+   { label: "Compromissos", icon: Calculator, to: "/simulador" },
    { label: "Objetivos e Planos", icon: TrendingUp, to: "/objetivos" },
    { label: "Pessoas", icon: Users, to: "/pessoas" },
    { label: "Contas", icon: Landmark, to: "/contas" },

@@ -2,6 +2,8 @@ import {
   buildSimulationPaydayCycles,
   computeAggregateCycleImpact,
   computeCreditBillImpacts,
+  computePaydayCycleImpacts,
+  filterCashSimulatedPurchases,
   payloadToSimulationInput,
   scenariosToSimulatedPurchases,
   suggestTransactionMatches,
@@ -21,6 +23,8 @@ import {
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../../prisma.js";
 import { fetchSimulatorBaseline, runSimulation } from "./purchaseSimulation.js";
+import { loadActiveManagedAccountsForImpact, syncFromSimulationScenario, deleteManagedAccountByLegacy } from "./managedAccounts.js";
+import { managedAccountsToSimulatedPurchases } from "@finance/shared";
 import { resolvePaydayCycle } from "../userSettings.js";
 import { buildCurrentCycleSummary } from "./aggregates.js";
 import { effectiveTransactionCategory } from "../transactionCategory.js";
@@ -182,6 +186,7 @@ export async function createScenario(
     include: scenarioInclude,
   });
 
+  await syncFromSimulationScenario(row.id);
   return serializeScenario(row);
 }
 
@@ -230,6 +235,7 @@ export async function updateScenario(
     include: scenarioInclude,
   });
 
+  await syncFromSimulationScenario(row.id);
   return serializeScenario(row);
 }
 
@@ -237,6 +243,7 @@ export async function deleteScenario(userId: string, id: string): Promise<void> 
   const existing = await prisma.simulationScenario.findFirst({ where: { id, userId } });
   if (!existing) throw new ScenarioNotFoundError();
   await prisma.simulationScenario.delete({ where: { id } });
+  await deleteManagedAccountByLegacy("legacySimulationScenarioId", id);
 }
 
 export async function runScenarioSimulation(
@@ -258,6 +265,7 @@ export async function runScenarioSimulation(
     },
   });
 
+  await syncFromSimulationScenario(id);
   return result;
 }
 
@@ -338,30 +346,38 @@ export async function fetchAggregateImpact(
   const baseline = await fetchSimulatorBaseline(userId, personId);
   const { paydayDay, paydayCycleAnchor } = await resolvePaydayCycle(userId, personId);
 
-  const activeRows = await prisma.simulationScenario.findMany({
-    where: {
-      userId,
-      status: "active",
-      ...(personId ? { personId } : {}),
-    },
-    include: scenarioInclude,
-    orderBy: [{ priority: "desc" }, { updatedAt: "desc" }],
-  });
+  const managedAccounts = await loadActiveManagedAccountsForImpact(userId, personId);
 
-  const scenarios = activeRows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    type: r.type as ScenarioSimulationType,
-    payload: r.payload as SimulationPayload,
-  }));
+  const scenarios = managedAccounts
+    .filter((account) => account.kind === "simulation" && account.simulationPayload)
+    .map((account) => ({
+      id: account.id,
+      name: account.title,
+      type: account.simulationType!,
+      payload: account.simulationPayload!,
+    }));
+
+  const extraPurchases = managedAccountsToSimulatedPurchases(
+    managedAccounts.filter(
+      (account) => account.kind === "fixed_recurring" || account.kind === "installment_plan",
+    ),
+  );
+
+  const hasImpactItems = scenarios.length > 0 || extraPurchases.length > 0;
+  const simulationOnlyPurchases = scenariosToSimulatedPurchases(
+    scenarios.map((scenario) => ({ id: scenario.id, payload: scenario.payload })),
+  );
 
   let cycleImpacts: AggregateSimulationImpactDTO["cycleImpacts"] = [];
+  let simulationOnlyCycleImpacts: AggregateSimulationImpactDTO["simulationOnlyCycleImpacts"] =
+    [];
   let monthlyPoints: AggregateSimulationImpactDTO["monthlyPoints"] = [];
   let alerts: string[] = [];
   let scenarioBreakdown: AggregateSimulationImpactDTO["scenarioBreakdown"] = [];
   let creditBillIncrease = 0;
+  let scenarioBankBalance = baseline.bankBalance;
 
-  if (paydayDay !== null && scenarios.length > 0) {
+  if (paydayDay !== null && hasImpactItems) {
     const txs = await loadTransactionsForImpact(userId, personId);
     const currentCycle = buildCurrentCycleSummary(txs, paydayDay, paydayCycleAnchor);
     const cycles = buildSimulationPaydayCycles(
@@ -372,7 +388,7 @@ export async function fetchAggregateImpact(
       },
       paydayDay,
       paydayCycleAnchor,
-      4,
+      2,
     );
 
     const today = todayDateKeyInTimeZone();
@@ -381,16 +397,35 @@ export async function fetchAggregateImpact(
       cycles,
       today,
       baselineSurplus: baseline.currentSurplus,
+      cycleBaselines: [
+        baseline.currentSurplus,
+        baseline.nextCycleSurplus ?? baseline.currentSurplus,
+      ],
+      bankBalance: baseline.bankBalance,
+      extraPurchases,
     });
 
     cycleImpacts = aggregate.cycleImpacts;
-    monthlyPoints = aggregate.monthlyPoints;
+    simulationOnlyCycleImpacts = computePaydayCycleImpacts(simulationOnlyPurchases, cycles, today);
+    const simulationCashImpacts = computePaydayCycleImpacts(
+      filterCashSimulatedPurchases(simulationOnlyPurchases),
+      cycles,
+      today,
+    );
+    monthlyPoints = aggregate.monthlyPoints.map((point, idx) => ({
+      ...point,
+      scenarioSurplus: Math.round(
+        (point.baselineSurplus - (simulationCashImpacts[idx]?.totalInPeriod ?? 0)) * 100,
+      ) / 100,
+    }));
     alerts = aggregate.alerts;
     scenarioBreakdown = aggregate.scenarioBreakdown;
+    scenarioBankBalance = aggregate.scenarioBankBalance;
 
-    const purchases = scenariosToSimulatedPurchases(
-      scenarios.map((s) => ({ id: s.id, payload: s.payload })),
-    );
+    const purchases = [
+      ...scenariosToSimulatedPurchases(scenarios.map((s) => ({ id: s.id, payload: s.payload }))),
+      ...extraPurchases,
+    ];
     const creditAccounts = await loadCreditAccountsForImpact(userId, personId);
 
     if (purchases.length > 0 && creditAccounts.length > 0) {
@@ -400,31 +435,63 @@ export async function fetchAggregateImpact(
         0,
       );
     }
-  } else if (paydayDay === null && scenarios.length > 0) {
+  } else if (paydayDay === null && hasImpactItems) {
     const today = todayDateKeyInTimeZone();
+    const cycles = [
+      {
+        cycleKey: baseline.periodLabel,
+        from: today.slice(0, 8) + "01",
+        to: today,
+      },
+    ];
     const aggregate = computeAggregateCycleImpact({
       scenarios,
-      cycles: [
-        {
-          cycleKey: baseline.periodLabel,
-          from: today.slice(0, 8) + "01",
-          to: today,
-        },
-      ],
+      cycles,
       today,
       baselineSurplus: baseline.currentSurplus,
+      cycleBaselines: [
+        baseline.currentSurplus,
+        baseline.nextCycleSurplus ?? baseline.currentSurplus,
+      ],
+      bankBalance: baseline.bankBalance,
+      extraPurchases,
     });
     cycleImpacts = aggregate.cycleImpacts;
-    monthlyPoints = aggregate.monthlyPoints;
+    simulationOnlyCycleImpacts = computePaydayCycleImpacts(simulationOnlyPurchases, cycles, today);
+    const simulationCashImpacts = computePaydayCycleImpacts(
+      filterCashSimulatedPurchases(simulationOnlyPurchases),
+      cycles,
+      today,
+    );
+    monthlyPoints = aggregate.monthlyPoints.map((point, idx) => ({
+      ...point,
+      scenarioSurplus: Math.round(
+        (point.baselineSurplus - (simulationCashImpacts[idx]?.totalInPeriod ?? 0)) * 100,
+      ) / 100,
+    }));
     alerts = aggregate.alerts;
     scenarioBreakdown = aggregate.scenarioBreakdown;
+    scenarioBankBalance = aggregate.scenarioBankBalance;
   }
+
+  const activeRows = await prisma.simulationScenario.findMany({
+    where: {
+      userId,
+      status: "active",
+      ...(personId ? { personId } : {}),
+    },
+    include: scenarioInclude,
+    orderBy: [{ priority: "desc" }, { updatedAt: "desc" }],
+  });
 
   return {
     currencyCode: baseline.currencyCode,
     baselineSurplus: baseline.currentSurplus,
-    activeCount: activeRows.length,
+    bankBalance: baseline.bankBalance,
+    scenarioBankBalance,
+    activeCount: managedAccounts.length,
     cycleImpacts,
+    simulationOnlyCycleImpacts,
     monthlyPoints,
     alerts,
     creditBillIncrease,
@@ -508,6 +575,7 @@ export async function completeScenario(
     include: scenarioInclude,
   });
 
+  await syncFromSimulationScenario(row.id);
   return serializeScenario(row);
 }
 
@@ -590,6 +658,8 @@ export async function convertScenarioToGoal(
 
     return { goal, scenario };
   });
+
+  await syncFromSimulationScenario(id);
 
   return {
     scenario: serializeScenario(result.scenario),

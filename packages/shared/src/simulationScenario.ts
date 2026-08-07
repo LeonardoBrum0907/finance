@@ -4,6 +4,7 @@ import type { SimulationInput } from "./index.js";
 import {
   computePaydayCycleImpacts,
   createSimulatedPurchase,
+  filterCashSimulatedPurchases,
   todayDateKeyInTimeZone,
   type PaydayCycleImpact,
   type PaydayCycleInput,
@@ -162,8 +163,14 @@ export interface ScenarioCycleBreakdown {
 export interface AggregateSimulationImpactDTO {
   currencyCode: string;
   baselineSurplus: number;
+  /** Soma dos saldos bancários (não inclui crédito). */
+  bankBalance: number;
+  /** Saldo em conta após despesas à vista já realizadas nos cenários (ciclo atual). */
+  scenarioBankBalance: number;
   activeCount: number;
   cycleImpacts: PaydayCycleImpact[];
+  /** Impacto só de simulações (sem contas fixas/parcelamentos já no ciclo). */
+  simulationOnlyCycleImpacts: PaydayCycleImpact[];
   monthlyPoints: {
     month: string;
     label?: string;
@@ -349,18 +356,31 @@ export function computeAggregateCycleImpact(params: {
   cycles: PaydayCycleInput[];
   today: string;
   baselineSurplus: number;
+  /** Sobra base por ciclo (ex.: fechamento atual + próximo). */
+  cycleBaselines?: number[];
+  bankBalance?: number;
+  /** Compras extras (ex.: contas fixas) somadas ao impacto agregado. */
+  extraPurchases?: SimulatedPurchase[];
 }): {
   cycleImpacts: PaydayCycleImpact[];
   monthlyPoints: AggregateSimulationImpactDTO["monthlyPoints"];
   alerts: string[];
   scenarioBreakdown: ScenarioCycleBreakdown[][];
+  scenarioBankBalance: number;
 } {
-  const { scenarios, cycles, today, baselineSurplus } = params;
-  const purchases = scenariosToSimulatedPurchases(
+  const { scenarios, cycles, today, baselineSurplus, cycleBaselines, bankBalance = 0, extraPurchases = [] } =
+    params;
+  const scenarioPurchases = scenariosToSimulatedPurchases(
     scenarios.map((s) => ({ id: s.id, payload: s.payload })),
   );
+  const purchases = [...scenarioPurchases, ...extraPurchases];
 
   const aggregateImpacts = computePaydayCycleImpacts(purchases, cycles, today);
+  const cashImpacts = computePaydayCycleImpacts(
+    filterCashSimulatedPurchases(purchases),
+    cycles,
+    today,
+  );
   const scenarioBreakdown: ScenarioCycleBreakdown[][] = cycles.map(() => []);
 
   for (const scenario of scenarios) {
@@ -379,23 +399,57 @@ export function computeAggregateCycleImpact(params: {
     });
   }
 
+  for (const purchase of extraPurchases) {
+    const impacts = computePaydayCycleImpacts([purchase], cycles, today);
+    impacts.forEach((impact, idx) => {
+      scenarioBreakdown[idx]!.push({
+        scenarioId: purchase.id,
+        scenarioName: purchase.title,
+        type: "recurring_expense",
+        totalInPeriod: impact.totalInPeriod,
+        realizedExpenses: impact.realizedExpenses,
+        committedExpenses: impact.committedExpenses,
+      });
+    });
+  }
+
   const alerts: string[] = [];
   const monthlyPoints = aggregateImpacts.map((impact, idx) => {
-    const scenarioSurplus = roundMoney(baselineSurplus - impact.totalInPeriod);
-    if (baselineSurplus >= 0 && scenarioSurplus < 0) {
+    const cashImpact = cashImpacts[idx]!;
+    const cycleBaseline = cycleBaselines?.[idx] ?? baselineSurplus;
+    const scenarioSurplus = roundMoney(cycleBaseline - cashImpact.totalInPeriod);
+    if (cycleBaseline >= 0 && scenarioSurplus < 0) {
+      const cycleLabel =
+        idx === 0 ? "este ciclo" : idx === 1 ? "próximo ciclo" : impact.cycleKey;
       alerts.push(
-        `No ciclo ${impact.cycleKey}, os cenários ativos deixariam a sobra negativa (${scenarioSurplus.toFixed(2)}).`,
+        `No ${cycleLabel}, os cenários à vista deixariam a sobra negativa (${scenarioSurplus.toFixed(2)}).`,
       );
     }
     return {
       month: impact.cycleKey,
-      label: idx === 0 ? `Atual (${impact.cycleKey})` : impact.cycleKey,
-      baselineSurplus: roundMoney(baselineSurplus),
+      label:
+        idx === 0
+          ? `Este ciclo (${impact.cycleKey})`
+          : idx === 1
+            ? `Próximo ciclo (${impact.cycleKey})`
+            : impact.cycleKey,
+      baselineSurplus: roundMoney(cycleBaseline),
       scenarioSurplus,
     };
   });
 
-  return { cycleImpacts: aggregateImpacts, monthlyPoints, alerts, scenarioBreakdown };
+  const currentCashImpact = cashImpacts[0];
+  const scenarioBankBalance = roundMoney(
+    bankBalance - (currentCashImpact?.realizedExpenses ?? 0),
+  );
+
+  return {
+    cycleImpacts: aggregateImpacts,
+    monthlyPoints,
+    alerts,
+    scenarioBreakdown,
+    scenarioBankBalance,
+  };
 }
 
 export function toTransactionMatchCandidate(

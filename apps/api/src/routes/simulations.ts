@@ -24,6 +24,7 @@ import {
 export async function simulationsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
 
+  /** @deprecated Prefer GET /api/accounts?kind=simulation */
   app.get("/api/simulations", async (request) => {
     const query = request.query as { status?: string; personId?: string };
     const userId = request.user!.sub;

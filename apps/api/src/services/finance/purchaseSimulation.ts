@@ -15,7 +15,6 @@ import { prisma } from "../../prisma.js";
 import { effectiveTransactionCategory } from "../transactionCategory.js";
 import { resolveNextDueDate } from "./creditBill.js";
 import {
-  buildCurrentCycleSummary,
   formatCurrency,
   getCycleSummary,
   getMonthlySummary,
@@ -24,6 +23,7 @@ import {
   monthKeysToDateRange,
   toLocalMonthKey,
 } from "./aggregates.js";
+import { buildDashboardCycleForecasts } from "./cycleForecasts.js";
 import { loadGoalsSummaryForUser } from "./goalsContext.js";
 import {
   resolveMonthlyContribution,
@@ -228,13 +228,22 @@ function computeAverageIncomeExpenses(
   };
 }
 
-function computeCurrentSurplus(ctx: SimulatorContext): number {
-  const { settings, txs, paydayDay, paydayCycleAnchor: anchor } = ctx;
+async function computeCurrentSurplus(
+  ctx: SimulatorContext,
+  userId: string,
+): Promise<number> {
+  const { settings, txs, paydayDay, paydayCycleAnchor: anchor, personId } = ctx;
   const periodMode = settings.defaultPeriodMode;
 
   if (periodMode === "payday" && paydayDay !== null) {
-    const cycle = buildCurrentCycleSummary(txs, paydayDay, anchor);
-    return cycle.committedExpenses > 0 ? cycle.availableNet : cycle.net;
+    const forecasts = await buildDashboardCycleForecasts(
+      txs,
+      userId,
+      paydayDay,
+      anchor,
+      personId,
+    );
+    return forecasts.current.closingBalance;
   }
 
   return getMonthlySummary(txs, toLocalMonthKey(new Date())).net;
@@ -373,7 +382,33 @@ export async function fetchSimulatorBaseline(
     ctx.paydayCycleAnchor,
   );
   const goalsSummary = await loadGoalsSummaryForUser(userId);
-  const currentSurplus = computeCurrentSurplus(ctx);
+  const currentSurplus = await computeCurrentSurplus(ctx, userId);
+
+  let projectedSalaryIncome: number | undefined;
+  let includesProjectedSalary = false;
+  let nextCycleSurplus: number | undefined;
+  let currentCycleFrom: string | undefined;
+  let currentCycleTo: string | undefined;
+  let nextCycleFrom: string | undefined;
+  let nextCycleTo: string | undefined;
+  if (ctx.paydayDay !== null && ctx.settings.defaultPeriodMode === "payday") {
+    const forecasts = await buildDashboardCycleForecasts(
+      ctx.txs,
+      userId,
+      ctx.paydayDay,
+      ctx.paydayCycleAnchor,
+      personId,
+    );
+    if (forecasts.current.pendingIncome > 0) {
+      projectedSalaryIncome = forecasts.current.pendingIncome;
+      includesProjectedSalary = true;
+    }
+    nextCycleSurplus = forecasts.next.closingBalance;
+    currentCycleFrom = forecasts.current.from;
+    currentCycleTo = forecasts.current.to;
+    nextCycleFrom = forecasts.next.from;
+    nextCycleTo = forecasts.next.to;
+  }
 
   let periodLabel: string;
   if (ctx.paydayDay !== null) {
@@ -394,6 +429,13 @@ export async function fetchSimulatorBaseline(
     bankBalance: ctx.bankBalance,
     monthlyContribution: goalsSummary.monthlyContribution,
     currentSurplus,
+    nextCycleSurplus,
+    currentCycleFrom,
+    currentCycleTo,
+    nextCycleFrom,
+    nextCycleTo,
+    projectedSalaryIncome,
+    includesProjectedSalary,
     creditAccounts: ctx.creditAccounts.map((acc) => ({
       id: acc.id,
       name: acc.name,
@@ -416,7 +458,7 @@ export async function runSimulation(
     ctx.paydayCycleAnchor,
   );
   /** Sobra do ciclo/mês atual — alinhada ao painel e ao card "Sobra atual". */
-  const baselineSurplus = computeCurrentSurplus(ctx);
+  const baselineSurplus = await computeCurrentSurplus(ctx, userId);
   const { income, expenses } = computeAverageIncomeExpenses(
     ctx.txs,
     ctx.paydayDay,

@@ -1,42 +1,53 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Calculator } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import type {
-  AggregateSimulationImpactDTO,
   CreateSimulationScenarioInput,
+  DashboardCycleSummaryResponse,
+  DetectRecurringBillsResponse,
+  ManagedAccountDTO,
   PersonDTO,
+  RecurringBillDTO,
   SimulationResultDTO,
   SimulationScenarioDTO,
-  SimulatorBaselineDTO,
+  UpdateRecurringBillInput,
   UpdateSimulationScenarioInput,
 } from "@finance/shared";
+import { managedAccountToScenarioDTO, managedAccountLegacyId } from "@finance/shared";
 import { api } from "../lib/api";
 import { AssistantSpotlightButton } from "../components/chat/AssistantSpotlightButton";
+import { CycleNavigator } from "../components/dashboard/CycleNavigator";
+import { FinanceSummaryCard } from "../components/dashboard/FinanceSummaryCard";
 import { PersonSelector, type PersonFilter } from "../components/dashboard/PersonSelector";
-import { BaselineCard } from "../components/simulator/BaselineCard";
 import { SimulationResults } from "../components/simulator/SimulationResults";
-import { ScenarioList, type ScenarioListTab } from "../components/simulator/ScenarioList";
-import { AggregateImpactPanel } from "../components/simulator/AggregateImpactPanel";
+import { AccountsSection, type AccountsTab } from "../components/simulator/AccountsSection";
 import { CompleteScenarioModal } from "../components/simulator/CompleteScenarioModal";
 import { ScenarioEditorModal } from "../components/simulator/ScenarioEditorModal";
 
-function baselineUrl(personId: PersonFilter): string {
-  return personId === "all" ? "/api/simulator/baseline" : `/api/simulator/baseline?personId=${personId}`;
+function summaryUrl(personId: PersonFilter, cycleKey?: string): string {
+  const params = new URLSearchParams();
+  if (personId !== "all") params.set("personId", personId);
+  if (cycleKey) params.set("cycleKey", cycleKey);
+  const qs = params.toString();
+  return qs ? `/api/dashboard/summary?${qs}` : "/api/dashboard/summary";
 }
 
-function scenariosUrl(personId: PersonFilter, tab: ScenarioListTab): string {
+function accountsUrl(personId: PersonFilter, tab: AccountsTab): string {
   const params = new URLSearchParams();
   if (personId !== "all") params.set("personId", personId);
   if (tab === "active") params.set("status", "active");
   else if (tab === "draft") params.set("status", "draft");
-  else params.set("status", "completed_history");
+  else if (tab === "inactive") params.set("status", "inactive,cancelled");
+  else if (tab === "history") params.set("status", "completed_history");
   const qs = params.toString();
-  return qs ? `/api/simulations?${qs}` : "/api/simulations";
+  return qs ? `/api/accounts?${qs}` : "/api/accounts?status=active";
 }
 
-function impactUrl(personId: PersonFilter): string {
-  return personId === "all" ? "/api/simulations/impact" : `/api/simulations/impact?personId=${personId}`;
+function detectRecurringBillsUrl(personId: PersonFilter): string {
+  return personId === "all"
+    ? "/api/recurring-bills/detect"
+    : `/api/recurring-bills/detect?personId=${personId}`;
 }
 
 export function SimulatorPage() {
@@ -44,13 +55,16 @@ export function SimulatorPage() {
   const highlightId = searchParams.get("highlight");
 
   const [personId, setPersonId] = useState<PersonFilter>("all");
-  const [tab, setTab] = useState<ScenarioListTab>("active");
+  const [selectedCycleKey, setSelectedCycleKey] = useState<string | null>(null);
+  const [accountsTab, setAccountsTab] = useState<AccountsTab>("active");
+  const [showManageTabs, setShowManageTabs] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<SimulationResultDTO | null>(null);
   const [detailScenarioId, setDetailScenarioId] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingScenario, setEditingScenario] = useState<SimulationScenarioDTO | null>(null);
   const [completeScenario, setCompleteScenario] = useState<SimulationScenarioDTO | null>(null);
   const [convertScenarioId, setConvertScenarioId] = useState<string | null>(null);
+  const [lastToggleDelta, setLastToggleDelta] = useState<number | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -59,23 +73,36 @@ export function SimulatorPage() {
     queryFn: () => api.get<PersonDTO[]>("/api/people"),
   });
 
-  const baseline = useQuery({
-    queryKey: ["simulator-baseline", personId],
-    queryFn: () => api.get<SimulatorBaselineDTO>(baselineUrl(personId)),
+  const cycleKeyForApi = selectedCycleKey ?? undefined;
+
+  const summary = useQuery({
+    queryKey: ["dashboard-summary", personId, cycleKeyForApi ?? "current"],
+    queryFn: () => api.get<DashboardCycleSummaryResponse>(summaryUrl(personId, cycleKeyForApi)),
   });
 
-  const scenarios = useQuery({
-    queryKey: ["simulations", personId, tab],
-    queryFn: () => api.get<SimulationScenarioDTO[]>(scenariosUrl(personId, tab)),
+  const accounts = useQuery({
+    queryKey: ["accounts", personId, accountsTab],
+    queryFn: async () => {
+      const res = await api.get<{ items: ManagedAccountDTO[] }>(
+        accountsUrl(personId, accountsTab),
+      );
+      return res.items;
+    },
   });
 
-  const impact = useQuery({
-    queryKey: ["simulations-impact", personId],
-    queryFn: () => api.get<AggregateSimulationImpactDTO>(impactUrl(personId)),
-  });
+  useEffect(() => {
+    if (summary.data?.selectedCycleKey && !selectedCycleKey) {
+      setSelectedCycleKey(summary.data.selectedCycleKey);
+    }
+  }, [summary.data?.selectedCycleKey, selectedCycleKey]);
+
+  useEffect(() => {
+    setSelectedCycleKey(null);
+  }, [personId]);
 
   const invalidateAll = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["simulations"] });
+    queryClient.invalidateQueries({ queryKey: ["accounts"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     queryClient.invalidateQueries({ queryKey: ["simulations-impact"] });
   }, [queryClient]);
 
@@ -88,6 +115,15 @@ export function SimulatorPage() {
     },
   });
 
+  const detailScenario = useMemo(() => {
+    if (!detailScenarioId || !accounts.data) return null;
+    const account = accounts.data.find(
+      (item) =>
+        item.legacySimulationScenarioId === detailScenarioId || item.id === detailScenarioId,
+    );
+    return account ? managedAccountToScenarioDTO(account) : null;
+  }, [accounts.data, detailScenarioId]);
+
   const createScenario = useMutation({
     mutationFn: (body: CreateSimulationScenarioInput) =>
       api.post<SimulationScenarioDTO>("/api/simulations", body),
@@ -95,7 +131,7 @@ export function SimulatorPage() {
       invalidateAll();
       setEditorOpen(false);
       setEditingScenario(null);
-      setTab("active");
+      setAccountsTab("active");
       setDetailScenarioId(created.id);
       runScenario.mutate(created.id);
     },
@@ -125,7 +161,8 @@ export function SimulatorPage() {
       setCompleteScenario(null);
       setAnalysisResult(null);
       setDetailScenarioId(null);
-      setTab("history");
+      setAccountsTab("history");
+      setShowManageTabs(true);
     },
   });
 
@@ -141,7 +178,8 @@ export function SimulatorPage() {
       setConvertScenarioId(null);
       setAnalysisResult(null);
       setDetailScenarioId(null);
-      setTab("history");
+      setAccountsTab("history");
+      setShowManageTabs(true);
     },
   });
 
@@ -156,10 +194,26 @@ export function SimulatorPage() {
     onSuccess: invalidateAll,
   });
 
-  const detailScenario = useMemo(
-    () => scenarios.data?.find((s) => s.id === detailScenarioId) ?? null,
-    [scenarios.data, detailScenarioId],
-  );
+  const detectRecurringBills = useMutation({
+    mutationFn: () => api.post<DetectRecurringBillsResponse>(detectRecurringBillsUrl(personId)),
+    onSuccess: invalidateAll,
+  });
+
+  const updateRecurringBill = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpdateRecurringBillInput }) =>
+      api.patch<RecurringBillDTO>(`/api/recurring-bills/${id}`, body),
+    onSuccess: invalidateAll,
+  });
+
+  const deleteRecurringBill = useMutation({
+    mutationFn: (id: string) => api.delete(`/api/recurring-bills/${id}`),
+    onSuccess: invalidateAll,
+  });
+
+  const cancelCommitment = useMutation({
+    mutationFn: (id: string) => api.patch(`/api/commitments/${id}`, { status: "cancelled" }),
+    onSuccess: invalidateAll,
+  });
 
   const handleConvertScenario = useCallback(
     (scenario: SimulationScenarioDTO) => {
@@ -170,14 +224,39 @@ export function SimulatorPage() {
   );
 
   const handleToggleActive = useCallback(
-    (scenario: SimulationScenarioDTO) => {
+    (scenario: SimulationScenarioDTO, cycleImpact?: number) => {
       const nextStatus = scenario.status === "active" ? "draft" : "active";
+      if (cycleImpact && nextStatus === "draft") {
+        setLastToggleDelta(cycleImpact);
+      } else {
+        setLastToggleDelta(null);
+      }
       updateScenario.mutate({ id: scenario.id, body: { status: nextStatus } });
     },
     [updateScenario],
   );
 
+  const handleToggleBill = useCallback(
+    (account: ManagedAccountDTO, cycleImpact: number) => {
+      const activating = account.status !== "active";
+      setLastToggleDelta(activating ? -cycleImpact : cycleImpact);
+      updateRecurringBill.mutate({
+        id: managedAccountLegacyId(account),
+        body: { status: account.status === "active" ? "inactive" : "active" },
+      });
+    },
+    [updateRecurringBill],
+  );
+
   const effectivePersonId = personId === "all" ? undefined : personId;
+  const data = summary.data;
+  const activeCycleKey = data?.selectedCycleKey ?? selectedCycleKey;
+  const selectedCycle = data?.navigableCycles.find((c) => c.cycleKey === activeCycleKey);
+  const displayMetrics = data?.household
+    ? effectivePersonId
+      ? data.household.persons.find((p) => p.personId === effectivePersonId) ?? data.household
+      : data.household
+    : null;
 
   return (
     <div className="space-y-8">
@@ -185,10 +264,10 @@ export function SimulatorPage() {
         <div>
           <div className="flex items-center gap-2">
             <Calculator className="h-6 w-6 text-positive" />
-            <h1 className="font-display text-2xl font-bold text-foreground">Simulador</h1>
+            <h1 className="font-display text-2xl font-bold text-foreground">Compromissos</h1>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Planeje compras, despesas, poupança e investimentos — veja o impacto nos ciclos
+            Ligue ou desligue compromissos e veja o impacto no ciclo
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -200,87 +279,146 @@ export function SimulatorPage() {
                 setPersonId(next);
                 setAnalysisResult(null);
                 setDetailScenarioId(null);
+                setLastToggleDelta(null);
               }}
+            />
+          )}
+          {data && data.navigableCycles.length > 0 && activeCycleKey && (
+            <CycleNavigator
+              cycles={data.navigableCycles}
+              selectedCycleKey={activeCycleKey}
+              onSelectCycle={setSelectedCycleKey}
             />
           )}
           <AssistantSpotlightButton
             label="Analisar com IA"
             message="Quero simular uma compra — quanto posso gastar sem comprometer minhas metas?"
             contextKey="simulator:page"
-            title="Simulador"
+            title="Compromissos"
             personId={effectivePersonId}
           />
         </div>
       </div>
 
-      {baseline.isLoading && (
+      {summary.isLoading && (
         <div className="rounded-2xl border border-app-border/60 bg-app-surface p-8 text-center text-sm text-muted-foreground">
           Carregando sua situação financeira...
         </div>
       )}
 
-      {baseline.isError && (
+      {summary.isError && (
         <div className="rounded-2xl border border-negative/20 bg-negative/10 p-4 text-sm text-negative">
           Não foi possível carregar os dados. Tente novamente.
         </div>
       )}
 
-      {baseline.data && (
-        <>
-          <BaselineCard baseline={baseline.data} />
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <ScenarioList
-              scenarios={scenarios.data ?? []}
-              currencyCode={baseline.data.currencyCode}
-              tab={tab}
-              highlightId={highlightId}
-              onTabChange={setTab}
-              onNew={() => {
-                setEditingScenario(null);
-                setEditorOpen(true);
-              }}
-              onRun={(id) => runScenario.mutate(id)}
-              onEdit={(scenario) => {
-                setEditingScenario(scenario);
-                setEditorOpen(true);
-              }}
-              onToggleActive={handleToggleActive}
-              onComplete={setCompleteScenario}
-              onConvert={handleConvertScenario}
-              onArchive={(id) => archiveScenario.mutate(id)}
-              onDelete={(id) => deleteScenario.mutate(id)}
-            />
-
-            <AggregateImpactPanel impact={impact.data} loading={impact.isLoading} />
-          </div>
-
-          {runScenario.isError && (
-            <div className="rounded-2xl border border-negative/20 bg-negative/10 p-4 text-sm text-negative">
-              Erro ao analisar cenário. Tente novamente.
-            </div>
-          )}
-
-          {analysisResult && detailScenario && baseline.data && (
-            <div className="space-y-3">
-              <p className="text-sm font-medium text-foreground">
-                Análise: <span className="text-brand">{detailScenario.name}</span>
-              </p>
-              <SimulationResults
-                result={analysisResult}
-                baseline={baseline.data}
-                onConvertToGoal={() => handleConvertScenario(detailScenario)}
-                personId={effectivePersonId}
-              />
-            </div>
-          )}
-        </>
+      {data?.household && displayMetrics && (
+        <FinanceSummaryCard
+          title="Impacto no ciclo"
+          metrics={{
+            bankBalance: displayMetrics.bankBalance,
+            closingBalance: displayMetrics.closingBalance,
+            realizedNet: displayMetrics.realizedNet,
+            isFuture: data.household.isFuture,
+            isComplete: data.household.isComplete,
+            pendingBillPayments: displayMetrics.pendingBillPayments,
+          }}
+          currencyCode={data.currencyCode}
+          closingDelta={lastToggleDelta ?? undefined}
+        />
       )}
 
-      {baseline.data && editorOpen && (
+      {data && (
+        <AccountsSection
+          accounts={accounts.data ?? []}
+          people={people.data ?? []}
+          currencyCode={data.currencyCode}
+          personId={effectivePersonId}
+          tab={accountsTab}
+          highlightId={highlightId}
+          loading={accounts.isLoading}
+          detecting={detectRecurringBills.isPending}
+          savingBill={updateRecurringBill.isPending}
+          periodMode="payday"
+          currentCycleFrom={selectedCycle?.from}
+          currentCycleTo={selectedCycle?.to}
+          showManageTabs={showManageTabs}
+          onShowManageTabsChange={setShowManageTabs}
+          onTabChange={setAccountsTab}
+          onDetect={() => detectRecurringBills.mutate()}
+          onNewSimulation={() => {
+            setEditingScenario(null);
+            setEditorOpen(true);
+          }}
+          onUpdateBill={(id, body) => updateRecurringBill.mutate({ id, body })}
+          onDeleteBill={(id) => deleteRecurringBill.mutate(id)}
+          onCancelCommitment={(id) => cancelCommitment.mutate(id)}
+          onRunScenario={(id) => runScenario.mutate(id)}
+          onEditScenario={(scenario) => {
+            setEditingScenario(scenario);
+            setEditorOpen(true);
+          }}
+          onToggleScenarioActive={handleToggleActive}
+          onToggleBill={handleToggleBill}
+          onCompleteScenario={setCompleteScenario}
+          onConvertScenario={handleConvertScenario}
+          onArchiveScenario={(id) => archiveScenario.mutate(id)}
+          onDeleteScenario={(id) => deleteScenario.mutate(id)}
+        />
+      )}
+
+      {runScenario.isError && (
+        <div className="rounded-2xl border border-negative/20 bg-negative/10 p-4 text-sm text-negative">
+          Erro ao analisar cenário. Tente novamente.
+        </div>
+      )}
+
+      {analysisResult && detailScenario && data?.household && (
+        <div className="space-y-3">
+          <p className="text-sm font-medium text-foreground">
+            Análise: <span className="text-brand">{detailScenario.name}</span>
+          </p>
+          <SimulationResults
+            result={analysisResult}
+            baseline={{
+              currencyCode: data.currencyCode,
+              periodMode: "payday",
+              periodLabel: selectedCycle?.label ?? "",
+              surplusLabel: "Média",
+              averageSurplus: 0,
+              averageIncome: 0,
+              averageExpenses: 0,
+              bankBalance: displayMetrics?.bankBalance ?? 0,
+              monthlyContribution: 0,
+              currentSurplus: displayMetrics?.closingBalance ?? 0,
+              includesProjectedSalary: true,
+              creditAccounts: [],
+              hasAccounts: data.accounts.length > 0,
+            }}
+            onConvertToGoal={() => handleConvertScenario(detailScenario)}
+            personId={effectivePersonId}
+          />
+        </div>
+      )}
+
+      {data && editorOpen && (
         <ScenarioEditorModal
           open={editorOpen}
-          baseline={baseline.data}
+          baseline={{
+            currencyCode: data.currencyCode,
+            periodMode: "payday",
+            periodLabel: selectedCycle?.label ?? "",
+            surplusLabel: "Média",
+            averageSurplus: 0,
+            averageIncome: 0,
+            averageExpenses: 0,
+            bankBalance: displayMetrics?.bankBalance ?? 0,
+            monthlyContribution: 0,
+            currentSurplus: displayMetrics?.closingBalance ?? 0,
+            includesProjectedSalary: true,
+            creditAccounts: [],
+            hasAccounts: data.accounts.length > 0,
+          }}
           editing={editingScenario}
           saving={createScenario.isPending || updateScenario.isPending}
           onClose={() => {
@@ -295,7 +433,7 @@ export function SimulatorPage() {
       <CompleteScenarioModal
         open={!!completeScenario}
         scenario={completeScenario}
-        currencyCode={baseline.data?.currencyCode ?? "BRL"}
+        currencyCode={data?.currencyCode ?? "BRL"}
         saving={completeScenarioMutation.isPending}
         onClose={() => setCompleteScenario(null)}
         onConfirm={(params) => {

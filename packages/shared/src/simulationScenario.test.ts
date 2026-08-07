@@ -85,11 +85,44 @@ describe("computeAggregateCycleImpact", () => {
       cycles: [{ cycleKey: "2026-06", from: "2026-06-01", to: "2026-06-30" }],
       today: "2026-06-15",
       baselineSurplus: 1000,
+      bankBalance: 1000,
     });
 
     assert.equal(result.cycleImpacts[0]!.totalInPeriod, 150);
     assert.equal(result.monthlyPoints[0]!.scenarioSurplus, 850);
+    assert.equal(result.scenarioBankBalance, 850);
     assert.equal(result.scenarioBreakdown[0]!.length, 2);
+  });
+
+  it("does not reduce cycle surplus for credit installments", () => {
+    const scenarios = [
+      {
+        id: "c",
+        name: "TV parcelada",
+        type: "installments" as const,
+        payload: {
+          type: "installments" as const,
+          amount: 6000,
+          purchaseDate: "2026-06-01",
+          totalInstallments: 12,
+          firstDueDate: "2026-06-01",
+          paymentMethodDetail: "credit_installments" as const,
+          creditAccountId: "card1",
+        },
+      },
+    ];
+
+    const result = computeAggregateCycleImpact({
+      scenarios,
+      cycles: [{ cycleKey: "2026-06", from: "2026-06-01", to: "2026-06-30" }],
+      today: "2026-06-15",
+      baselineSurplus: 166,
+      bankBalance: 6116,
+    });
+
+    assert.equal(result.cycleImpacts[0]!.totalInPeriod, 500);
+    assert.equal(result.monthlyPoints[0]!.scenarioSurplus, 166);
+    assert.equal(result.scenarioBankBalance, 6116);
   });
 });
 

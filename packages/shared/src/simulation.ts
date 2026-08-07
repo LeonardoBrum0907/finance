@@ -298,12 +298,12 @@ export function computePaydayCycleImpacts(
   }));
 }
 
-/** Ciclo atual + N ciclos futuros para projeção de simulação. */
+/** Ciclo atual + N−1 ciclos futuros para projeção de simulação (ex.: 2 = atual + próximo). */
 export function buildSimulationPaydayCycles(
   currentCycle: PaydayCycleInput,
   paydayDay: number,
   anchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
-  futureCount = 3,
+  futureCount = 2,
 ): PaydayCycleInput[] {
   const cycles: PaydayCycleInput[] = [currentCycle];
   let ref = new Date(`${currentCycle.to}T12:00:00.000Z`);
@@ -348,6 +348,15 @@ export function flattenSimulatedRows(purchases: SimulatedPurchase[]): FlatSimula
     });
   }
   return rows.sort((a, b) => b.dueDate.localeCompare(a.dueDate));
+}
+
+/** PIX e débito saem do fluxo à vista; crédito entra na fatura. */
+export function isCashLikeSimulatedPayment(method: SimulatedPaymentMethod): boolean {
+  return method === "pix" || method === "debit";
+}
+
+export function filterCashSimulatedPurchases(purchases: SimulatedPurchase[]): SimulatedPurchase[] {
+  return purchases.filter((p) => isCashLikeSimulatedPayment(p.paymentMethod));
 }
 
 export function paymentMethodLabel(method: SimulatedPaymentMethod): string {

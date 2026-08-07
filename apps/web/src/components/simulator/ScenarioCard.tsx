@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import {
   Archive,
   CheckCircle2,
@@ -29,6 +30,7 @@ interface Props {
   scenario: SimulationScenarioDTO;
   currencyCode: string;
   highlighted?: boolean;
+  kindBadge?: ReactNode;
   onRun: (id: string) => void;
   onEdit: (scenario: SimulationScenarioDTO) => void;
   onToggleActive: (scenario: SimulationScenarioDTO) => void;
@@ -42,6 +44,7 @@ export function ScenarioCard({
   scenario,
   currencyCode,
   highlighted,
+  kindBadge,
   onRun,
   onEdit,
   onToggleActive,
@@ -90,6 +93,7 @@ export function ScenarioCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
+            {kindBadge}
             <p className="truncate font-display text-sm font-semibold text-foreground">
               {scenario.name}
             </p>
