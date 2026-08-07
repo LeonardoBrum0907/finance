@@ -30,12 +30,23 @@ import {
 import { loadInvestmentData } from "./investments.js";
 import { loadUserSettings, resolvePaydayCycle, resolvePeriodMode } from "../services/userSettings.js";
 import { buildHouseholdArena } from "../services/finance/householdComparison.js";
-import { sumPendingInstallmentsInRange } from "../services/finance/commitments.js";
+import { sumPendingManagedEntriesInRange } from "../services/finance/managedAccounts.js";
+import { buildDashboardCycleForecasts } from "../services/finance/cycleForecasts.js";
+import { buildDashboardCycleSummary } from "../services/finance/householdCycleSummary.js";
 
 const MIN_PAYDAY_CYCLES_FETCH = 12;
 
 export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
+
+  app.get("/api/dashboard/summary", async (request, reply) => {
+    const query = request.query as { personId?: string; cycleKey?: string };
+    const summary = await buildDashboardCycleSummary(request.user!.sub, {
+      personId: query.personId?.trim() || undefined,
+      cycleKey: query.cycleKey?.trim() || undefined,
+    });
+    return reply.send(summary);
+  });
 
   app.get("/api/dashboard", async (request, reply) => {
     const query = request.query as {
@@ -237,10 +248,11 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     if (paydayDay !== null) {
       const currentMeta = getPaydayCycleRange(paydayDay, new Date(), paydayCycleAnchor);
       if (!currentMeta.isComplete) {
-        manualCommittedForCurrent = await sumPendingInstallmentsInRange(
+        manualCommittedForCurrent = await sumPendingManagedEntriesInRange(
           userId,
-          currentMeta.from,
-          currentMeta.to,
+          new Date(`${currentMeta.from}T00:00:00.000Z`),
+          new Date(`${currentMeta.to}T23:59:59.999Z`),
+          personId,
         );
       }
       if (focusCycleKey) {
@@ -250,20 +262,22 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
           paydayCycleAnchor,
         );
         if (!focusMeta.isComplete) {
-          manualCommittedForFocus = await sumPendingInstallmentsInRange(
+          manualCommittedForFocus = await sumPendingManagedEntriesInRange(
             userId,
-            focusMeta.from,
-            focusMeta.to,
+            new Date(`${focusMeta.from}T00:00:00.000Z`),
+            new Date(`${focusMeta.to}T23:59:59.999Z`),
+            personId,
           );
         }
       }
     } else if (periods.currentRange.from && periods.currentRange.to) {
       const today = new Date().toISOString().slice(0, 10);
       if (today >= periods.currentRange.from && today <= periods.currentRange.to) {
-        manualCommittedForFocus = await sumPendingInstallmentsInRange(
+        manualCommittedForFocus = await sumPendingManagedEntriesInRange(
           userId,
-          today,
-          periods.currentRange.to,
+          new Date(`${today}T00:00:00.000Z`),
+          new Date(`${periods.currentRange.to}T23:59:59.999Z`),
+          personId,
         );
       }
     }
@@ -430,6 +444,17 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     const investmentsIncluded = settings.includeInvestmentsInNetWorth;
     const netWorthInvestmentContribution = investmentsIncluded ? investmentBalance : 0;
 
+    const cycleForecasts =
+      paydayDay !== null && currentCycle
+        ? await buildDashboardCycleForecasts(
+            financialTransactions,
+            userId,
+            paydayDay,
+            paydayCycleAnchor,
+            personId,
+          )
+        : null;
+
     return reply.send({
       totalBalance: totalBalance + netWorthInvestmentContribution,
       netWorth: {
@@ -446,6 +471,8 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       paydayCycleAnchor,
       paydayConfigured: isPaydayDayConfigured(paydayDay),
       currentCycle,
+      currentCycleForecast: cycleForecasts?.current ?? null,
+      nextCycleForecast: cycleForecasts?.next ?? null,
       recentCycles,
       perPerson,
       accounts,

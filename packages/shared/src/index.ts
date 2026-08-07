@@ -1,4 +1,6 @@
 import { z } from "zod";
+import type { CycleForecastBlock } from "./cycleForecast";
+import type { HouseholdCycleSummary, NavigableCycle } from "./householdCycleSummary";
 import type { TransactionCommitmentSummary } from "./commitments";
 import type { DashboardCategoryGroup } from "./categoryGroups";
 import type { InvestmentAllocationPoint } from "./investments";
@@ -32,6 +34,7 @@ export {
   countsTowardCashFlow,
   isSamePersonTransfer,
   descriptionMatchesPersonName,
+  isCreditCardBillPayment,
 } from "./transactions";
 export {
   COMMITMENT_STATUSES,
@@ -48,6 +51,61 @@ export {
   type UpdateCommitmentInput,
 } from "./commitments";
 export {
+  RECURRING_BILL_STATUSES,
+  RECURRING_BILL_SOURCES,
+  OCCURRENCE_STATUSES,
+  updateRecurringBillSchema,
+  normalizeBillSignature,
+  isRecurringBillCandidateTransaction,
+  detectRecurringPatterns,
+  recurringBillToSimulatedPurchase,
+  recurringBillsToSimulatedPurchases,
+  amountsMatch,
+  amountTolerance,
+  countMissedRecurringBillingCycles,
+  extractPayeeFromDescription,
+  shouldDeactivateStaleRecurringBill,
+  STALE_RECURRING_BILL_MISSED_CYCLES,
+  computeDueDateForCycle,
+  buildFutureOccurrenceDates,
+  recurringBillStatusLabel,
+  occurrenceStatusLabel,
+  type RecurringBillStatus,
+  type RecurringBillSource,
+  type OccurrenceStatus,
+  type RecurringBillOccurrenceDTO,
+  type RecurringBillDTO,
+  type DetectRecurringBillsResponse,
+  type UpdateRecurringBillInput,
+  type RecurringPatternTransaction,
+  type RecurringPatternCandidate,
+  type RecurringBillForSimulation,
+} from "./recurringBills";
+export {
+  MANAGED_ACCOUNT_KINDS,
+  MANAGED_ACCOUNT_SOURCES,
+  MANAGED_ACCOUNT_STATUSES,
+  MANAGED_ENTRY_STATUSES,
+  managedAccountKindLabel,
+  managedAccountSimulationTypeLabel,
+  managedAccountDisplayLabel,
+  managedAccountMonthlyContribution,
+  managedAccountToSimulatedPurchase,
+  managedAccountsToSimulatedPurchases,
+  sumActiveManagedAccountsMonthlyTotal,
+  managedAccountLegacyId,
+  managedAccountToScenarioDTO,
+  managedAccountToRecurringBillDTO,
+  managedAccountToCommitmentDTO,
+  type ManagedAccountKind,
+  type ManagedAccountSource,
+  type ManagedAccountStatus,
+  type ManagedEntryStatus,
+  type ManagedAccountEntryDTO,
+  type ManagedAccountDTO,
+  type ManagedAccountForSimulation,
+} from "./managedAccounts";
+export {
   SIMULATED_PAYMENT_METHODS,
   simulatedPurchaseInputSchema,
   buildInstallmentSchedule,
@@ -55,6 +113,7 @@ export {
   normalizeSimulatedPurchase,
   computeSimulationCycleImpact,
   computePaydayCycleImpacts,
+  filterCashSimulatedPurchases,
   buildSimulationPaydayCycles,
   computeCreditBillImpacts,
   computeSimulationStatDelta,
@@ -116,9 +175,16 @@ export {
   resolveBillForChargeDate,
   toDate,
   toDateKey,
+  buildPendingBillPayments,
+  buildCreditBillSnapshot,
+  isCreditBillAlreadyPaid,
   type BillBucket,
   type BillAssignment,
   type CreditBillSimulatedCharge,
+  type CreditBillSnapshot,
+  type CreditBillPaymentItem,
+  type PendingBillPaymentsResult,
+  type CheckingPaymentLike,
 } from "./creditBill";
 export {
   PERIOD_MODES,
@@ -150,6 +216,11 @@ export {
   formatPaydayCycleLabel,
   formatPaydayCycleShortLabel,
   classifyIncome,
+  estimateUpcomingCycleSalary,
+  estimateSalaryForCycle,
+  resolveCycleSalaryProjection,
+  type CycleSalaryProjectionMeta,
+  type CycleSalaryProjection,
   type PeriodMode,
   type PaydayCycleAnchor,
   type AppTheme,
@@ -157,7 +228,32 @@ export {
   type UserSettingsDTO,
   type PaydayCycleRange,
   type IncomeBreakdown,
+  type TransactionLike,
 } from "./payday";
+export {
+  buildCycleForecastBlock,
+  buildCycleForecastPair,
+  buildPendingExpensesFromPurchases,
+  getNextPaydayCycle,
+  resolveCurrentPaydayCycle,
+  splitPurchaseImpactsByKind,
+  summarizeForecastCashFlow,
+  summarizeForecastTransactions,
+  type CycleForecastBlock,
+  type CycleForecastExpenseBreakdown,
+  type CycleForecastExpenseItem,
+  type CycleForecastPair,
+  type CycleForecastPendingInput,
+} from "./cycleForecast";
+export {
+  aggregateHouseholdCycleSummary,
+  buildNavigableCycles,
+  cycleForecastToPersonSummary,
+  resolveSelectedCycleKey,
+  type HouseholdCycleSummary,
+  type NavigableCycle,
+  type PersonCycleSummary,
+} from "./householdCycleSummary";
 export {
   translateInvestmentType,
   translateInvestmentSubtype,
@@ -516,12 +612,18 @@ export interface DashboardCurrentCycle {
   committedExpensesManual?: number;
   /** Parcelas de cartão/banco com data futura no ciclo. */
   committedExpensesBank?: number;
-  /** Saldo realizado: receitas − despesas já ocorridas. */
+  /** Saldo realizado: receitas − despesas já ocorridas (sem salário previsto). */
   net: number;
-  /** Saldo disponível: net − committedExpenses. */
+  /** Saldo realizado explícito (igual a net após separação). */
+  realizedNet: number;
+  realizedIncome: number;
+  realizedExpenses: number;
+  /** Saldo de fechamento: realizedNet + salário previsto − contas pendentes. */
   availableNet: number;
   salaryIncome: number;
   extraIncome: number;
+  /** Salário estimado ainda não recebido (âncora end, ciclo em andamento). */
+  projectedSalaryIncome?: number;
 }
 
 export interface DashboardCategoryPoint {
@@ -581,6 +683,9 @@ export interface DashboardSummary {
   paydayCycleAnchor: PaydayCycleAnchor;
   paydayConfigured: boolean;
   currentCycle: DashboardCurrentCycle | null;
+  /** Projeção do ciclo atual e do próximo ciclo (payday). */
+  currentCycleForecast: CycleForecastBlock | null;
+  nextCycleForecast: CycleForecastBlock | null;
   /** Últimos ciclos (mais recente por último), com detalhamento de renda. */
   recentCycles: DashboardCurrentCycle[] | null;
   perPerson: {
@@ -596,6 +701,20 @@ export interface DashboardSummary {
   previousCategories: DashboardCategoryPoint[];
   growthMetrics: DashboardGrowthMetrics;
   insights: string[];
+}
+
+/** Resposta enxuta do painel focado em ciclo. */
+export interface DashboardCycleSummaryResponse {
+  currencyCode: string;
+  paydayDay: number | null;
+  paydayCycleAnchor: PaydayCycleAnchor;
+  paydayConfigured: boolean;
+  /** Todas as pessoas compartilham o mesmo dia de pagamento. */
+  householdPaydayAligned: boolean;
+  selectedCycleKey: string;
+  navigableCycles: NavigableCycle[];
+  household: HouseholdCycleSummary | null;
+  accounts: (AccountDTO & { personName: string })[];
 }
 
 export type TransactionTypeFilter = "all" | "inflow" | "outflow";
@@ -972,8 +1091,19 @@ export interface SimulatorBaselineDTO {
   averageExpenses: number;
   bankBalance: number;
   monthlyContribution: number;
-  /** Sobra real do ciclo/período atual (net ou availableNet). */
+  /** Sobra de fechamento do ciclo atual (closing balance). */
   currentSurplus: number;
+  /** Sobra prevista do próximo ciclo. */
+  nextCycleSurplus?: number;
+  /** Intervalo do ciclo atual (payday). */
+  currentCycleFrom?: string;
+  currentCycleTo?: string;
+  /** Intervalo do próximo ciclo (payday). */
+  nextCycleFrom?: string;
+  nextCycleTo?: string;
+  /** Salário estimado incluído em currentSurplus (âncora end). */
+  projectedSalaryIncome?: number;
+  includesProjectedSalary: boolean;
   creditAccounts: SimulatorCreditAccountDTO[];
   hasAccounts: boolean;
 }

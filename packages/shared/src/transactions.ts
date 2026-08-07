@@ -126,7 +126,7 @@ export function isSamePersonTransfer(
   return descriptionMatchesPersonName(description, personName);
 }
 
-function isCreditCardBillPayment(
+export function isCreditCardBillPayment(
   category: string | null | undefined,
   description: string | null | undefined,
 ): boolean {

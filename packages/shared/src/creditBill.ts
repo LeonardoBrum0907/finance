@@ -1,3 +1,5 @@
+import { isCreditAccount, isCreditCardBillPayment } from "./transactions.js";
+
 /** Fechamento costuma ocorrer alguns dias antes do vencimento. */
 export const CLOSE_DAYS_BEFORE_DUE = 7;
 
@@ -182,6 +184,199 @@ export interface CreditBillPurchaseLike {
   paymentMethod: string;
   creditAccountId?: string;
   installments: { dueDate: string; amount: number }[];
+}
+
+/** Snapshot de fatura para projeção de pagamento no ciclo (caixa no vencimento). */
+export interface CreditBillSnapshot {
+  accountId: string;
+  accountName: string;
+  closedBillAmount: number | null;
+  closedBillDueDate: string | null;
+  openBillAmount: number | null;
+  openBillDueDate: string | null;
+}
+
+export interface CreditBillPaymentItem {
+  id: string;
+  title: string;
+  dueDate: string;
+  amount: number;
+  kind: "creditBills";
+}
+
+export interface PendingBillPaymentsResult {
+  total: number;
+  items: CreditBillPaymentItem[];
+}
+
+interface BillPaymentCandidate {
+  id: string;
+  title: string;
+  dueDate: string;
+  amount: number;
+}
+
+export interface CheckingPaymentLike {
+  date: Date | string;
+  amount: number;
+  category?: string | null;
+  description?: string | null;
+  accountType?: string | null;
+}
+
+function isDateInCycle(dateKey: string, from: string, to: string): boolean {
+  return dateKey >= from && dateKey <= to;
+}
+
+function normalizeDueDateKey(value: string | Date | null | undefined): string | null {
+  if (value == null) return null;
+  if (typeof value === "string") return value.slice(0, 10);
+  return toDateKey(value);
+}
+
+/** Pagamento de fatura já detectado na conta corrente. */
+export function isCreditBillAlreadyPaid(
+  billAmount: number,
+  dueDateKey: string,
+  checkingPayments: CheckingPaymentLike[],
+): boolean {
+  if (billAmount <= 0) return true;
+
+  for (const tx of checkingPayments) {
+    if (isCreditAccount(tx.accountType)) continue;
+    if (!isCreditCardBillPayment(tx.category, tx.description)) continue;
+
+    const dateKey =
+      typeof tx.date === "string" ? tx.date.slice(0, 10) : toDateKey(tx.date);
+    // Pagamento costuma cair no dia do vencimento ou poucos dias antes/depois.
+    const dueMs = new Date(`${dueDateKey}T12:00:00.000Z`).getTime();
+    const txMs = new Date(`${dateKey}T12:00:00.000Z`).getTime();
+    const daysDiff = Math.abs(txMs - dueMs) / 86_400_000;
+    if (daysDiff > 14) continue;
+
+    const paid = Math.abs(tx.amount);
+    if (paid >= billAmount * 0.85) return true;
+  }
+
+  return false;
+}
+
+function collectBillCandidates(snapshot: CreditBillSnapshot): BillPaymentCandidate[] {
+  const candidates: BillPaymentCandidate[] = [];
+
+  if (
+    snapshot.closedBillAmount != null &&
+    snapshot.closedBillAmount > 0 &&
+    snapshot.closedBillDueDate
+  ) {
+    candidates.push({
+      id: `${snapshot.accountId}:closed`,
+      title: `Fatura ${snapshot.accountName}`,
+      dueDate: snapshot.closedBillDueDate,
+      amount: snapshot.closedBillAmount,
+    });
+  }
+
+  if (
+    snapshot.openBillAmount != null &&
+    snapshot.openBillAmount > 0 &&
+    snapshot.openBillDueDate
+  ) {
+    const duplicateClosed =
+      snapshot.closedBillAmount != null &&
+      snapshot.closedBillDueDate === snapshot.openBillDueDate &&
+      Math.abs(snapshot.closedBillAmount - snapshot.openBillAmount) < 0.01;
+
+    if (!duplicateClosed) {
+      candidates.push({
+        id: `${snapshot.accountId}:open`,
+        title: `Fatura aberta ${snapshot.accountName}`,
+        dueDate: snapshot.openBillDueDate,
+        amount: snapshot.openBillAmount,
+      });
+    }
+  }
+
+  return candidates;
+}
+
+/**
+ * Projeta saídas de caixa por pagamento de fatura com vencimento no ciclo.
+ * Não duplica compras no cartão — só o pagamento agregado na corrente.
+ */
+export function buildPendingBillPayments(
+  snapshots: CreditBillSnapshot[],
+  cycle: { from: string; to: string },
+  _today: string,
+  checkingPayments: CheckingPaymentLike[],
+): PendingBillPaymentsResult {
+  const items: CreditBillPaymentItem[] = [];
+
+  for (const snapshot of snapshots) {
+    for (const candidate of collectBillCandidates(snapshot)) {
+      if (!isDateInCycle(candidate.dueDate, cycle.from, cycle.to)) continue;
+      if (isCreditBillAlreadyPaid(candidate.amount, candidate.dueDate, checkingPayments)) {
+        continue;
+      }
+      items.push({
+        id: candidate.id,
+        title: candidate.title,
+        dueDate: candidate.dueDate,
+        amount: roundMoney(candidate.amount),
+        kind: "creditBills",
+      });
+    }
+  }
+
+  const total = roundMoney(items.reduce((sum, item) => sum + item.amount, 0));
+  return { total, items };
+}
+
+/** Monta snapshot a partir de saldo Pluggy e fatura fechada (Bills API ou fallback). */
+export function buildCreditBillSnapshot(params: {
+  accountId: string;
+  accountName: string;
+  balance: number;
+  balanceDueDate: Date | string | null;
+  closedBill?: { totalAmount: number; dueDate: Date | string } | null;
+}): CreditBillSnapshot {
+  const openBillAmount =
+    Math.abs(params.balance) > 0 ? roundMoney(Math.abs(params.balance)) : null;
+  const openBillDueDate = params.balanceDueDate
+    ? normalizeDueDateKey(resolveNextDueDate(toDate(params.balanceDueDate), new Date()))
+    : null;
+
+  if (!params.closedBill) {
+    return {
+      accountId: params.accountId,
+      accountName: params.accountName,
+      closedBillAmount: openBillAmount,
+      closedBillDueDate: params.balanceDueDate
+        ? normalizeDueDateKey(params.balanceDueDate)
+        : null,
+      openBillAmount: null,
+      openBillDueDate: null,
+    };
+  }
+
+  const closedDue = normalizeDueDateKey(params.closedBill.dueDate);
+  const openDueKey = openBillDueDate;
+
+  const sameBill =
+    openBillAmount != null &&
+    closedDue != null &&
+    openDueKey != null &&
+    closedDue === openDueKey &&
+    Math.abs(openBillAmount - params.closedBill.totalAmount) < 0.01;
+
+  return {
+    accountId: params.accountId,
+    accountName: params.accountName,
+    closedBillAmount: roundMoney(params.closedBill.totalAmount),
+    closedBillDueDate: closedDue,
+    openBillAmount: sameBill ? null : openBillAmount,
+    openBillDueDate: sameBill ? null : openDueKey,
+  };
 }
 
 export function computeCreditBillImpacts(
