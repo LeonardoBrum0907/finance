@@ -1,0 +1,12 @@
+{
+  "name": "finance",
+  "install": "pnpm install && pnpm db:generate",
+  "start": "bash scripts/ensure-db.sh",
+  "terminals": [
+    {
+      "name": "dev",
+      "command": "test -f apps/api/.env || cp apps/api/.env.example apps/api/.env; pnpm exec prisma migrate deploy --schema apps/api/prisma/schema.prisma; pnpm dev",
+      "description": "API (3333) + Web (5173)"
+    }
+  ]
+}

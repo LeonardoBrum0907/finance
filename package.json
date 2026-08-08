@@ -11,7 +11,7 @@
     "db:migrate": "pnpm --filter @finance/api db:migrate",
     "db:generate": "pnpm --filter @finance/api db:generate",
     "db:studio": "pnpm --filter @finance/api db:studio",
-    "db:up": "docker compose up -d db",
+    "db:up": "bash scripts/ensure-db.sh",
     "db:down": "docker compose down"
   },
   "engines": {
