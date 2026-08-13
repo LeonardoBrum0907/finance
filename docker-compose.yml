@@ -4,11 +4,11 @@ services:
     container_name: finance-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: finance
-      POSTGRES_PASSWORD: finance
-      POSTGRES_DB: finance
+      POSTGRES_USER: ${POSTGRES_USER:-finance}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finance}
+      POSTGRES_DB: ${POSTGRES_DB:-finance}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - finance-db-data:/var/lib/postgresql/data
     healthcheck:
@@ -16,6 +16,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    profiles:
+      - with-db
 
   api:
     build:
@@ -26,21 +28,36 @@ services:
     depends_on:
       db:
         condition: service_healthy
+        required: false
     environment:
-      DATABASE_URL: postgresql://finance:finance@db:5432/finance?schema=public
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      # Use host da rede Docker (`db`) se subir com --profile with-db,
+      # ou aponte DATABASE_URL para o Postgres da VPS.
+      DATABASE_URL: ${DATABASE_URL:-postgresql://finance:finance@db:5432/finance?schema=public}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       PLUGGY_CLIENT_ID: ${PLUGGY_CLIENT_ID:-}
       PLUGGY_CLIENT_SECRET: ${PLUGGY_CLIENT_SECRET:-}
       AI_PROVIDER: ${AI_PROVIDER:-openai}
       AI_MODEL: ${AI_MODEL:-}
+      AI_FALLBACK_PROVIDER: ${AI_FALLBACK_PROVIDER:-}
+      AI_FALLBACK_MODEL: ${AI_FALLBACK_MODEL:-}
+      AI_MONTHLY_TOKEN_BUDGET: ${AI_MONTHLY_TOKEN_BUDGET:-300000}
+      AI_MAX_STEPS: ${AI_MAX_STEPS:-6}
+      AI_MAX_TOOL_CALLS: ${AI_MAX_TOOL_CALLS:-6}
+      AI_REQUEST_TIMEOUT_MS: ${AI_REQUEST_TIMEOUT_MS:-90000}
+      AI_REGENERATE_COOLDOWN_MS: ${AI_REGENERATE_COOLDOWN_MS:-5000}
+      AI_PROMPT_CACHE_ENABLED: ${AI_PROMPT_CACHE_ENABLED:-true}
+      AI_PROMPT_CACHE_KEY_PREFIX: ${AI_PROMPT_CACHE_KEY_PREFIX:-finance}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
-      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:5173}
+      # Origem pública do frontend (CORS + cookie). Ex: https://financas.seudominio.com
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:8080}
       PORT: 3333
-      NODE_ENV: production
+      NODE_ENV: ${NODE_ENV:-production}
     ports:
-      - "3333:3333"
+      - "${API_PORT:-3333}:3333"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     profiles:
       - full
 
@@ -48,14 +65,12 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-      args:
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:3333}
     container_name: finance-web
     restart: unless-stopped
     depends_on:
       - api
     ports:
-      - "8080:80"
+      - "${WEB_PORT:-8080}:80"
     profiles:
       - full
 
