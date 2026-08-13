@@ -11,3 +11,4 @@ coverage/
 apps/api/prisma/*.db
 .pnpm-store/
 *.tsbuildinfo
+graphify-out/
