@@ -1,0 +1,21 @@
+{
+  "name": "finance",
+  "install": "pnpm install && pnpm db:generate",
+  "terminals": [
+    {
+      "name": "api",
+      "command": "cd apps/api && ./node_modules/.bin/tsx watch src/server.ts",
+      "description": "API Fastify na porta 3333"
+    },
+    {
+      "name": "web",
+      "command": "cd apps/web && ./node_modules/.bin/vite --host --port 5173 --strictPort",
+      "description": "Vite na porta 5173 (0.0.0.0)"
+    }
+  ],
+  "ports": [
+    { "name": "web", "port": 5173 },
+    { "name": "web-5174", "port": 5174 },
+    { "name": "api", "port": 3333 }
+  ]
+}
