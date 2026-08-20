@@ -86,27 +86,42 @@ Veja `apps/api/.env.example`. Principais:
 
 ## Deploy em VPS (Docker Compose)
 
-O `docker-compose.yml` tem os serviços `db`, `api` e `web`. Os serviços de app ficam
-no profile `full`.
+Há dois caminhos. Nos dois, o nginx do `web` serve o frontend e faz proxy de `/api`
+para a API (mesma origem → cookie de sessão funciona).
+
+### 1) Postgres na própria VPS (recomendado se você já sobe o banco à parte)
 
 ```bash
-# Na VPS, com Docker instalado e o repositório clonado:
-export JWT_SECRET="um-valor-aleatorio-bem-longo"
-export PLUGGY_CLIENT_ID="..."
-export PLUGGY_CLIENT_SECRET="..."
-export AI_PROVIDER="openai"
-export OPENAI_API_KEY="..."
+git clone https://github.com/LeonardoBrum0907/finance.git
+cd finance
+cp .env.deploy.example .env
+# edite .env: JWT_SECRET, DATABASE_URL, WEB_ORIGIN, Pluggy, chaves de IA
 
-# Sobe tudo (db + api + web). O nginx do web faz proxy de /api para a api.
+# Postgres acessível a partir dos containers (ex.: na VPS em 5432):
+# DATABASE_URL=postgresql://finance:SENHA@host.docker.internal:5432/finance?schema=public
+
 docker compose --profile full up -d --build
 ```
 
-- Web: porta `8080` (nginx serve o frontend e faz proxy de `/api` para a API).
-- A API aplica as migrações automaticamente no start (`prisma migrate deploy`).
+Garanta que o Postgres aceite conexões da bridge do Docker (e que o user/db existam).
 
-> Observação sobre cookies: em produção o cookie de sessão usa `secure: true`,
-> portanto sirva a aplicação atrás de HTTPS (ex.: um proxy reverso com TLS na frente
-> do nginx). Para um teste rápido em HTTP, rode a API com `NODE_ENV=development`.
+### 2) Postgres + app tudo no Compose
+
+```bash
+cp .env.deploy.example .env
+# em .env use DATABASE_URL com host `db` e a mesma senha do POSTGRES_PASSWORD
+docker compose --profile with-db --profile full up -d --build
+```
+
+- Web: porta `8080` (ou `WEB_PORT`)
+- A API aplica migrações no start (`prisma migrate deploy`)
+- Volume `finance-db-data` persiste o banco na opção 2
+
+> Cookies: em `NODE_ENV=production` o cookie usa `secure: true` → precisa de **HTTPS**
+> (Caddy/nginx/Cloudflare na frente). Para teste rápido em HTTP puro:
+> `NODE_ENV=development` no `.env`.
+
+Webhook Pluggy em produção: `https://SEU_DOMINIO/api/pluggy/webhook`.
 
 ## Estrutura
 

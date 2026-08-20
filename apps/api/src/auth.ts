@@ -2,6 +2,7 @@ import argon2 from "argon2";
 import jwt from "jsonwebtoken";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { env } from "./env.js";
+import { prisma } from "./prisma.js";
 
 const COOKIE_NAME = "finance_token";
 const TOKEN_TTL = "7d";
@@ -55,7 +56,16 @@ export async function authenticate(
   }
   try {
     const payload = jwt.verify(token, env.jwtSecret) as TokenPayload;
-    request.user = payload;
+    const user = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { id: true, email: true, name: true },
+    });
+    if (!user) {
+      clearAuthCookie(reply);
+      reply.code(401).send({ error: "Sessão inválida. Entre novamente." });
+      return;
+    }
+    request.user = { sub: user.id, email: user.email, name: user.name };
   } catch {
     reply.code(401).send({ error: "Sessão inválida" });
   }

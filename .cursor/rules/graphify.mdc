@@ -1,0 +1,10 @@
+---
+description: Prefer Graphify graph tools when graphify-out/graph.json exists
+alwaysApply: true
+---
+
+# Graphify
+
+If `graphify-out/graph.json` exists, prefer Graphify MCP tools (`query_graph`, `get_node`, `get_neighbors`, `shortest_path`) over broad grep/find for architecture, call graphs, and "what connects X to Y".
+
+If the graph is missing, tell the user to install Graphify (`pip install "graphifyy[mcp]"`) and run `/graphify .` (or `graphify .`) in the repo root, then reload Cursor MCP.
