@@ -1,6 +1,23 @@
 #!/usr/bin/env bash
 # Garante Postgres local para desenvolvimento: Docker (profile with-db) ou cluster nativo.
+# Se DATABASE_URL aponta para um host remoto, não tenta subir Postgres nesta VM.
 set -euo pipefail
+
+if [[ -n "${DATABASE_URL:-}" ]]; then
+  remote_host="$(python3 -c "
+import os, urllib.parse
+u = urllib.parse.urlparse(os.environ['DATABASE_URL'])
+print(u.hostname or '')
+")"
+  case "$remote_host" in
+    ""|localhost|127.0.0.1|db|host.docker.internal)
+      ;;
+    *)
+      echo "DATABASE_URL remoto ($remote_host); Postgres local não necessário."
+      exit 0
+      ;;
+  esac
+fi
 
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   if [ -f docker-compose.yml ] || [ -f compose.yml ]; then
