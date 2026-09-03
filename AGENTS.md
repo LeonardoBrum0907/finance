@@ -11,12 +11,13 @@ Full setup/run docs live in `README.md`. Notes below are non-obvious caveats for
 - Pluggy (Open Finance) and the AI chat provider are **optional** external SaaS deps, gated by env vars. Core flows (auth, people, dashboard, budgets, goals) run fully without them; only bank-sync / AI-chat degrade when the keys are absent.
 
 ### Postgres in this environment
-- Prefer `pnpm db:up` (`scripts/ensure-db.sh`): uses Docker Compose `--profile with-db` when the daemon is available; otherwise starts a native PostgreSQL 16 cluster.
-- There is often **no Docker** on Cloud Agent VMs. In that case Postgres must be started with `sudo pg_ctlcluster 16 main start` (it does not auto-start on VM boot) — the script does this when `pg_isready` fails.
-- The DB matches the default `DATABASE_URL` in `apps/api/.env.example`: role `finance` / password `finance` / database `finance` on `localhost:5432`. If the cluster is fresh, `ensure-db.sh` recreates the role/database.
+- Prefer the Cloud secret `DATABASE_URL` pointing at the **remote Postgres on the VPS** (Coolify). Use the `finance` database (schema of this app). Do **not** point at the `ems` database on the same host — that belongs to another app.
+- `scripts/sync-api-env-from-cloud.sh` (run from `start` / `dev` terminal) copies injected Cloud secrets into `apps/api/.env` so dotenv/`getAiEnv` see them. It will not overwrite a remote `DATABASE_URL` with a localhost default.
+- `scripts/ensure-db.sh` skips local Postgres when `DATABASE_URL` points at a remote host. Local Docker/native Postgres is only a fallback when the secret is unset or still `localhost`.
+- Local fallback (no remote secret): `pnpm db:up` / `ensure-db.sh` — Docker Compose `--profile with-db`, or `sudo pg_ctlcluster 16 main start` when there is no Docker. Default local URL: `postgresql://finance:finance@localhost:5432/finance`.
 
 ### Env / DB migrations
-- Copy `apps/api/.env.example` → `apps/api/.env` and set a `JWT_SECRET` (the update script does not create `.env`). The default `DATABASE_URL` already points at the local Postgres.
+- Cloud boots sync secrets into `apps/api/.env` before migrate/dev. Locally: copy `apps/api/.env.example` → `apps/api/.env` if missing.
 - Apply schema with `pnpm --filter @finance/api exec prisma migrate deploy` (non-interactive). `pnpm db:migrate` runs `prisma migrate dev`, which can prompt — prefer `deploy` in automation.
 - The API dev server (`tsx watch`) does not run migrations; run them yourself after pulling new migration files. Cloud `environment.json` already runs `migrate deploy` before `pnpm dev`.
 
