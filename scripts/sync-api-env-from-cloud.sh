@@ -27,16 +27,40 @@ if [[ ${#KEYS[@]} -eq 0 ]]; then
 fi
 
 python3 - "$ENV_FILE" "${KEYS[@]}" <<'PY'
-import os, sys
+import os, sys, urllib.parse
 from pathlib import Path
 
 env_path = Path(sys.argv[1])
 keys = sys.argv[2:]
 
+injected = {
+    s.strip()
+    for s in os.environ.get("CLOUD_AGENT_INJECTED_SECRET_NAMES", "").replace(";", ",").split(",")
+    if s.strip()
+}
+
 def quote(v: str) -> str:
     if any(c in v for c in ' \t#"\'\\'):
         return '"' + v.replace('\\', '\\\\').replace('"', '\\"') + '"'
     return v
+
+def db_host(url: str) -> str:
+    try:
+        return urllib.parse.urlparse(url).hostname or ""
+    except Exception:
+        return ""
+
+def should_sync_key(key: str) -> bool:
+    value = os.environ.get(key)
+    if not value:
+        return False
+    if key == "DATABASE_URL":
+        host = db_host(value)
+        if host in ("localhost", "127.0.0.1", "db", "host.docker.internal"):
+            # Não sobrescrever .env remoto com default local do ambiente.
+            return key in injected
+        return True
+    return True
 
 text = env_path.read_text() if env_path.exists() else ""
 lines = text.splitlines()
@@ -51,13 +75,13 @@ for line in lines:
     k, v = stripped.split("=", 1)
     k = k.strip()
     seen.add(k)
-    if k in keys and os.environ.get(k):
+    if k in keys and should_sync_key(k):
         existing_order.append(("kv", k, quote(os.environ[k])))
     else:
         existing_order.append(("kv", k, v))
 
 for k in keys:
-    if k not in seen and os.environ.get(k):
+    if k not in seen and should_sync_key(k):
         existing_order.append(("kv", k, quote(os.environ[k])))
 
 out: list[str] = []
@@ -69,7 +93,7 @@ for item in existing_order:
 
 env_path.write_text("\n".join(out) + "\n")
 
-synced = [k for k in keys if os.environ.get(k)]
+synced = [k for k in keys if should_sync_key(k)]
 if synced:
     print(f"sync-api-env: {len(synced)} variável(s) do ambiente → apps/api/.env")
 else:
