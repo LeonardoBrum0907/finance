@@ -4,9 +4,13 @@ import path from "node:path";
 
 // Garante que o .env da API seja carregado mesmo quando o processo
 // é iniciado a partir da raiz do monorepo (pnpm dev).
+// Em desenvolvimento, override=true para que apps/api/.env (preenchido pelo
+// sync das secrets do Cloud) prevaleça sobre um DATABASE_URL=localhost residual
+// no ambiente do processo.
 const apiRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const envPath = path.join(apiRoot, ".env");
-config({ path: envPath });
+const isProd = (process.env.NODE_ENV ?? "development") === "production";
+config({ path: envPath, override: !isProd });
 
 function required(name: string): string {
   const value = process.env[name];
