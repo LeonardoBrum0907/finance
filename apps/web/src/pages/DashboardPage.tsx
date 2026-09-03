@@ -8,17 +8,18 @@ import type {
   UserSettingsDTO,
 } from "@finance/shared";
 import {
+  hasAnyEnabledDashboardWidget,
   isCreditAccount,
   isPaydayDayConfigured,
   parsePaydayCycleAnchor,
+  resolveDashboardWidgets,
   simulatedPurchaseInputToPayload,
 } from "@finance/shared";
 import { api } from "../lib/api";
 import { CycleNavigator } from "../components/dashboard/CycleNavigator";
 import { DashboardSkeleton } from "../components/dashboard/DashboardSkeleton";
-import { HouseholdSummary } from "../components/dashboard/HouseholdSummary";
+import { DashboardWidgetList } from "../components/dashboard/DashboardWidgetList";
 import { PersonSelector, type PersonFilter } from "../components/dashboard/PersonSelector";
-import { RecentTransactions } from "../components/dashboard/RecentTransactions";
 import { useAssistant } from "../lib/assistantContext";
 
 function summaryUrl(personId: PersonFilter, cycleKey?: string): string {
@@ -98,6 +99,8 @@ export function DashboardPage() {
   });
 
   const data = summary.data;
+  const dashboardWidgets = resolveDashboardWidgets(settings.data?.dashboardWidgets);
+  const anyWidgetEnabled = hasAnyEnabledDashboardWidget(dashboardWidgets);
 
   useEffect(() => {
     if (data?.selectedCycleKey && !selectedCycleKey) {
@@ -237,41 +240,25 @@ export function DashboardPage() {
           </p>
         </div>
       ) : (
-        <>
-          <HouseholdSummary
-            household={data.household}
-            currencyCode={data.currencyCode}
-            householdPaydayAligned={data.householdPaydayAligned}
-            personFilter={effectivePersonId}
-          />
-
-          <RecentTransactions
-            personId={personId}
-            dashboardMonths={1}
-            periodMode="payday"
-            cycleKey={activeCycleKey ?? undefined}
-            periodSummary={periodSummaryForTransactions}
-            categorySelection={null}
-            onClearCategorySelection={() => {}}
-            sectionRef={transactionsRef}
-            simulationEnabled={simulationEnabled}
-            simulateModalOpen={simulateModalOpen}
-            onSimulateModalOpenChange={setSimulateModalOpen}
-            onSaveSimulations={handleSaveSimulations}
-            savingSimulation={saveSimulations.isPending}
-            creditAccounts={creditAccountsForSimulation}
-            bankBalance={data.household.bankBalance}
-            currentCycle={
-              selectedCycle
-                ? {
-                    from: selectedCycle.from,
-                    to: selectedCycle.to,
-                    cycleKey: selectedCycle.cycleKey,
-                  }
-                : undefined
-            }
-          />
-        </>
+        <DashboardWidgetList
+          widgets={dashboardWidgets}
+          anyWidgetEnabled={anyWidgetEnabled}
+          household={data.household}
+          currencyCode={data.currencyCode}
+          householdPaydayAligned={data.householdPaydayAligned}
+          personFilter={effectivePersonId}
+          personId={personId}
+          activeCycleKey={activeCycleKey}
+          periodSummary={periodSummaryForTransactions}
+          transactionsRef={transactionsRef}
+          simulationEnabled={simulationEnabled}
+          simulateModalOpen={simulateModalOpen}
+          onSimulateModalOpenChange={setSimulateModalOpen}
+          onSaveSimulations={handleSaveSimulations}
+          savingSimulation={saveSimulations.isPending}
+          creditAccounts={creditAccountsForSimulation}
+          selectedCycle={selectedCycle}
+        />
       )}
     </div>
   );
