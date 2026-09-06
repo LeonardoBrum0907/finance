@@ -109,13 +109,17 @@ const MIN_INTERVAL_DAYS = 25;
 const MAX_INTERVAL_DAYS = 35;
 const MIN_OCCURRENCES = 2;
 const MIN_OCCURRENCES_FOR_DISCRETIONARY = 3;
+const MIN_OCCURRENCES_FOR_DONATIONS = 3;
+const NOISY_PAYEE_MIN_TXS = 4;
+const NOISY_PAYEE_MIN_CHAIN_RATIO = 0.5;
 
 const RECURRING_FRIENDLY_GROUPS = new Set<DashboardCategoryGroup>([
   "Assinaturas",
   "Contas fixas",
   "Serviços",
-  "Igreja",
 ]);
+
+const DONATION_GROUPS = new Set<DashboardCategoryGroup>(["Igreja", "Doações"]);
 
 const DISCRETIONARY_GROUPS = new Set<DashboardCategoryGroup>([
   "Alimentação",
@@ -189,6 +193,38 @@ export function normalizeBillSignature(description: string, merchantName?: strin
     .trim();
 }
 
+const DATE_LIKE_IN_TEXT = /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b|\b\d{2}\/\d{4}\b/g;
+const INSTALLMENT_PARCELA_RE = /parcela\s*(\d{1,2})\s*(?:\/|de)\s*(\d{1,2})/i;
+const INSTALLMENT_SLASH_RE = /\b(\d{1,2})\s*\/\s*(\d{1,2})\b/;
+
+function installmentPairFromMatch(match: RegExpMatchArray | null): { current: number; total: number } | null {
+  if (!match) return null;
+  const current = Number(match[1]);
+  const total = Number(match[2]);
+  if (!Number.isInteger(current) || !Number.isInteger(total)) return null;
+  if (current < 1 || total < 2 || total > 48 || current > total) return null;
+  return { current, total };
+}
+
+/** Detecta marcador de parcela (ex.: `2/3`, `parcela 2/12`) em descrição de fatura. */
+export function parseInstallmentMarker(
+  description: string,
+  merchantName?: string | null,
+): { current: number; total: number } | null {
+  const text = `${description} ${merchantName ?? ""}`.replace(DATE_LIKE_IN_TEXT, " ");
+  return (
+    installmentPairFromMatch(text.match(INSTALLMENT_PARCELA_RE)) ??
+    installmentPairFromMatch(text.match(INSTALLMENT_SLASH_RE))
+  );
+}
+
+export function descriptionLooksLikeInstallment(
+  description: string,
+  merchantName?: string | null,
+): boolean {
+  return parseInstallmentMarker(description, merchantName) != null;
+}
+
 export function extractPayeeFromDescription(description: string): string | null {
   const upper = description.toUpperCase();
   const pixMatch = upper.match(/PIX\s+(?:ENVIADO|RECEBIDO)\s+(.+)/);
@@ -230,6 +266,7 @@ export function isRecurringBillCandidateTransaction(tx: RecurringPatternTransact
   if (!isTransactionOutflow(tx.amount, tx.accountType)) return false;
   if (isCreditCardBillPayment(tx.category, tx.description)) return false;
   if (descriptionHasExcludedMarker(tx.description)) return false;
+  if (descriptionLooksLikeInstallment(tx.description, tx.merchantName)) return false;
   if (isSamePersonTransfer(tx.category, tx.description, tx.personName)) return false;
 
   const group = resolveDashboardGroup(tx.category);
@@ -255,6 +292,9 @@ function qualifiesAsRecurringBill(
   if (chain.length < MIN_OCCURRENCES) return false;
 
   const group = resolveDashboardGroup(chain[0]?.category);
+  if (group && DONATION_GROUPS.has(group)) {
+    return chain.length >= MIN_OCCURRENCES_FOR_DONATIONS;
+  }
   if (group && RECURRING_FRIENDLY_GROUPS.has(group)) return true;
   if (group && DISCRETIONARY_GROUPS.has(group) && chain.length < MIN_OCCURRENCES_FOR_DISCRETIONARY) {
     return false;
@@ -291,12 +331,20 @@ function filterStableAmountCluster(
   const group = resolveDashboardGroup(txs[0]?.category);
   const flexibleGroup =
     group === "Assinaturas" || group === "Contas fixas" || group === "Serviços";
-  if (!flexibleGroup) return txs;
+  const multiplier = flexibleGroup ? 1.5 : 1;
 
   const anchor = dominantAmount(txs);
   return txs.filter((tx) =>
-    amountsMatch(anchor, tx.amount, amountTolerance(anchor) * 1.5),
+    amountsMatch(anchor, tx.amount, amountTolerance(anchor) * multiplier),
   );
+}
+
+function isNoisyIrregularPayee(
+  group: RecurringPatternTransaction[],
+  chain: RecurringPatternTransaction[],
+): boolean {
+  if (group.length < NOISY_PAYEE_MIN_TXS) return false;
+  return chain.length / group.length < NOISY_PAYEE_MIN_CHAIN_RATIO;
 }
 
 function findLongestMonthlyChain(txs: RecurringPatternTransaction[]): RecurringPatternTransaction[] {
@@ -324,9 +372,9 @@ function findLongestMonthlyChain(txs: RecurringPatternTransaction[]): RecurringP
     }
   }
 
-  return bestChain.length >= MIN_OCCURRENCES && qualifiesAsRecurringBill(bestChain)
-    ? bestChain
-    : [];
+  if (bestChain.length < MIN_OCCURRENCES || !qualifiesAsRecurringBill(bestChain)) return [];
+  if (isNoisyIrregularPayee(txs, bestChain)) return [];
+  return bestChain;
 }
 
 export function detectRecurringPatterns(
@@ -449,6 +497,18 @@ export function countMissedRecurringBillingCycles(
   }
 
   return missed;
+}
+
+/** Contas auto-detectadas sem lastro (conta Pluggy sumiu ou parcela n/m). */
+export function shouldDismissAutoDetectedBill(input: {
+  source: RecurringBillSource;
+  accountId: string | null;
+  title: string;
+  payeeName?: string | null;
+}): boolean {
+  if (input.source !== "auto_detected") return false;
+  if (!input.accountId) return true;
+  return descriptionLooksLikeInstallment(input.title, input.payeeName);
 }
 
 export function shouldDeactivateStaleRecurringBill(input: {

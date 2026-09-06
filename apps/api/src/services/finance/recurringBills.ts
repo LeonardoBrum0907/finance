@@ -5,6 +5,7 @@ import type {
   RecurringBillForSimulation,
   RecurringBillStatus,
   RecurringBillSource,
+  RecurringPatternCandidate,
   RecurringPatternTransaction,
   UpdateRecurringBillInput,
 } from "@finance/shared";
@@ -17,6 +18,7 @@ import {
   isTransactionOutflow,
   normalizeBillSignature,
   shouldDeactivateStaleRecurringBill,
+  shouldDismissAutoDetectedBill,
   todayDateKeyInTimeZone,
 } from "@finance/shared";
 import type { RecurringBill, RecurringBillOccurrence } from "@prisma/client";
@@ -221,6 +223,21 @@ export async function ensureFutureOccurrences(
   }
 }
 
+async function applyBillStatus(
+  billId: string,
+  status: "dismissed" | "inactive",
+): Promise<void> {
+  await prisma.recurringBill.update({
+    where: { id: billId },
+    data: { status },
+  });
+  await prisma.recurringBillOccurrence.updateMany({
+    where: { billId, status: "pending" },
+    data: { status: "skipped" },
+  });
+  await syncFromRecurringBill(billId);
+}
+
 async function dismissInvalidRecurringBills(userId: string): Promise<number> {
   const bills = await prisma.recurringBill.findMany({
     where: { userId, status: { in: ["active", "inactive"] } },
@@ -248,12 +265,22 @@ async function dismissInvalidRecurringBills(userId: string): Promise<number> {
 
   let dismissed = 0;
   for (const bill of bills) {
+    const orphanOrInstallment = shouldDismissAutoDetectedBill({
+      source: bill.source as RecurringBillSource,
+      accountId: bill.accountId,
+      title: bill.title,
+      payeeName: bill.payeeName,
+    });
+
     const anchorTx = bill.occurrences[0]?.transaction;
+    const reconstructedAmount =
+      anchorTx?.amount ??
+      (isCreditAccount(bill.account?.type) ? bill.expectedAmount : -bill.expectedAmount);
     const candidate = {
       id: bill.id,
       date: bill.lastOccurrenceDate?.toISOString() ?? new Date().toISOString(),
       description: anchorTx?.description ?? bill.title,
-      amount: anchorTx?.amount ?? -bill.expectedAmount,
+      amount: reconstructedAmount,
       merchantName: anchorTx?.merchantName,
       category: anchorTx
         ? effectiveTransactionCategory(anchorTx)
@@ -264,14 +291,12 @@ async function dismissInvalidRecurringBills(userId: string): Promise<number> {
     };
 
     const shouldDismiss =
+      orphanOrInstallment ||
       isCreditCardBillPayment(candidate.category, candidate.description) ||
       !isRecurringBillCandidateTransaction(candidate);
 
     if (shouldDismiss) {
-      await prisma.recurringBill.update({
-        where: { id: bill.id },
-        data: { status: "dismissed" },
-      });
+      await applyBillStatus(bill.id, "dismissed");
       dismissed += 1;
     }
   }
@@ -279,11 +304,39 @@ async function dismissInvalidRecurringBills(userId: string): Promise<number> {
   return dismissed;
 }
 
+async function dismissUnconfirmedAutoBills(
+  userId: string,
+  personId: string | undefined,
+  candidates: RecurringPatternCandidate[],
+): Promise<number> {
+  const confirmed = new Set(
+    candidates.map((candidate) => `${candidate.matchSignature}::${candidate.accountId}`),
+  );
+
+  const bills = await prisma.recurringBill.findMany({
+    where: {
+      userId,
+      source: "auto_detected",
+      status: { in: ["active", "inactive"] },
+      ...(personId ? { personId } : {}),
+    },
+  });
+
+  let dismissed = 0;
+  for (const bill of bills) {
+    const key = `${bill.matchSignature}::${bill.accountId ?? ""}`;
+    if (confirmed.has(key)) continue;
+    await applyBillStatus(bill.id, "dismissed");
+    dismissed += 1;
+  }
+  return dismissed;
+}
+
 export async function detectRecurringBills(
   userId: string,
   personId?: string,
 ): Promise<{ detected: number; dismissed: number }> {
-  const dismissed = await dismissInvalidRecurringBills(userId);
+  let dismissed = await dismissInvalidRecurringBills(userId);
   const txs = await loadOutflowTransactions(userId, personId);
   const candidates = detectRecurringPatterns(txs);
   let detected = 0;
@@ -374,6 +427,8 @@ export async function detectRecurringBills(
     await syncFromRecurringBill(bill.id);
     detected += 1;
   }
+
+  dismissed += await dismissUnconfirmedAutoBills(userId, personId, candidates);
 
   return { detected, dismissed };
 }
@@ -521,17 +576,7 @@ export async function deactivateStaleRecurringBills(
       continue;
     }
 
-    await prisma.recurringBill.update({
-      where: { id: bill.id },
-      data: { status: "inactive" },
-    });
-
-    await prisma.recurringBillOccurrence.updateMany({
-      where: { billId: bill.id, status: "pending" },
-      data: { status: "skipped" },
-    });
-
-    await syncFromRecurringBill(bill.id);
+    await applyBillStatus(bill.id, "inactive");
     deactivated += 1;
   }
 
@@ -594,12 +639,7 @@ export async function dismissRecurringBill(userId: string, id: string): Promise<
   const existing = await prisma.recurringBill.findFirst({ where: { id, userId } });
   if (!existing) throw new RecurringBillNotFoundError();
 
-  await prisma.recurringBill.update({
-    where: { id },
-    data: { status: "dismissed" },
-  });
-
-  await syncFromRecurringBill(id);
+  await applyBillStatus(id, "dismissed");
 }
 
 export async function runRecurringBillPipeline(
