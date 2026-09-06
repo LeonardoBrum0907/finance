@@ -60,7 +60,7 @@ function CreditBillCalendarForm({
           type="number"
           min={1}
           max={31}
-          placeholder="21"
+          placeholder="—"
           value={closeDay}
           onChange={(event) => setCloseDay(event.target.value)}
           className={inputClass}
@@ -72,7 +72,7 @@ function CreditBillCalendarForm({
           type="number"
           min={1}
           max={31}
-          placeholder="28"
+          placeholder="—"
           value={dueDay}
           onChange={(event) => setDueDay(event.target.value)}
           className={inputClass}
