@@ -1,23 +1,35 @@
-import { ArrowDownLeft, ArrowUpRight, Wallet } from "lucide-react";
+import { Landmark, PiggyBank, Wallet } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import type { HouseholdCycleSummary, PersonCycleSummary } from "@finance/shared";
+import { savingsRate, stillMineThisPeriod, cycleSaved } from "@finance/shared";
 import {
   CYCLE_COPY,
   formatCycleBalance,
   formatPlainAmount,
+  formatSavingsPercent,
   toneBorderClass,
   toneTextClass,
 } from "../../lib/cycleLabels";
 import { cardClass } from "./motion";
 
-export interface FinanceMetrics {
-  bankBalance: number;
-  closingBalance: number;
-  realizedNet: number;
+export type FinanceMetrics = Pick<
+  PersonCycleSummary,
+  | "bankBalance"
+  | "creditDebt"
+  | "investmentBalance"
+  | "investmentsIncluded"
+  | "netWorth"
+  | "realizedIncome"
+  | "realizedExpenses"
+  | "realizedNet"
+  | "closingBalance"
+  | "projectedSalaryIncome"
+  | "pendingExpenses"
+  | "pendingBillPayments"
+> & {
   isFuture?: boolean;
   isComplete?: boolean;
-  /** Pagamentos de fatura projetados no ciclo. */
-  pendingBillPayments?: number;
-}
+};
 
 interface Props {
   metrics: FinanceMetrics;
@@ -27,9 +39,12 @@ interface Props {
 }
 
 interface MetricTile {
+  key: "netWorth" | "stillMine" | "saved";
   label: string;
   value: string;
+  status?: string;
   hint?: string;
+  extra?: string;
   tone: "positive" | "negative" | "neutral" | "brand";
   icon: LucideIcon;
   featured?: boolean;
@@ -53,42 +68,95 @@ function tileTextClass(tone: MetricTile["tone"]): string {
   return toneTextClass(tone);
 }
 
+function netWorthHint(metrics: FinanceMetrics, currencyCode: string): string {
+  const parts = [
+    `Caixa ${formatPlainAmount(metrics.bankBalance, currencyCode)}`,
+    `Cartão −${formatPlainAmount(metrics.creditDebt, currencyCode)}`,
+  ];
+  if (metrics.investmentsIncluded) {
+    parts.push(`Invest. ${formatPlainAmount(metrics.investmentBalance, currencyCode)}`);
+  } else if (metrics.investmentBalance !== 0) {
+    parts.push(`Invest. fora (${formatPlainAmount(metrics.investmentBalance, currencyCode)})`);
+  }
+  return parts.join(" · ");
+}
+
+function stillMineHint(metrics: FinanceMetrics): string {
+  if (metrics.isComplete) return "Ciclo encerrado · caixa atual";
+  if (metrics.isFuture) return "Caixa atual + salário esperado − contas do ciclo";
+  return "Caixa + renda prevista − contas e faturas";
+}
+
+export function toFinanceMetrics(
+  summary: PersonCycleSummary | HouseholdCycleSummary,
+  flags: { isFuture?: boolean; isComplete?: boolean } = {},
+): FinanceMetrics {
+  return {
+    bankBalance: summary.bankBalance,
+    creditDebt: summary.creditDebt,
+    investmentBalance: summary.investmentBalance,
+    investmentsIncluded: summary.investmentsIncluded,
+    netWorth: summary.netWorth,
+    realizedIncome: summary.realizedIncome,
+    realizedExpenses: summary.realizedExpenses,
+    realizedNet: summary.realizedNet,
+    closingBalance: summary.closingBalance,
+    projectedSalaryIncome: summary.projectedSalaryIncome,
+    pendingExpenses: summary.pendingExpenses,
+    pendingBillPayments: summary.pendingBillPayments,
+    isFuture: flags.isFuture,
+    isComplete: flags.isComplete,
+  };
+}
+
 export function FinanceSummaryCard({
   metrics,
   currencyCode,
   title = "Resumo do ciclo",
   closingDelta,
 }: Props) {
-  const closingDisplay = formatCycleBalance(metrics.closingBalance, currencyCode);
-  const flowDisplay = formatCycleBalance(metrics.realizedNet, currencyCode);
+  const stillMine = stillMineThisPeriod(metrics);
+  const stillMineDisplay = formatCycleBalance(stillMine, currencyCode);
+  const saved = cycleSaved(metrics);
+  const savedDisplay = formatCycleBalance(saved, currencyCode);
+  const rate = savingsRate(metrics);
 
   const tiles: MetricTile[] = [
     {
-      label: "Saldo em conta",
-      value: formatPlainAmount(metrics.bankBalance, currencyCode),
-      hint: "Contas correntes e poupança",
-      tone: "brand",
-      icon: Wallet,
+      key: "netWorth",
+      label: CYCLE_COPY.netWorth,
+      value: formatPlainAmount(metrics.netWorth, currencyCode),
+      hint: netWorthHint(metrics, currencyCode),
+      tone: toneForValue(metrics.netWorth),
+      icon: Landmark,
     },
     {
-      label: CYCLE_COPY.closingThisCycle,
-      value: closingDisplay.formattedAmount,
-      hint:
-        metrics.isFuture
-          ? "Projeção com salário e contas conhecidas"
-          : metrics.isComplete
-            ? "Ciclo encerrado"
-            : "Salário previsto, contas e faturas pendentes",
-      tone: toneForValue(metrics.closingBalance),
-      icon: metrics.closingBalance >= 0 ? ArrowUpRight : ArrowDownLeft,
+      key: "stillMine",
+      label: CYCLE_COPY.stillMineThisPeriod,
+      value: stillMineDisplay.formattedAmount,
+      status: stillMineDisplay.status,
+      hint: stillMineHint(metrics),
+      extra:
+        metrics.pendingBillPayments > 0
+          ? `Faturas a pagar neste ciclo: ${formatPlainAmount(metrics.pendingBillPayments, currencyCode)}`
+          : undefined,
+      tone: toneForValue(stillMine),
+      icon: Wallet,
       featured: true,
     },
     {
-      label: CYCLE_COPY.realizedUntilNow,
-      value: flowDisplay.formattedAmount,
-      hint: metrics.isFuture ? "Sem movimentação ainda" : "Entradas − saídas no ciclo",
-      tone: toneForValue(metrics.realizedNet),
-      icon: metrics.realizedNet >= 0 ? ArrowUpRight : ArrowDownLeft,
+      key: "saved",
+      label: CYCLE_COPY.savedThisCycle,
+      value: formatSavingsPercent(rate),
+      status: rate == null ? CYCLE_COPY.noCycleIncome : savedDisplay.status,
+      hint:
+        rate == null
+          ? saved === 0
+            ? CYCLE_COPY.noCycleIncome
+            : `${savedDisplay.status} ${savedDisplay.formattedAmount}`
+          : `${savedDisplay.status} ${savedDisplay.formattedAmount} neste ciclo`,
+      tone: rate == null && saved === 0 ? "neutral" : toneForValue(saved),
+      icon: PiggyBank,
     },
   ];
 
@@ -101,39 +169,32 @@ export function FinanceSummaryCard({
           const Icon = tile.icon;
           return (
             <div
-              key={tile.label}
-              className={`rounded-xl border px-4 py-3 ${tileToneClass(tile.tone)} ${
-                tile.featured ? "sm:col-span-1" : ""
-              }`}
+              key={tile.key}
+              className={`rounded-xl border px-4 py-3 ${tileToneClass(tile.tone)}`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-[10px] font-semibold uppercase leading-tight tracking-wide text-muted-foreground">
                   {tile.label}
                 </p>
-                <Icon className={`h-3.5 w-3.5 ${tileTextClass(tile.tone)}`} />
+                <Icon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${tileTextClass(tile.tone)}`} />
               </div>
-              {tile.featured && tile.tone !== "brand" && (
+              {tile.featured && tile.status && tile.tone !== "brand" && (
                 <p className={`mt-1 text-[11px] font-bold uppercase tracking-wide ${tileTextClass(tile.tone)}`}>
-                  {closingDisplay.status}
+                  {tile.status}
                 </p>
               )}
-              <p className={`font-display text-xl font-bold ${tileTextClass(tile.tone)}`}>
+              <p className={`font-display text-xl font-bold tabular-nums ${tileTextClass(tile.tone)}`}>
                 {tile.value}
               </p>
-              {tile.label === CYCLE_COPY.closingThisCycle && closingDelta != null && closingDelta !== 0 && (
+              {tile.key === "stillMine" && closingDelta != null && closingDelta !== 0 && (
                 <p className={`mt-1 text-xs font-medium ${closingDelta > 0 ? "text-positive" : "text-negative"}`}>
                   {closingDelta > 0 ? "+" : ""}
                   {formatPlainAmount(closingDelta, currencyCode)} ao desligar conta
                 </p>
               )}
-              {tile.label === CYCLE_COPY.closingThisCycle &&
-                metrics.pendingBillPayments != null &&
-                metrics.pendingBillPayments > 0 && (
-                  <p className="mt-1 text-xs font-medium text-muted-foreground">
-                    Faturas a pagar neste ciclo:{" "}
-                    {formatPlainAmount(metrics.pendingBillPayments, currencyCode)}
-                  </p>
-                )}
+              {tile.extra && (
+                <p className="mt-1 text-xs font-medium text-muted-foreground">{tile.extra}</p>
+              )}
               {tile.hint && (
                 <p className="mt-1 text-[11px] text-muted-foreground">{tile.hint}</p>
               )}
