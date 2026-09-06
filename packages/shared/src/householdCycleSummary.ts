@@ -19,6 +19,12 @@ export interface PersonCycleSummary {
   personId: string;
   personName: string;
   bankBalance: number;
+  creditDebt: number;
+  investmentBalance: number;
+  investmentsIncluded: boolean;
+  netWorth: number;
+  realizedIncome: number;
+  realizedExpenses: number;
   realizedNet: number;
   closingBalance: number;
   projectedSalaryIncome: number;
@@ -34,12 +40,73 @@ export interface HouseholdCycleSummary {
   isComplete: boolean;
   isFuture: boolean;
   bankBalance: number;
+  creditDebt: number;
+  investmentBalance: number;
+  investmentsIncluded: boolean;
+  netWorth: number;
+  realizedIncome: number;
+  realizedExpenses: number;
   realizedNet: number;
   closingBalance: number;
   projectedSalaryIncome: number;
   pendingExpenses: number;
   pendingBillPayments: number;
   persons: PersonCycleSummary[];
+}
+
+export function computeNetWorth(input: {
+  bankBalance: number;
+  creditDebt: number;
+  investmentBalance: number;
+  investmentsIncluded: boolean;
+}): number {
+  const investments = input.investmentsIncluded ? input.investmentBalance : 0;
+  return roundMoney(input.bankBalance - input.creditDebt + investments);
+}
+
+/** Caixa + renda prevista − contas/faturas ainda pendentes neste período. */
+export function stillMineThisPeriod(input: {
+  bankBalance: number;
+  projectedSalaryIncome: number;
+  pendingExpenses: number;
+}): number {
+  return roundMoney(input.bankBalance + input.projectedSalaryIncome - input.pendingExpenses);
+}
+
+export function cycleIncome(input: {
+  realizedIncome: number;
+  projectedSalaryIncome: number;
+}): number {
+  return roundMoney(input.realizedIncome + input.projectedSalaryIncome);
+}
+
+export function cycleExpenses(input: {
+  realizedExpenses: number;
+  pendingExpenses: number;
+}): number {
+  return roundMoney(input.realizedExpenses + input.pendingExpenses);
+}
+
+/** Renda do ciclo − gastos do ciclo (realizados + pendentes). Igual ao closingBalance. */
+export function cycleSaved(input: {
+  realizedIncome: number;
+  realizedExpenses: number;
+  projectedSalaryIncome: number;
+  pendingExpenses: number;
+}): number {
+  return roundMoney(cycleIncome(input) - cycleExpenses(input));
+}
+
+/** (renda − gastos) / renda. Null quando não há renda no ciclo. */
+export function savingsRate(input: {
+  realizedIncome: number;
+  realizedExpenses: number;
+  projectedSalaryIncome: number;
+  pendingExpenses: number;
+}): number | null {
+  const income = cycleIncome(input);
+  if (income <= 0) return null;
+  return cycleSaved(input) / income;
 }
 
 export interface NavigableCycle {
@@ -57,11 +124,32 @@ export function cycleForecastToPersonSummary(
   personName: string,
   bankBalance: number,
   forecast: CycleForecastBlock,
+  balances: {
+    creditDebt?: number;
+    investmentBalance?: number;
+    includeInvestments?: boolean;
+  } = {},
 ): PersonCycleSummary {
+  const creditDebt = roundMoney(balances.creditDebt ?? 0);
+  const investmentBalance = roundMoney(balances.investmentBalance ?? 0);
+  const investmentsIncluded = balances.includeInvestments ?? true;
+  const roundedBank = roundMoney(bankBalance);
+
   return {
     personId,
     personName,
-    bankBalance: roundMoney(bankBalance),
+    bankBalance: roundedBank,
+    creditDebt,
+    investmentBalance,
+    investmentsIncluded,
+    netWorth: computeNetWorth({
+      bankBalance: roundedBank,
+      creditDebt,
+      investmentBalance,
+      investmentsIncluded,
+    }),
+    realizedIncome: forecast.realizedIncome,
+    realizedExpenses: forecast.realizedExpenses,
     realizedNet: forecast.realizedNet,
     closingBalance: forecast.closingBalance,
     projectedSalaryIncome: forecast.pendingIncome,
@@ -90,6 +178,12 @@ export function aggregateHouseholdCycleSummary(
     isComplete: cycle.isComplete,
     isFuture: cycle.isFuture ?? false,
     bankBalance: sum((p) => p.bankBalance),
+    creditDebt: sum((p) => p.creditDebt),
+    investmentBalance: sum((p) => p.investmentBalance),
+    investmentsIncluded: persons[0]?.investmentsIncluded ?? true,
+    netWorth: sum((p) => p.netWorth),
+    realizedIncome: sum((p) => p.realizedIncome),
+    realizedExpenses: sum((p) => p.realizedExpenses),
     realizedNet: sum((p) => p.realizedNet),
     closingBalance: sum((p) => p.closingBalance),
     projectedSalaryIncome: sum((p) => p.projectedSalaryIncome),

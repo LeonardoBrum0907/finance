@@ -1,9 +1,14 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { HouseholdCycleSummary, PersonCycleSummary } from "@finance/shared";
-import { FinanceSummaryCard } from "./FinanceSummaryCard";
-import { formatPlainAmount } from "../../lib/cycleLabels";
-import { CYCLE_COPY, formatCycleBalance } from "../../lib/cycleLabels";
+import { savingsRate, stillMineThisPeriod } from "@finance/shared";
+import { FinanceSummaryCard, toFinanceMetrics } from "./FinanceSummaryCard";
+import {
+  CYCLE_COPY,
+  formatCycleBalance,
+  formatPlainAmount,
+  formatSavingsPercent,
+} from "../../lib/cycleLabels";
 
 interface Props {
   household: HouseholdCycleSummary;
@@ -19,33 +24,41 @@ function PersonRow({
   person: PersonCycleSummary;
   currencyCode: string;
 }) {
-  const closing = formatCycleBalance(person.closingBalance, currencyCode);
-  const flow = formatCycleBalance(person.realizedNet, currencyCode);
+  const stillMine = formatCycleBalance(stillMineThisPeriod(person), currencyCode);
+  const rate = savingsRate(person);
 
   return (
     <div className="grid gap-3 rounded-xl border border-app-border/50 bg-app-bg/60 px-4 py-3 sm:grid-cols-4 sm:items-center">
       <p className="text-sm font-medium text-foreground">{person.personName}</p>
       <div>
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Saldo</p>
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          {CYCLE_COPY.netWorth}
+        </p>
         <p className="text-sm font-semibold text-brand">
-          {formatPlainAmount(person.bankBalance, currencyCode)}
+          {formatPlainAmount(person.netWorth, currencyCode)}
         </p>
       </div>
       <div>
         <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-          {CYCLE_COPY.closingThisCycle}
+          {CYCLE_COPY.stillMineThisPeriod}
         </p>
-        <p className={`text-sm font-semibold ${closing.tone === "positive" ? "text-positive" : closing.tone === "negative" ? "text-negative" : "text-foreground"}`}>
-          {closing.formattedAmount}
+        <p
+          className={`text-sm font-semibold ${
+            stillMine.tone === "positive"
+              ? "text-positive"
+              : stillMine.tone === "negative"
+                ? "text-negative"
+                : "text-foreground"
+          }`}
+        >
+          {stillMine.formattedAmount}
         </p>
       </div>
       <div>
         <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-          {CYCLE_COPY.realizedUntilNow}
+          {CYCLE_COPY.savedThisCycle}
         </p>
-        <p className={`text-sm font-semibold ${flow.tone === "positive" ? "text-positive" : flow.tone === "negative" ? "text-negative" : "text-foreground"}`}>
-          {flow.formattedAmount}
-        </p>
+        <p className="text-sm font-semibold text-foreground">{formatSavingsPercent(rate)}</p>
       </div>
     </div>
   );
@@ -62,11 +75,13 @@ export function HouseholdSummary({
   const visiblePersons = personFilter
     ? household.persons.filter((p) => p.personId === personFilter)
     : household.persons;
-  const displayMetrics = personFilter && visiblePersons[0]
-    ? visiblePersons[0]
-    : showHouseholdTotals
-      ? household
-      : null;
+  const displayMetrics =
+    personFilter && visiblePersons[0]
+      ? visiblePersons[0]
+      : showHouseholdTotals
+        ? household
+        : null;
+  const stillMine = stillMineThisPeriod(household);
 
   return (
     <div className="space-y-3">
@@ -76,24 +91,20 @@ export function HouseholdSummary({
         </div>
       )}
 
-      {household.closingBalance < 0 && (
+      {stillMine < 0 && (
         <div className="rounded-xl border border-negative/30 bg-negative/5 px-4 py-3 text-sm text-negative">
-          Atenção: o fechamento deste ciclo indica déficit de{" "}
-          {formatPlainAmount(Math.abs(household.closingBalance), currencyCode)}.
+          Atenção: neste período ainda falta{" "}
+          {formatPlainAmount(Math.abs(stillMine), currencyCode)} depois de contas e faturas.
         </div>
       )}
 
       {displayMetrics && (
         <FinanceSummaryCard
           title={personFilter ? visiblePersons[0]?.personName ?? "Resumo" : "Casa"}
-          metrics={{
-            bankBalance: displayMetrics.bankBalance,
-            closingBalance: displayMetrics.closingBalance,
-            realizedNet: displayMetrics.realizedNet,
+          metrics={toFinanceMetrics(displayMetrics, {
             isFuture: household.isFuture,
             isComplete: household.isComplete,
-            pendingBillPayments: displayMetrics.pendingBillPayments,
-          }}
+          })}
           currencyCode={currencyCode}
         />
       )}

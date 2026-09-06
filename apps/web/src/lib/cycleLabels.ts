@@ -14,6 +14,9 @@ export const CYCLE_COPY = {
   realizedUntilNow: "Realizado até hoje",
   closingThisCycle: "Fechamento deste ciclo",
   nextCycle: "Próximo ciclo",
+  netWorth: "Patrimônio líquido",
+  stillMineThisPeriod: "Ainda é meu neste período",
+  savedThisCycle: "Guardado neste ciclo",
   /** @deprecated use realizedUntilNow */
   untilNow: "Realizado até hoje",
   /** @deprecated use closingThisCycle */
@@ -27,6 +30,7 @@ export const CYCLE_COPY = {
   expectedSalary: "Salário esperado",
   extraIncome: "Renda extra",
   salaryUnknown: "Salário desconhecido",
+  noCycleIncome: "Sem renda neste ciclo",
   heroTooltip:
     "Realizado até hoje: só entradas e saídas que já aconteceram. Fechamento deste ciclo: inclui salário previsto e contas com vencimento neste ciclo. Próximo ciclo: projeção com salário e contas conhecidas.",
   nextCycleTooltip:
@@ -51,6 +55,14 @@ export function formatCycleBalance(
 
 export function formatPlainAmount(value: number, currencyCode = "BRL"): string {
   return formatCurrency(value, currencyCode);
+}
+
+export function formatSavingsPercent(rate: number | null): string {
+  if (rate == null) return "—";
+  return new Intl.NumberFormat("pt-BR", {
+    style: "percent",
+    maximumFractionDigits: 0,
+  }).format(rate);
 }
 
 export function toneTextClass(tone: CycleBalanceTone): string {

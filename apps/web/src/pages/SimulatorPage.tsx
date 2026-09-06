@@ -18,7 +18,7 @@ import { managedAccountToScenarioDTO, managedAccountLegacyId } from "@finance/sh
 import { api } from "../lib/api";
 import { AssistantSpotlightButton } from "../components/chat/AssistantSpotlightButton";
 import { CycleNavigator } from "../components/dashboard/CycleNavigator";
-import { FinanceSummaryCard } from "../components/dashboard/FinanceSummaryCard";
+import { FinanceSummaryCard, toFinanceMetrics } from "../components/dashboard/FinanceSummaryCard";
 import { PersonSelector, type PersonFilter } from "../components/dashboard/PersonSelector";
 import { SimulationResults } from "../components/simulator/SimulationResults";
 import { AccountsSection, type AccountsTab } from "../components/simulator/AccountsSection";
@@ -315,14 +315,10 @@ export function SimulatorPage() {
       {data?.household && displayMetrics && (
         <FinanceSummaryCard
           title="Impacto no ciclo"
-          metrics={{
-            bankBalance: displayMetrics.bankBalance,
-            closingBalance: displayMetrics.closingBalance,
-            realizedNet: displayMetrics.realizedNet,
+          metrics={toFinanceMetrics(displayMetrics, {
             isFuture: data.household.isFuture,
             isComplete: data.household.isComplete,
-            pendingBillPayments: displayMetrics.pendingBillPayments,
-          }}
+          })}
           currencyCode={data.currencyCode}
           closingDelta={lastToggleDelta ?? undefined}
         />
