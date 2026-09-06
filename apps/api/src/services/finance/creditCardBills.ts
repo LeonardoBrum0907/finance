@@ -9,6 +9,18 @@ import { prisma } from "../../prisma.js";
 import { isPluggyConfigured } from "../../env.js";
 import type { FinancialTransaction } from "./types.js";
 
+function utcDateKey(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function parsePluggyCalendarDate(value: string | Date): Date | null {
+  const raw = typeof value === "string" ? value : value.toISOString();
+  const key = raw.slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return null;
+  const parsed = new Date(`${key}T12:00:00.000Z`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 type PluggyBill = {
   id?: string;
   dueDate?: string | Date;
@@ -29,17 +41,18 @@ export async function persistPluggyCreditCardBills(
     const bills = (response.results ?? []) as PluggyBill[];
     for (const bill of bills) {
       if (!bill.id || bill.dueDate == null || bill.totalAmount == null) continue;
-      const dueDate = new Date(bill.dueDate);
-      if (Number.isNaN(dueDate.getTime())) continue;
-      const closingDate = bill.billClosingDate ? new Date(bill.billClosingDate) : null;
+      const dueDate = parsePluggyCalendarDate(bill.dueDate);
+      if (!dueDate) continue;
+      const closingDate = bill.billClosingDate
+        ? parsePluggyCalendarDate(bill.billClosingDate)
+        : null;
       await prisma.creditCardBill.upsert({
         where: { pluggyBillId: bill.id },
         create: {
           pluggyBillId: bill.id,
           accountId,
           dueDate,
-          closingDate:
-            closingDate && !Number.isNaN(closingDate.getTime()) ? closingDate : null,
+          closingDate: closingDate ?? null,
           totalAmount: bill.totalAmount,
           minimumPaymentAmount: bill.minimumPaymentAmount ?? null,
           source: "pluggy",
@@ -47,8 +60,7 @@ export async function persistPluggyCreditCardBills(
         update: {
           accountId,
           dueDate,
-          closingDate:
-            closingDate && !Number.isNaN(closingDate.getTime()) ? closingDate : null,
+          closingDate: closingDate ?? null,
           totalAmount: bill.totalAmount,
           minimumPaymentAmount: bill.minimumPaymentAmount ?? null,
         },
@@ -126,14 +138,14 @@ export async function loadCardsForCycleBills(
     accountName: acc.name,
     billDueDay: acc.billDueDay,
     billCloseDay: acc.billCloseDay,
-    balanceDueDate: acc.balanceDueDate ? toLocalDateKey(acc.balanceDueDate) : null,
-    balanceCloseDate: acc.balanceCloseDate ? toLocalDateKey(acc.balanceCloseDate) : null,
+    balanceDueDate: acc.balanceDueDate ? utcDateKey(acc.balanceDueDate) : null,
+    balanceCloseDate: acc.balanceCloseDate ? utcDateKey(acc.balanceCloseDate) : null,
     creditBrand: acc.creditBrand,
     statements: stored
       .filter((bill) => bill.accountId === acc.id)
       .map((bill) => ({
-        dueDate: toLocalDateKey(bill.dueDate),
-        closingDate: bill.closingDate ? toLocalDateKey(bill.closingDate) : null,
+        dueDate: utcDateKey(bill.dueDate),
+        closingDate: bill.closingDate ? utcDateKey(bill.closingDate) : null,
         totalAmount: bill.totalAmount,
       })),
     charges: txs
