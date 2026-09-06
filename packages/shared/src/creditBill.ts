@@ -277,32 +277,13 @@ function collectBillCandidates(snapshot: CreditBillSnapshot): BillPaymentCandida
     });
   }
 
-  if (
-    snapshot.openBillAmount != null &&
-    snapshot.openBillAmount > 0 &&
-    snapshot.openBillDueDate
-  ) {
-    const duplicateClosed =
-      snapshot.closedBillAmount != null &&
-      snapshot.closedBillDueDate === snapshot.openBillDueDate &&
-      Math.abs(snapshot.closedBillAmount - snapshot.openBillAmount) < 0.01;
-
-    if (!duplicateClosed) {
-      candidates.push({
-        id: `${snapshot.accountId}:open`,
-        title: `Fatura aberta ${snapshot.accountName}`,
-        dueDate: snapshot.openBillDueDate,
-        amount: snapshot.openBillAmount,
-      });
-    }
-  }
-
   return candidates;
 }
 
 /**
  * Projeta saídas de caixa por pagamento de fatura com vencimento no ciclo.
- * Não duplica compras no cartão — só o pagamento agregado na corrente.
+ * Usa só fatura fechada do snapshot — o saldo aberto (limite usado) não é caixa deste ciclo.
+ * Prefira `buildCycleStatementPayments` quando houver calendário e faturas persistidas.
  */
 export function buildPendingBillPayments(
   snapshots: CreditBillSnapshot[],
@@ -326,6 +307,271 @@ export function buildPendingBillPayments(
         kind: "creditBills",
       });
     }
+  }
+
+  const total = roundMoney(items.reduce((sum, item) => sum + item.amount, 0));
+  return { total, items };
+}
+
+export interface CardStatementCharge {
+  date: string;
+  amount: number;
+}
+
+export interface PersistedCardStatement {
+  dueDate: string;
+  closingDate: string | null;
+  totalAmount: number;
+}
+
+export interface CardForCycleBills {
+  accountId: string;
+  accountName: string;
+  billDueDay: number | null;
+  billCloseDay: number | null;
+  balanceDueDate: string | null;
+  balanceCloseDate: string | null;
+  creditBrand: string | null;
+  statements: PersistedCardStatement[];
+  charges: CardStatementCharge[];
+}
+
+export interface CycleStatementPaymentItem extends CreditBillPaymentItem {
+  estimated: boolean;
+  closingDate: string | null;
+}
+
+export interface CycleStatementPaymentsResult {
+  total: number;
+  items: CycleStatementPaymentItem[];
+}
+
+const STATEMENT_CLOSE_GAP_DAYS = 7;
+
+function parseDateKey(key: string): { y: number; m: number; d: number } {
+  const [y, m, d] = key.split("-").map(Number);
+  return { y: y!, m: m!, d: d! };
+}
+
+function formatDateKey(y: number, m: number, d: number): string {
+  return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+function daysInMonth(year: number, month: number): number {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+export function dateKeyForDayInMonth(year: number, month: number, day: number): string {
+  const dim = daysInMonth(year, month);
+  return formatDateKey(year, month, Math.min(Math.max(1, day), dim));
+}
+
+export function addDaysToDateKey(dateKey: string, days: number): string {
+  const { y, m, d } = parseDateKey(dateKey);
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  return dt.toISOString().slice(0, 10);
+}
+
+export function dayOfMonthFromDateKey(dateKey: string): number {
+  return parseDateKey(dateKey).d;
+}
+
+/** Próxima ocorrência do dia do mês em fromKey ou depois. */
+export function nextDayOfMonthOnOrAfter(fromKey: string, day: number): string {
+  const { y, m } = parseDateKey(fromKey);
+  const thisMonth = dateKeyForDayInMonth(y, m, day);
+  if (thisMonth >= fromKey) return thisMonth;
+  if (m === 12) return dateKeyForDayInMonth(y + 1, 1, day);
+  return dateKeyForDayInMonth(y, m + 1, day);
+}
+
+export function previousDayOfMonthBefore(fromKey: string, day: number): string {
+  const { y, m } = parseDateKey(fromKey);
+  const thisMonth = dateKeyForDayInMonth(y, m, day);
+  if (thisMonth < fromKey) return thisMonth;
+  if (m === 1) return dateKeyForDayInMonth(y - 1, 12, day);
+  return dateKeyForDayInMonth(y, m - 1, day);
+}
+
+/** Fecha no closeDay do mesmo mês do vencimento, ou no mês anterior se o dia for depois. */
+export function closeDateForDue(dueKey: string, closeDay: number): string {
+  const { y, m } = parseDateKey(dueKey);
+  const sameMonth = dateKeyForDayInMonth(y, m, closeDay);
+  if (sameMonth < dueKey) return sameMonth;
+  if (m === 1) return dateKeyForDayInMonth(y - 1, 12, closeDay);
+  return dateKeyForDayInMonth(y, m - 1, closeDay);
+}
+
+/** Nubank e o padrão BR: fechamento = vencimento − 7 dias. */
+export function inferCloseDay(dueDay: number): number {
+  const sampleDue = dateKeyForDayInMonth(2026, 6, dueDay);
+  return dayOfMonthFromDateKey(addDaysToDateKey(sampleDue, -STATEMENT_CLOSE_GAP_DAYS));
+}
+
+export function resolveStatementDays(
+  card: Pick<
+    CardForCycleBills,
+    | "billDueDay"
+    | "billCloseDay"
+    | "balanceDueDate"
+    | "balanceCloseDate"
+    | "statements"
+  >,
+): { dueDay: number; closeDay: number } | null {
+  const latest = [...card.statements].sort((a, b) => b.dueDate.localeCompare(a.dueDate))[0];
+  const dueDay =
+    card.billDueDay ??
+    (latest ? dayOfMonthFromDateKey(latest.dueDate) : null) ??
+    (card.balanceDueDate ? dayOfMonthFromDateKey(card.balanceDueDate) : null);
+  if (!dueDay) return null;
+
+  const closeDay =
+    card.billCloseDay ??
+    (latest?.closingDate ? dayOfMonthFromDateKey(latest.closingDate) : null) ??
+    (card.balanceCloseDate ? dayOfMonthFromDateKey(card.balanceCloseDate) : null) ??
+    inferCloseDay(dueDay);
+
+  return { dueDay, closeDay };
+}
+
+/** Faturas são mensais; um vencimento a menos de 20 dias da última fechada é o calendário antigo. */
+const MIN_STATEMENT_GAP_DAYS = 20;
+
+export function daysBetweenDateKeys(fromKey: string, toKey: string): number {
+  const from = Date.parse(`${fromKey}T12:00:00.000Z`);
+  const to = Date.parse(`${toKey}T12:00:00.000Z`);
+  return Math.round((to - from) / 86_400_000);
+}
+
+/** Próximo vencimento do dia informado, pulando o ciclo curto após uma mudança de data. */
+export function nextStatementDueAfter(
+  fromKey: string,
+  dueDay: number,
+  lastDueKey: string | null = null,
+): string {
+  let due = nextDayOfMonthOnOrAfter(fromKey, dueDay);
+  if (lastDueKey && due <= lastDueKey) {
+    due = nextDayOfMonthOnOrAfter(addDaysToDateKey(lastDueKey, 1), dueDay);
+  }
+  if (lastDueKey && daysBetweenDateKeys(lastDueKey, due) < MIN_STATEMENT_GAP_DAYS) {
+    due = nextDayOfMonthOnOrAfter(addDaysToDateKey(due, 1), dueDay);
+  }
+  return due;
+}
+
+export function statementDueInCycle(
+  cycle: { from: string; to: string },
+  dueDay: number,
+  lastDueKey: string | null = null,
+): string | null {
+  const due = nextStatementDueAfter(cycle.from, dueDay, lastDueKey);
+  return due <= cycle.to ? due : null;
+}
+
+function matchStatementForDue(
+  statements: PersistedCardStatement[],
+  dueKey: string,
+): PersistedCardStatement | null {
+  const exact = statements.find((s) => s.dueDate === dueKey);
+  if (exact) return exact;
+  const dueDay = dayOfMonthFromDateKey(dueKey);
+  const yearMonth = dueKey.slice(0, 7);
+  const closeDays = statements.filter((s) => {
+    if (!s.dueDate.startsWith(yearMonth)) return false;
+    return Math.abs(dayOfMonthFromDateKey(s.dueDate) - dueDay) <= 2;
+  });
+  closeDays.sort(
+    (a, b) =>
+      Math.abs(dayOfMonthFromDateKey(a.dueDate) - dueDay) -
+      Math.abs(dayOfMonthFromDateKey(b.dueDate) - dueDay),
+  );
+  return closeDays[0] ?? null;
+}
+
+function latestDueBefore(card: CardForCycleBills, dueKey: string): string | null {
+  const fromStatements = [...card.statements]
+    .map((s) => s.dueDate)
+    .filter((date) => date < dueKey)
+    .sort((a, b) => b.localeCompare(a))[0];
+  if (fromStatements) return fromStatements;
+  if (card.balanceDueDate && card.balanceDueDate < dueKey) return card.balanceDueDate;
+  return null;
+}
+
+function estimateStatementAmount(
+  card: CardForCycleBills,
+  dueKey: string,
+  closeDay: number,
+): { amount: number; closingDate: string } {
+  const closingDate = closeDateForDue(dueKey, closeDay);
+  const previousClosed = [...card.statements]
+    .filter((s) => s.dueDate < dueKey)
+    .sort((a, b) => b.dueDate.localeCompare(a.dueDate))[0];
+
+  const windowStart = previousClosed
+    ? addDaysToDateKey(
+        previousClosed.closingDate ?? closeDateForDue(previousClosed.dueDate, closeDay),
+        1,
+      )
+    : addDaysToDateKey(closingDate, -31);
+
+  let amount = 0;
+  for (const charge of card.charges) {
+    if (charge.date >= windowStart && charge.date <= closingDate) {
+      amount += charge.amount;
+    }
+  }
+  return { amount: roundMoney(amount), closingDate };
+}
+
+/**
+ * Caixa a sair neste ciclo de salário por fatura de cartão.
+ * Usa fatura fechada persistida; se ainda não veio da Pluggy, estima pelas compras do corte.
+ * Nunca usa o saldo/limite usado do cartão.
+ */
+export function buildCycleStatementPayments(
+  cards: CardForCycleBills[],
+  cycle: { from: string; to: string },
+  _today: string,
+  checkingPayments: CheckingPaymentLike[],
+): CycleStatementPaymentsResult {
+  const items: CycleStatementPaymentItem[] = [];
+
+  for (const card of cards) {
+    const days = resolveStatementDays(card);
+    if (!days) continue;
+
+    const candidate = nextDayOfMonthOnOrAfter(cycle.from, days.dueDay);
+    const dueKey = statementDueInCycle(
+      cycle,
+      days.dueDay,
+      latestDueBefore(card, candidate),
+    );
+    if (!dueKey) continue;
+
+    const persisted = matchStatementForDue(card.statements, dueKey);
+    const estimated = persisted
+      ? {
+          amount: roundMoney(persisted.totalAmount),
+          closingDate: persisted.closingDate ?? closeDateForDue(dueKey, days.closeDay),
+        }
+      : estimateStatementAmount(card, dueKey, days.closeDay);
+
+    if (estimated.amount <= 0) continue;
+    if (isCreditBillAlreadyPaid(estimated.amount, dueKey, checkingPayments)) continue;
+
+    const isEstimate = !persisted;
+    items.push({
+      id: `${card.accountId}:${dueKey}`,
+      title: isEstimate
+        ? `Fatura estimada ${card.accountName}`
+        : `Fatura ${card.accountName}`,
+      dueDate: dueKey,
+      amount: estimated.amount,
+      kind: "creditBills",
+      estimated: isEstimate,
+      closingDate: estimated.closingDate,
+    });
   }
 
   const total = roundMoney(items.reduce((sum, item) => sum + item.amount, 0));

@@ -12,6 +12,7 @@ import {
   normalizePluggyTransaction,
   processSyncedTransactions,
 } from "./categoryPipeline.js";
+import { persistPluggyCreditCardBills } from "./finance/creditCardBills.js";
 
 let client: PluggyClient | null = null;
 
@@ -155,6 +156,10 @@ export async function syncConnection(connectionId: string): Promise<void> {
         ...creditFields,
       },
     });
+
+    if (acc.type === "CREDIT") {
+      await persistPluggyCreditCardBills(acc.id, account.id);
+    }
 
     const transactions = await fetchAllTransactions(pluggy, acc.id, dateFromStr);
     const normalized = transactions.map((tx) => normalizePluggyTransaction(tx));

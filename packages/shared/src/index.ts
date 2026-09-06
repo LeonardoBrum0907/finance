@@ -176,8 +176,17 @@ export {
   toDate,
   toDateKey,
   buildPendingBillPayments,
+  buildCycleStatementPayments,
   buildCreditBillSnapshot,
   isCreditBillAlreadyPaid,
+  inferCloseDay,
+  closeDateForDue,
+  nextDayOfMonthOnOrAfter,
+  nextStatementDueAfter,
+  daysBetweenDateKeys,
+  previousDayOfMonthBefore,
+  resolveStatementDays,
+  statementDueInCycle,
   type BillBucket,
   type BillAssignment,
   type CreditBillSimulatedCharge,
@@ -185,6 +194,11 @@ export {
   type CreditBillPaymentItem,
   type PendingBillPaymentsResult,
   type CheckingPaymentLike,
+  type CardForCycleBills,
+  type CardStatementCharge,
+  type PersistedCardStatement,
+  type CycleStatementPaymentItem,
+  type CycleStatementPaymentsResult,
 } from "./creditBill";
 export {
   DASHBOARD_WIDGET_IDS,
@@ -229,6 +243,7 @@ export {
   paydayCyclesToDateRange,
   formatPaydayCycleLabel,
   formatPaydayCycleShortLabel,
+  toLocalDateKey,
   classifyIncome,
   estimateUpcomingCycleSalary,
   estimateSalaryForCycle,
@@ -548,6 +563,8 @@ export interface AccountDTO {
   minimumPayment?: number | null;
   balanceCloseDate?: string | null;
   balanceDueDate?: string | null;
+  billDueDay?: number | null;
+  billCloseDay?: number | null;
   /** Fatura já fechada (Pluggy Bills). */
   closedBillAmount?: number | null;
   closedBillDueDate?: string | null;
@@ -559,6 +576,12 @@ export interface AccountDTO {
   /** @deprecated Use openBillDueDate */
   nextBillDueDate?: string | null;
 }
+
+export const updateCreditAccountSchema = z.object({
+  billDueDay: z.number().int().min(1).max(31).nullable().optional(),
+  billCloseDay: z.number().int().min(1).max(31).nullable().optional(),
+});
+export type UpdateCreditAccountInput = z.infer<typeof updateCreditAccountSchema>;
 
 export interface TransactionDTO {
   id: string;

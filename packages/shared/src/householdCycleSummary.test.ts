@@ -68,6 +68,37 @@ describe("cycleForecastToPersonSummary", () => {
     assert.equal(summary.investmentsIncluded, false);
     assert.equal(summary.investmentBalance, 8000);
   });
+
+  it("maps credit bill expense items onto pendingCreditBills", () => {
+    const summary = cycleForecastToPersonSummary(
+      "p1",
+      "João",
+      10000,
+      forecast({
+        expenseBreakdown: {
+          recurring: 0,
+          installments: 0,
+          simulations: 0,
+          bank: 0,
+          creditBills: 190.5,
+        },
+        expenseItems: [
+          {
+            id: "nu:2026-09-11",
+            title: "Fatura gold",
+            dueDate: "2026-09-11",
+            amount: 190.5,
+            kind: "creditBills",
+          },
+        ],
+        pendingExpenses: 190.5,
+      }),
+    );
+    assert.equal(summary.pendingBillPayments, 190.5);
+    assert.equal(summary.pendingCreditBills.length, 1);
+    assert.equal(summary.pendingCreditBills[0]!.dueDate, "2026-09-11");
+    assert.equal(summary.pendingCreditBills[0]!.amount, 190.5);
+  });
 });
 
 describe("stillMineThisPeriod", () => {
