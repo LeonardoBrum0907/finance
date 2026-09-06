@@ -73,7 +73,6 @@ export function DashboardPage() {
   const summary = useQuery({
     queryKey: ["dashboard-summary", personId, cycleKeyForApi ?? "current"],
     queryFn: () => api.get<DashboardCycleSummaryResponse>(summaryUrl(personId, cycleKeyForApi)),
-    enabled: settings.isSuccess,
   });
 
   const saveSimulations = useMutation({
