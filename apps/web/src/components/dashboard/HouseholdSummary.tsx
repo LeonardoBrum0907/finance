@@ -34,7 +34,11 @@ function PersonRow({
         <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
           {CYCLE_COPY.netWorth}
         </p>
-        <p className="text-sm font-semibold text-brand">
+        <p
+          className={`text-sm font-semibold ${
+            person.netWorth < 0 ? "text-negative" : person.netWorth > 0 ? "text-positive" : "text-foreground"
+          }`}
+        >
           {formatPlainAmount(person.netWorth, currencyCode)}
         </p>
       </div>

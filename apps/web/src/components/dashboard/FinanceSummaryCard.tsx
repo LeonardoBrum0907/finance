@@ -127,7 +127,7 @@ export function FinanceSummaryCard({
       label: CYCLE_COPY.netWorth,
       value: formatPlainAmount(metrics.netWorth, currencyCode),
       hint: netWorthHint(metrics, currencyCode),
-      tone: "brand",
+      tone: toneForValue(metrics.netWorth),
       icon: Landmark,
     },
     {
@@ -183,7 +183,7 @@ export function FinanceSummaryCard({
                   {tile.status}
                 </p>
               )}
-              <p className={`font-display text-xl font-bold ${tileTextClass(tile.tone)}`}>
+              <p className={`font-display text-xl font-bold tabular-nums ${tileTextClass(tile.tone)}`}>
                 {tile.value}
               </p>
               {tile.key === "stillMine" && closingDelta != null && closingDelta !== 0 && (
