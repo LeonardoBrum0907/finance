@@ -24,7 +24,11 @@ import {
 import type { RecurringBill, RecurringBillOccurrence } from "@prisma/client";
 import { prisma } from "../../prisma.js";
 import { effectiveTransactionCategory } from "../transactionCategory.js";
-import { clampDayOfMonth, computeInstallmentDueDate } from "./commitments.js";
+import {
+  clampDayOfMonth,
+  computeInstallmentDueDate,
+  detectCardInstallmentPlans,
+} from "./commitments.js";
 import { syncFromRecurringBill } from "./managedAccounts.js";
 
 const DETECTION_LOOKBACK_MONTHS = 6;
@@ -43,6 +47,13 @@ function toDateKey(date: Date): string {
 
 function monthCycleKey(dateKey: string): string {
   return dateKey.slice(0, 7);
+}
+
+/** Uma ocorrência por mês: se duas cobranças caem no mesmo mês, fica a mais recente. */
+function lastTxPerCycle<T extends { date: string }>(txs: T[]): T[] {
+  const byCycle = new Map<string, T>();
+  for (const tx of txs) byCycle.set(monthCycleKey(toDateKey(new Date(tx.date))), tx);
+  return [...byCycle.values()];
 }
 
 function serializeOccurrence(occ: RecurringBillOccurrence) {
@@ -333,11 +344,81 @@ async function dismissUnconfirmedAutoBills(
   return dismissed;
 }
 
+/**
+ * Atualiza a assinatura das contas já salvas quando a normalização muda, para que
+ * contas excluídas pelo usuário continuem excluídas e não dupliquem com o nome novo.
+ * Se duas contas da mesma conta bancária caem na mesma assinatura, fica a mais recente.
+ */
+async function recanonicalizeBillSignatures(userId: string): Promise<void> {
+  const bills = await prisma.recurringBill.findMany({
+    where: { userId },
+    include: {
+      occurrences: {
+        where: { transactionId: { not: null } },
+        include: { transaction: { select: { description: true, merchantName: true } } },
+        orderBy: { dueDate: "desc" },
+        take: 1,
+      },
+    },
+    orderBy: [{ lastOccurrenceDate: "desc" }, { updatedAt: "desc" }],
+  });
+
+  const taken = new Map<string, string>();
+  for (const bill of bills) {
+    taken.set(`${bill.accountId ?? ""}::${bill.matchSignature}`, bill.id);
+  }
+
+  for (const bill of bills) {
+    const anchor = bill.occurrences[0]?.transaction;
+    const canonical = anchor
+      ? normalizeBillSignature(anchor.description, anchor.merchantName)
+      : normalizeBillSignature(bill.title);
+    if (!canonical || canonical === bill.matchSignature) continue;
+
+    const key = `${bill.accountId ?? ""}::${canonical}`;
+    const holderId = taken.get(key);
+    if (holderId && holderId !== bill.id) {
+      const holder = bills.find((b) => b.id === holderId);
+      if (bill.status !== "dismissed" && holder && holder.status !== "dismissed") {
+        await applyBillStatus(bill.id, "dismissed");
+      }
+      continue;
+    }
+
+    await prisma.recurringBill.update({
+      where: { id: bill.id },
+      data: { matchSignature: canonical },
+    });
+    taken.delete(`${bill.accountId ?? ""}::${bill.matchSignature}`);
+    taken.set(key, bill.id);
+    await syncFromRecurringBill(bill.id);
+  }
+}
+
+/** IOF de uma assinatura que o usuário excluiu também fica de fora. */
+async function parentBillWasDismissed(
+  userId: string,
+  candidate: RecurringPatternCandidate,
+): Promise<boolean> {
+  if (!candidate.matchSignature.startsWith("IOF ")) return false;
+  const parent = await prisma.recurringBill.findFirst({
+    where: {
+      userId,
+      accountId: candidate.accountId,
+      matchSignature: candidate.matchSignature.slice("IOF ".length),
+      status: "dismissed",
+    },
+    select: { id: true },
+  });
+  return parent != null;
+}
+
 export async function detectRecurringBills(
   userId: string,
   personId?: string,
 ): Promise<{ detected: number; dismissed: number }> {
   let dismissed = await dismissInvalidRecurringBills(userId);
+  await recanonicalizeBillSignatures(userId);
   const txs = await loadOutflowTransactions(userId, personId);
   const candidates = detectRecurringPatterns(txs);
   let detected = 0;
@@ -352,9 +433,19 @@ export async function detectRecurringBills(
     });
 
     if (existing?.status === "dismissed") continue;
+    if (await parentBillWasDismissed(userId, candidate)) continue;
 
     const lastTx = candidate.transactions[candidate.transactions.length - 1]!;
     const lastDate = new Date(lastTx.date);
+
+    // Uma cobrança pode ter ficado presa a uma conta antiga com outro descritor
+    // (ex.: "Ppro *Microsoft"); ela passa para a conta que a sequência confirmou.
+    await prisma.recurringBillOccurrence.updateMany({
+      where: {
+        transactionId: { in: candidate.transactions.map((tx) => tx.id) },
+      },
+      data: { transactionId: null },
+    });
 
     if (existing) {
       await prisma.recurringBill.update({
@@ -368,7 +459,7 @@ export async function detectRecurringBills(
         },
       });
 
-      for (const tx of candidate.transactions) {
+      for (const tx of lastTxPerCycle(candidate.transactions)) {
         const cycleKey = monthCycleKey(toDateKey(new Date(tx.date)));
         await prisma.recurringBillOccurrence.upsert({
           where: {
@@ -412,7 +503,7 @@ export async function detectRecurringBills(
         source: "auto_detected",
         lastOccurrenceDate: lastDate,
         occurrences: {
-          create: candidate.transactions.map((tx) => ({
+          create: lastTxPerCycle(candidate.transactions).map((tx) => ({
             cycleKey: monthCycleKey(toDateKey(new Date(tx.date))),
             dueDate: new Date(tx.date),
             amount: Math.abs(tx.amount),
@@ -487,7 +578,6 @@ export async function matchRecurringBillOccurrences(userId: string): Promise<num
     const candidates = candidateTransactions.filter((tx) => {
       if (linkedTxIds.has(tx.id)) return false;
       if (bill.accountId && tx.accountId !== bill.accountId) return false;
-      if (isCreditAccount(tx.account.type)) return false;
       if (!isTransactionOutflow(tx.amount, tx.account.type)) return false;
       if (!amountsMatch(tx.amount, bill.expectedAmount, bill.expectedAmount * 0.2)) return false;
 
@@ -648,6 +738,7 @@ export async function runRecurringBillPipeline(
   personId?: string,
 ): Promise<DetectRecurringBillsResponse> {
   const { detected, dismissed } = await detectRecurringBills(userId, personId);
+  await detectCardInstallmentPlans(userId);
   const matched = await matchRecurringBillOccurrences(userId);
   const deactivated = await deactivateStaleRecurringBills(userId, personId);
 

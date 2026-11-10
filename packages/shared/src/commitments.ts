@@ -35,6 +35,8 @@ export interface PaymentCommitmentDTO {
   totalInstallments: number;
   dayOfMonth: number | null;
   status: CommitmentStatus;
+  /** "auto_detected" quando veio das parcelas n/m do cartão. */
+  source?: "manual" | "auto_detected";
   anchorTransactionId: string | null;
   personId?: string | null;
   personName?: string | null;

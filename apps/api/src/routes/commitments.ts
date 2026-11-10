@@ -7,6 +7,7 @@ import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
 import {
   createCommitmentFromTransaction,
+  detectCardInstallmentPlans,
   listUserCommitments,
   matchCommitmentInstallments,
   updateCommitment,
@@ -57,6 +58,7 @@ export async function commitmentRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/api/commitments/match", async (request, reply) => {
     const matched = await matchCommitmentInstallments(request.user!.sub);
-    return reply.send({ matched });
+    const detected = await detectCardInstallmentPlans(request.user!.sub);
+    return reply.send({ matched, detected });
   });
 }
