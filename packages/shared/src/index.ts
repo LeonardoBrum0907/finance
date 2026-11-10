@@ -206,7 +206,9 @@ export {
 export {
   DASHBOARD_WIDGET_IDS,
   DASHBOARD_WIDGETS,
+  DASHBOARD_WIDGET_GROUPS,
   dashboardWidgetsPatchSchema,
+  needsDashboardDetails,
   hasAnyEnabledDashboardWidget,
   isDashboardWidgetId,
   mergeDashboardWidgetPatch,

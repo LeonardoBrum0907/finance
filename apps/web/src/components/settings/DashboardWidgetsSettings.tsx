@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LayoutDashboard } from "lucide-react";
 import {
+  DASHBOARD_WIDGET_GROUPS,
   DASHBOARD_WIDGETS,
   resolveDashboardWidgets,
   type DashboardWidgetId,
@@ -59,42 +60,51 @@ export function DashboardWidgetsSettings() {
       <p className="mb-4 text-xs text-muted-foreground">
         Escolha quais blocos aparecem no painel. A seleção é salva na sua conta.
       </p>
-      <div className="space-y-3">
-        {DASHBOARD_WIDGETS.map((widget) => {
-          const enabled = widgets?.[widget.id] ?? widget.defaultEnabled;
-          return (
-            <div
-              key={widget.id}
-              className="flex items-start justify-between gap-4 rounded-lg border border-app-border/60 bg-app-bg/50 p-4"
-            >
-              <div>
-                <p className="text-sm font-medium text-foreground">{widget.title}</p>
-                <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                  {widget.description}
-                </p>
-              </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={enabled}
-                disabled={disabled || !widgets}
-                onClick={() => handleToggle(widget.id)}
-                className={`relative mt-0.5 inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                  enabled ? "bg-brand" : "bg-slate-300"
-                }`}
-              >
-                <span
-                  className={`inline-block h-5 w-5 transform rounded-full bg-app-surface shadow-sm transition ${
-                    enabled ? "translate-x-6" : "translate-x-1"
-                  }`}
-                />
-                <span className="sr-only">
-                  {enabled ? `Ocultar ${widget.title}` : `Exibir ${widget.title}`}
-                </span>
-              </button>
+      <div className="space-y-5">
+        {DASHBOARD_WIDGET_GROUPS.map((group) => (
+          <div key={group.id}>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {group.title}
+            </p>
+            <div className="space-y-3">
+              {DASHBOARD_WIDGETS.filter((widget) => widget.group === group.id).map((widget) => {
+                const enabled = widgets?.[widget.id] ?? widget.defaultEnabled;
+                return (
+                  <div
+                    key={widget.id}
+                    className="flex items-start justify-between gap-4 rounded-lg border border-app-border/60 bg-app-bg/50 p-4"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{widget.title}</p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                        {widget.description}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={enabled}
+                      disabled={disabled || !widgets}
+                      onClick={() => handleToggle(widget.id)}
+                      className={`relative mt-0.5 inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                        enabled ? "bg-brand" : "bg-slate-300"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-5 w-5 transform rounded-full bg-app-surface shadow-sm transition ${
+                          enabled ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                      <span className="sr-only">
+                        {enabled ? `Ocultar ${widget.title}` : `Exibir ${widget.title}`}
+                      </span>
+                    </button>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
       {save.isError && (
         <p className="mt-2 text-xs text-danger">
