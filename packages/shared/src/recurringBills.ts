@@ -218,11 +218,20 @@ export function parseInstallmentMarker(
   );
 }
 
+/**
+ * `n/m` só indica parcela em cartão; em conta corrente costuma ser a data (`05/08`).
+ * `parcela n/m` escrito por extenso vale para qualquer conta.
+ */
 export function descriptionLooksLikeInstallment(
   description: string,
   merchantName?: string | null,
+  accountType?: string | null,
 ): boolean {
-  return parseInstallmentMarker(description, merchantName) != null;
+  if (isCreditAccount(accountType)) {
+    return parseInstallmentMarker(description, merchantName) != null;
+  }
+  const text = `${description} ${merchantName ?? ""}`;
+  return installmentPairFromMatch(text.match(INSTALLMENT_PARCELA_RE)) != null;
 }
 
 export function extractPayeeFromDescription(description: string): string | null {
@@ -266,7 +275,7 @@ export function isRecurringBillCandidateTransaction(tx: RecurringPatternTransact
   if (!isTransactionOutflow(tx.amount, tx.accountType)) return false;
   if (isCreditCardBillPayment(tx.category, tx.description)) return false;
   if (descriptionHasExcludedMarker(tx.description)) return false;
-  if (descriptionLooksLikeInstallment(tx.description, tx.merchantName)) return false;
+  if (descriptionLooksLikeInstallment(tx.description, tx.merchantName, tx.accountType)) return false;
   if (isSamePersonTransfer(tx.category, tx.description, tx.personName)) return false;
 
   const group = resolveDashboardGroup(tx.category);
@@ -505,10 +514,11 @@ export function shouldDismissAutoDetectedBill(input: {
   accountId: string | null;
   title: string;
   payeeName?: string | null;
+  accountType?: string | null;
 }): boolean {
   if (input.source !== "auto_detected") return false;
   if (!input.accountId) return true;
-  return descriptionLooksLikeInstallment(input.title, input.payeeName);
+  return descriptionLooksLikeInstallment(input.title, input.payeeName, input.accountType);
 }
 
 export function shouldDeactivateStaleRecurringBill(input: {

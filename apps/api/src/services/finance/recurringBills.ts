@@ -270,6 +270,7 @@ async function dismissInvalidRecurringBills(userId: string): Promise<number> {
       accountId: bill.accountId,
       title: bill.title,
       payeeName: bill.payeeName,
+      accountType: bill.account?.type,
     });
 
     const anchorTx = bill.occurrences[0]?.transaction;

@@ -113,6 +113,15 @@ describe("detectRecurringPatterns", () => {
     assert.equal(candidates[0]!.expectedAmount, 420);
   });
 
+  it("keeps bank bills whose description carries a dd/mm date", () => {
+    const candidates = detectRecurringPatterns([
+      { id: "t1", date: "2026-08-05", description: "PIX TRANSF ALUGUEL 05/08", amount: -1500, accountId: "itau", accountType: "BANK", category: "Contas fixas" },
+      { id: "t2", date: "2026-09-05", description: "PIX TRANSF ALUGUEL 05/09", amount: -1500, accountId: "itau", accountType: "BANK", category: "Contas fixas" },
+      { id: "t3", date: "2026-10-05", description: "PIX TRANSF ALUGUEL 05/10", amount: -1500, accountId: "itau", accountType: "BANK", category: "Contas fixas" },
+    ]);
+    assert.equal(candidates.length, 1);
+  });
+
   it("still detects a utility bill with small amount drift", () => {
     const candidates = detectRecurringPatterns([
       { id: "t1", date: "2026-03-17", description: "Conta Vivo", amount: 59, accountId: "card1", accountType: "CREDIT", category: "Telecomunicações" },
@@ -341,8 +350,21 @@ describe("shouldDismissAutoDetectedBill", () => {
         source: "auto_detected",
         accountId: "acc1",
         title: "Nat*Natura Pagamentos 2/3",
+        accountType: "CREDIT",
       }),
       true,
+    );
+  });
+
+  it("keeps a bank bill whose title carries a dd/mm date", () => {
+    assert.equal(
+      shouldDismissAutoDetectedBill({
+        source: "auto_detected",
+        accountId: "acc1",
+        title: "PIX TRANSF ALUGUEL 05/08",
+        accountType: "BANK",
+      }),
+      false,
     );
   });
 
