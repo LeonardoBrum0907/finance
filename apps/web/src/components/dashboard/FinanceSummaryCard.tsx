@@ -33,15 +33,24 @@ export type FinanceMetrics = Pick<
   isComplete?: boolean;
 };
 
+export type FinanceTileKey = "netWorth" | "stillMine" | "saved";
+
 interface Props {
   metrics: FinanceMetrics;
   currencyCode: string;
   title?: string;
   closingDelta?: number;
+  /** Sem valor, mostra todos os indicadores. */
+  visibleTiles?: readonly FinanceTileKey[];
 }
 
+const GRID_COLUMNS: Record<number, string> = {
+  2: "sm:grid-cols-2",
+  3: "sm:grid-cols-3",
+};
+
 interface MetricTile {
-  key: "netWorth" | "stillMine" | "saved";
+  key: FinanceTileKey;
   label: string;
   value: string;
   status?: string;
@@ -117,6 +126,7 @@ export function FinanceSummaryCard({
   currencyCode,
   title = "Resumo do ciclo",
   closingDelta,
+  visibleTiles,
 }: Props) {
   const stillMine = stillMineThisPeriod(metrics);
   const stillMineDisplay = formatCycleBalance(stillMine, currencyCode);
@@ -124,7 +134,7 @@ export function FinanceSummaryCard({
   const savedDisplay = formatCycleBalance(saved, currencyCode);
   const rate = savingsRate(metrics);
 
-  const tiles: MetricTile[] = [
+  const allTiles: MetricTile[] = [
     {
       key: "netWorth",
       label: CYCLE_COPY.netWorth,
@@ -162,12 +172,15 @@ export function FinanceSummaryCard({
       icon: PiggyBank,
     },
   ];
+  const tiles = visibleTiles
+    ? allTiles.filter((tile) => visibleTiles.includes(tile.key))
+    : allTiles;
 
   return (
     <section className={cardClass}>
       <h2 className="font-display text-sm font-semibold text-foreground">{title}</h2>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+      <div className={`mt-4 grid gap-3 ${GRID_COLUMNS[tiles.length] ?? ""}`}>
         {tiles.map((tile) => {
           const Icon = tile.icon;
           return (

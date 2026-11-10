@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { HouseholdCycleSummary, PersonCycleSummary } from "@finance/shared";
 import { savingsRate, stillMineThisPeriod } from "@finance/shared";
-import { FinanceSummaryCard, toFinanceMetrics } from "./FinanceSummaryCard";
+import { FinanceSummaryCard, toFinanceMetrics, type FinanceTileKey } from "./FinanceSummaryCard";
 import {
   CYCLE_COPY,
   formatCycleBalance,
@@ -15,6 +15,8 @@ interface Props {
   currencyCode: string;
   householdPaydayAligned: boolean;
   personFilter?: string;
+  visibleTiles: readonly FinanceTileKey[];
+  showPerPerson: boolean;
 }
 
 function PersonRow({
@@ -73,6 +75,8 @@ export function HouseholdSummary({
   currencyCode,
   householdPaydayAligned,
   personFilter,
+  visibleTiles,
+  showPerPerson,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const showHouseholdTotals = householdPaydayAligned || household.persons.length === 1;
@@ -91,18 +95,21 @@ export function HouseholdSummary({
     <div className="space-y-3">
       {!householdPaydayAligned && household.persons.length > 1 && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          As pessoas têm dias de pagamento diferentes. Veja o detalhamento por pessoa abaixo.
+          As pessoas têm dias de pagamento diferentes.{" "}
+          {showPerPerson
+            ? "Veja o detalhamento por pessoa abaixo."
+            : "Selecione uma pessoa para ver o resumo."}
         </div>
       )}
 
-      {stillMine < 0 && (
+      {stillMine < 0 && visibleTiles.includes("stillMine") && (
         <div className="rounded-xl border border-negative/30 bg-negative/5 px-4 py-3 text-sm text-negative">
           Atenção: neste período ainda falta{" "}
           {formatPlainAmount(Math.abs(stillMine), currencyCode)} depois de contas e faturas.
         </div>
       )}
 
-      {displayMetrics && (
+      {displayMetrics && visibleTiles.length > 0 && (
         <FinanceSummaryCard
           title={personFilter ? visiblePersons[0]?.personName ?? "Resumo" : "Casa"}
           metrics={toFinanceMetrics(displayMetrics, {
@@ -110,10 +117,11 @@ export function HouseholdSummary({
             isComplete: household.isComplete,
           })}
           currencyCode={currencyCode}
+          visibleTiles={visibleTiles}
         />
       )}
 
-      {household.persons.length > 1 && !personFilter && (
+      {showPerPerson && household.persons.length > 1 && !personFilter && (
         <div>
           <button
             type="button"
