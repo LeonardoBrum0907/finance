@@ -209,7 +209,7 @@ export function DashboardPage() {
             Painel
           </h1>
           <p className="mt-1 text-sm text-muted-foreground-dark">
-            Patrimônio, o que ainda é seu neste período e quanto ficou guardado.
+            Patrimônio, o que ainda é seu neste período e quanto sobrou no ciclo.
           </p>
         </div>
         {data && data.accounts.length > 0 && (

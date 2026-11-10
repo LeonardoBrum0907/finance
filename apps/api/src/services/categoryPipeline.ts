@@ -23,6 +23,7 @@ export interface PluggyTransactionPayload {
   currencyCode: string | null;
   category: string | null;
   merchantName: string | null;
+  billForecastMonth: string | null;
 }
 
 export interface ResolvedCategory {
@@ -50,14 +51,20 @@ export function extractMerchantName(tx: Record<string, unknown>): string | null 
 }
 
 export function normalizePluggyTransaction(tx: Record<string, unknown>): PluggyTransactionPayload {
+  // Compra em moeda estrangeira: `amount` vem na moeda original.
+  const amountInAccountCurrency = tx.amountInAccountCurrency as number | null | undefined;
+  const converted = amountInAccountCurrency != null;
+  const creditMeta = tx.creditCardMetadata as { billForecastDate?: string } | null | undefined;
+
   return {
     id: String(tx.id),
     date: String(tx.date),
     description: String(tx.description ?? "Transação"),
-    amount: Number(tx.amount ?? 0),
-    currencyCode: (tx.currencyCode as string | null) ?? null,
+    amount: Number(amountInAccountCurrency ?? tx.amount ?? 0),
+    currencyCode: converted ? null : ((tx.currencyCode as string | null) ?? null),
     category: (tx.category as string | null) ?? null,
     merchantName: extractMerchantName(tx),
+    billForecastMonth: creditMeta?.billForecastDate?.slice(0, 7) ?? null,
   };
 }
 
@@ -97,6 +104,7 @@ export async function processSyncedTransactions(
       amount: tx.amount,
       merchantName: tx.merchantName,
       pluggyCategory: tx.category,
+      billForecastMonth: tx.billForecastMonth,
     };
 
     if (existing?.userCategory) {
@@ -115,6 +123,8 @@ export async function processSyncedTransactions(
         update: {
           description: baseData.description,
           amount: baseData.amount,
+          currencyCode: tx.currencyCode ?? "BRL",
+          billForecastMonth: baseData.billForecastMonth,
           merchantName: baseData.merchantName,
           pluggyCategory: baseData.pluggyCategory,
         },
@@ -138,6 +148,8 @@ export async function processSyncedTransactions(
         update: {
           description: baseData.description,
           amount: baseData.amount,
+          currencyCode: tx.currencyCode ?? "BRL",
+          billForecastMonth: baseData.billForecastMonth,
           merchantName: baseData.merchantName,
           pluggyCategory: baseData.pluggyCategory,
           category: cached,
@@ -168,6 +180,8 @@ export async function processSyncedTransactions(
         update: {
           description: baseData.description,
           amount: baseData.amount,
+          currencyCode: tx.currencyCode ?? "BRL",
+          billForecastMonth: baseData.billForecastMonth,
           merchantName: baseData.merchantName,
           pluggyCategory: baseData.pluggyCategory,
           category: rulesResult.category,
@@ -192,6 +206,8 @@ export async function processSyncedTransactions(
       update: {
         description: baseData.description,
         amount: baseData.amount,
+        currencyCode: tx.currencyCode ?? "BRL",
+        billForecastMonth: baseData.billForecastMonth,
         merchantName: baseData.merchantName,
         pluggyCategory: baseData.pluggyCategory,
         category: rulesResult.category,

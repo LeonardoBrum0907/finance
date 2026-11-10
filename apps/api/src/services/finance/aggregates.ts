@@ -1,5 +1,6 @@
 import type { FinancialConnection, FinancialTransaction } from "./types.js";
 import {
+  alignSalaryDatesToPayday,
   classifyIncome,
   DEFAULT_PAYDAY_CYCLE_ANCHOR,
   estimateUpcomingCycleSalary,
@@ -431,7 +432,7 @@ export function getCycleSummary(
 ): MonthlySummary {
   const { from, to } = getPaydayCycleBounds(cycleKey, paydayDay, paydayCycleAnchor);
   const range = { from, to };
-  const totals = summarizeTransactions(txs, range);
+  const totals = summarizeTransactions(alignSalaryDatesToPayday(txs, paydayDay), range);
   return {
     month: cycleKey,
     label: formatPaydayCycleShortLabel(cycleKey, paydayDay, paydayCycleAnchor),
@@ -476,6 +477,7 @@ export function buildCycleSummary(
   extraIncome: number;
   projectedSalaryIncome: number;
 } {
+  txs = alignSalaryDatesToPayday(txs, paydayDay);
   const meta = cycleKey
     ? getPaydayCycleRangeByKey(cycleKey, paydayDay, paydayCycleAnchor)
     : getPaydayCycleRange(paydayDay, new Date(), paydayCycleAnchor);
@@ -665,7 +667,8 @@ export function buildGrowthMetrics(params: {
                   return { from: meta.from, to: today };
                 })()
               : currentRange;
-          const b = classifyIncome(txs, range, paydayDay);
+          const alignedTxs = alignSalaryDatesToPayday(txs, paydayDay);
+          const b = classifyIncome(alignedTxs, range, paydayDay);
           let projected = 0;
           if (periodMode === "payday") {
             const meta = focusCycleKey
@@ -673,7 +676,7 @@ export function buildGrowthMetrics(params: {
               : getPaydayCycleRange(paydayDay, new Date(), paydayCycleAnchor);
             if (!meta.isComplete && today <= meta.to) {
               projected = estimateUpcomingCycleSalary(
-                txs,
+                alignedTxs,
                 paydayDay,
                 paydayCycleAnchor,
                 {

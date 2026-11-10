@@ -316,6 +316,8 @@ export function buildPendingBillPayments(
 export interface CardStatementCharge {
   date: string;
   amount: number;
+  /** Mês da fatura informado pela Pluggy (AAAA-MM). Tem prioridade sobre a data da compra. */
+  billMonth?: string | null;
 }
 
 export interface PersistedCardStatement {
@@ -516,7 +518,12 @@ function estimateStatementAmount(
     : addDaysToDateKey(closingDate, -31);
 
   let amount = 0;
+  const dueMonth = dueKey.slice(0, 7);
   for (const charge of card.charges) {
+    if (charge.billMonth) {
+      if (charge.billMonth === dueMonth) amount += charge.amount;
+      continue;
+    }
     if (charge.date >= windowStart && charge.date <= closingDate) {
       amount += charge.amount;
     }

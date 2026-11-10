@@ -65,6 +65,14 @@ const CREDIT_CARD_PAYMENT_PREFIXES = [
   "Credit card payment",
 ] as const;
 
+/** Pix pago com cartão: o banco credita e debita a conta; o gasto real é a cobrança no cartão. */
+const PIX_ON_CREDIT_MARKERS = ["crédito liberado para pix", "credito liberado para pix", "pix enviado com cartão", "pix enviado com cartao"] as const;
+
+const AUTOMATIC_INVESTMENT_CATEGORIES = ["Investimento automático", "Automatic investment"] as const;
+
+/** Parcelamento via Pix que a Pluggy classifica como cartão, mas não é fatura. */
+const NOT_A_CARD_BILL_MARKERS = ["pagaleve"] as const;
+
 function normalizeForNameMatch(text: string): string {
   return text
     .normalize("NFD")
@@ -126,10 +134,21 @@ export function isSamePersonTransfer(
   return descriptionMatchesPersonName(description, personName);
 }
 
+export function isPixOnCreditLeg(description: string | null | undefined): boolean {
+  const text = (description ?? "").toLowerCase();
+  return PIX_ON_CREDIT_MARKERS.some((marker) => text.includes(marker));
+}
+
+export function isAutomaticInvestmentMovement(category: string | null | undefined): boolean {
+  return AUTOMATIC_INVESTMENT_CATEGORIES.some((name) => category === name);
+}
+
 export function isCreditCardBillPayment(
   category: string | null | undefined,
   description: string | null | undefined,
 ): boolean {
+  const lowered = (description ?? "").toLowerCase();
+  if (NOT_A_CARD_BILL_MARKERS.some((marker) => lowered.includes(marker))) return false;
   if (category && CREDIT_CARD_PAYMENT_PREFIXES.some((prefix) => category.startsWith(prefix))) {
     return true;
   }
@@ -162,6 +181,8 @@ export function countsTowardCashFlow(
 
   if (isSamePersonTransfer(category, description, personName)) return false;
   if (isCreditCardBillPayment(category, description)) return false;
+  if (isPixOnCreditLeg(description)) return false;
+  if (isAutomaticInvestmentMovement(category)) return false;
 
   return true;
 }

@@ -1,4 +1,5 @@
 import {
+  alignSalaryDatesToPayday,
   buildCycleForecastBlock,
   buildCycleForecastPair,
   buildCycleStatementPayments,
@@ -33,12 +34,19 @@ function toTransactionLike(txs: FinancialTransaction[]): TransactionLike[] {
 
 function managedAccountsToPurchasesWithKind(
   accounts: ManagedAccountForSimulation[],
-): Array<SimulatedPurchase & { accountKind: string }> {
-  const purchases: Array<SimulatedPurchase & { accountKind: string }> = [];
+): Array<SimulatedPurchase & { accountKind: string; paidByCard: boolean }> {
+  const purchases: Array<SimulatedPurchase & { accountKind: string; paidByCard: boolean }> = [];
   for (const account of accounts) {
     const purchase = managedAccountToSimulatedPurchase(account);
     if (!purchase) continue;
-    purchases.push({ ...purchase, accountKind: account.kind });
+    purchases.push({
+      ...purchase,
+      accountKind: account.kind,
+      paidByCard:
+        account.paidByCard === true ||
+        purchase.paymentMethod === "credit_single" ||
+        purchase.paymentMethod === "credit_installments",
+    });
   }
   return purchases;
 }
@@ -90,6 +98,7 @@ export async function buildDashboardCycleForecasts(
   includeSimulations = true,
   creditCards?: CardForCycleBills[],
 ): Promise<CycleForecastPair> {
+  txs = alignSalaryDatesToPayday(txs, paydayDay);
   const currentCycle = buildCurrentCycleSummary(txs, paydayDay, paydayCycleAnchor, 0);
   const today = todayDateKeyInTimeZone();
   const managedAccounts = await loadActiveManagedAccountsForImpact(userId, personId);
@@ -133,6 +142,7 @@ export async function buildCycleForecastForKey(
   includeSimulations = true,
   creditCards?: CardForCycleBills[],
 ): Promise<CycleForecastBlock> {
+  txs = alignSalaryDatesToPayday(txs, paydayDay);
   const meta = getPaydayCycleRangeByKey(cycleKey, paydayDay, paydayCycleAnchor);
   const today = todayDateKeyInTimeZone();
   const managedAccounts = await loadActiveManagedAccountsForImpact(userId, personId);

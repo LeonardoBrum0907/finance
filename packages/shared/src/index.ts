@@ -249,6 +249,7 @@ export {
   formatPaydayCycleLabel,
   formatPaydayCycleShortLabel,
   toLocalDateKey,
+  alignSalaryDatesToPayday,
   classifyIncome,
   estimateUpcomingCycleSalary,
   estimateSalaryForCycle,

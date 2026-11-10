@@ -1,5 +1,6 @@
 import {
   countsTowardCashFlow,
+  isCreditAccount,
   isTransactionOutflow,
 } from "./transactions.js";
 import {
@@ -46,6 +47,8 @@ export interface CycleForecastExpenseItem {
   dueDate: string;
   amount: number;
   kind: "recurring" | "installments" | "simulations" | "bank" | "creditBills";
+  /** Cobrado no cartão: só vira saída de caixa quando a fatura vence. */
+  paidByCard?: boolean;
 }
 
 export interface CycleForecastBlock {
@@ -58,8 +61,11 @@ export interface CycleForecastBlock {
   realizedNet: number;
   /** Salário pendente (ciclo atual) ou esperado (próximo ciclo). */
   pendingIncome: number;
+  /** Gastos a acontecer, pela data da compra. Não inclui pagamento de fatura. */
   pendingExpenses: number;
-  /** realizedNet + pendingIncome - pendingExpenses (inclui creditBills). */
+  /** O que ainda sai do caixa no ciclo: inclui faturas e exclui o que é cobrado no cartão. */
+  pendingCashExpenses: number;
+  /** realizedNet + pendingIncome - pendingExpenses. */
   closingBalance: number;
   expenseBreakdown: CycleForecastExpenseBreakdown;
   expenseItems: CycleForecastExpenseItem[];
@@ -84,11 +90,18 @@ export function summarizeForecastCashFlow(
   txs: TransactionLike[],
   range: { from: string; to: string },
   asOfKey: string,
-): { income: number; expenses: number; net: number; bankCommitted: number } {
+): {
+  income: number;
+  expenses: number;
+  net: number;
+  bankCommitted: number;
+  bankCommittedCash: number;
+} {
   const effectiveTo = range.to < asOfKey ? range.to : asOfKey;
   const realized = summarizeForecastTransactions(txs, { from: range.from, to: effectiveTo });
 
   let bankCommitted = 0;
+  let bankCommittedCash = 0;
   if (asOfKey < range.to) {
     const committedFrom = addDaysToDateKey(asOfKey, 1);
     if (committedFrom <= range.to) {
@@ -96,6 +109,10 @@ export function summarizeForecastCashFlow(
         from: committedFrom,
         to: range.to,
       }).expenses;
+      bankCommittedCash = summarizeForecastTransactions(
+        txs.filter((tx) => !isCreditAccount(tx.accountType)),
+        { from: committedFrom, to: range.to },
+      ).expenses;
     }
   }
 
@@ -104,6 +121,7 @@ export function summarizeForecastCashFlow(
     expenses: realized.expenses,
     net: realized.net,
     bankCommitted,
+    bankCommittedCash,
   };
 }
 
@@ -145,7 +163,7 @@ export function getNextPaydayCycle(
 }
 
 export function buildPendingExpensesFromPurchases(
-  purchases: SimulatedPurchase[],
+  purchases: Array<SimulatedPurchase & { paidByCard?: boolean }>,
   range: { from: string; to: string },
   today: string,
   kind: CycleForecastExpenseItem["kind"],
@@ -164,6 +182,7 @@ export function buildPendingExpensesFromPurchases(
         dueDate: inst.dueDate,
         amount: inst.amount,
         kind,
+        ...(purchase.paidByCard ? { paidByCard: true } : {}),
       });
     }
   }
@@ -226,8 +245,7 @@ export function buildCycleForecastBlock(params: {
     expenseBreakdown.recurring +
       expenseBreakdown.installments +
       expenseBreakdown.simulations +
-      expenseBreakdown.bank +
-      expenseBreakdown.creditBills,
+      expenseBreakdown.bank,
   );
 
   const realizedIncome = roundMoney(incomeBreakdown.salary + incomeBreakdown.extra);
@@ -237,6 +255,20 @@ export function buildCycleForecastBlock(params: {
 
   const expenseItems = [...(pending.items ?? [])].filter(
     (item) => includeSimulations || item.kind !== "simulations",
+  );
+
+  const onCardTotal = expenseItems.reduce(
+    (sum, item) => sum + (item.paidByCard ? item.amount : 0),
+    0,
+  );
+  const bankCash = pending.bank ?? cashFlow.bankCommittedCash;
+  const pendingCashExpenses = roundMoney(
+    expenseBreakdown.recurring +
+      expenseBreakdown.installments +
+      expenseBreakdown.simulations -
+      onCardTotal +
+      bankCash +
+      expenseBreakdown.creditBills,
   );
 
   const salaryKnown = pendingIncome > 0 || incomeBreakdown.salary > 0;
@@ -251,6 +283,7 @@ export function buildCycleForecastBlock(params: {
     realizedNet,
     pendingIncome: roundMoney(pendingIncome),
     pendingExpenses,
+    pendingCashExpenses,
     closingBalance,
     expenseBreakdown,
     expenseItems,
@@ -298,7 +331,7 @@ export function buildCycleForecastPair(params: {
 
 /** Impacto de compras simuladas separado por tipo de conta gerenciada. */
 export function splitPurchaseImpactsByKind(
-  purchases: Array<SimulatedPurchase & { accountKind?: string }>,
+  purchases: Array<SimulatedPurchase & { accountKind?: string; paidByCard?: boolean }>,
   cycle: PaydayCycleInput,
   today: string,
 ): CycleForecastPendingInput {

@@ -147,7 +147,7 @@ describe("buildCreditBillSnapshot", () => {
 });
 
 describe("creditBills in cycle forecast closing balance", () => {
-  it("reduces closingBalance by bill payment without doubling card purchases", () => {
+  it("takes the bill out of cash without counting card purchases twice", () => {
     const paydayDay = 25;
     const txs: TransactionLike[] = [
       salaryTx("2026-05-25", 5000),
@@ -185,10 +185,8 @@ describe("creditBills in cycle forecast closing balance", () => {
     });
 
     assert.equal(withBill.expenseBreakdown.creditBills, 1200);
-    assert.equal(
-      withBill.closingBalance,
-      Math.round((withoutBill.closingBalance - 1200) * 100) / 100,
-    );
+    assert.equal(withBill.closingBalance, withoutBill.closingBalance);
+    assert.equal(withBill.pendingCashExpenses, withoutBill.pendingCashExpenses + 1200);
     // Compras no cartão permanecem só em realized — não somam de novo via creditBills
     assert.equal(withBill.realizedExpenses, withoutBill.realizedExpenses);
   });
@@ -309,5 +307,34 @@ describe("buildCycleStatementPayments", () => {
       [billPaymentTx("2026-09-11", 190.5)],
     );
     assert.equal(result.total, 0);
+  });
+});
+
+describe("estimated statement by Pluggy bill month", () => {
+  it("uses the bill month over the purchase date", () => {
+    const result = buildCycleStatementPayments(
+      [
+        {
+          accountId: "c1",
+          accountName: "Itaú",
+          billDueDay: 28,
+          billCloseDay: 21,
+          balanceDueDate: "2026-10-28",
+          balanceCloseDate: null,
+          creditBrand: null,
+          statements: [{ dueDate: "2026-10-28", closingDate: "2026-10-21", totalAmount: 3000 }],
+          charges: [
+            { date: "2026-11-30", amount: 500, billMonth: "2026-11" },
+            { date: "2026-10-20", amount: 40, billMonth: "2026-11" },
+            { date: "2026-11-02", amount: 10, billMonth: "2026-12" },
+            { date: "2026-11-01", amount: 5 },
+          ],
+        },
+      ],
+      { from: "2026-11-25", to: "2026-12-24" },
+      "2026-11-10",
+      [],
+    );
+    assert.equal(result.total, 545);
   });
 });

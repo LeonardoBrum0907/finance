@@ -56,15 +56,15 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
   },
   {
     id: "cycle-savings",
-    title: "Guardado neste ciclo",
-    description: "Quanto da renda do ciclo ficou guardado.",
+    title: "Sobra do ciclo",
+    description: "Renda do ciclo menos os gastos do ciclo.",
     defaultEnabled: true,
     group: "main",
   },
   {
     id: "per-person",
     title: "Resumo por pessoa",
-    description: "Patrimônio, o que ainda é seu e o guardado de cada pessoa da casa.",
+    description: "Patrimônio, o que ainda é seu e a sobra de cada pessoa da casa.",
     defaultEnabled: true,
     group: "main",
   },

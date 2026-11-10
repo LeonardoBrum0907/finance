@@ -138,6 +138,8 @@ model Transaction {
   categorySource      String?
   categoryConfidence  Float?
   merchantName        String?
+  /** Mês da fatura em que a compra cai (AAAA-MM), informado pela Pluggy. */
+  billForecastMonth   String?
   accountId           String
   createdAt           DateTime @default(now())
 

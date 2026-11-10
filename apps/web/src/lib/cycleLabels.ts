@@ -16,7 +16,7 @@ export const CYCLE_COPY = {
   nextCycle: "Próximo ciclo",
   netWorth: "Patrimônio líquido",
   stillMineThisPeriod: "Ainda é meu neste período",
-  savedThisCycle: "Guardado neste ciclo",
+  savedThisCycle: "Sobra do ciclo",
   /** @deprecated use realizedUntilNow */
   untilNow: "Realizado até hoje",
   /** @deprecated use closingThisCycle */

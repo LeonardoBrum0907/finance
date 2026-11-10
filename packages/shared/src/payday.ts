@@ -694,14 +694,39 @@ const PAYDAY_TOLERANCE_DAYS = 2;
 
 
 
+/** Dia de pagamento mais próximo da data, olhando também os meses vizinhos. */
+function nearestPayday(dateKey: string, paydayDay: number): { key: string; distance: number } {
+  const { y, m } = parseDateKey(dateKey);
+  let best = { key: paydayDateInMonth(y, m, paydayDay), distance: Number.POSITIVE_INFINITY };
+  for (const delta of [-1, 0, 1]) {
+    const month = addMonths(y, m, delta);
+    const key = paydayDateInMonth(month.y, month.m, paydayDay);
+    const distance = Math.abs(diffDays(dateKey, key));
+    if (distance < best.distance) best = { key, distance };
+  }
+  return best;
+}
+
 function isNearPayday(dateKey: string, paydayDay: number): boolean {
+  return nearestPayday(dateKey, paydayDay).distance <= PAYDAY_TOLERANCE_DAYS;
+}
 
-  const { y, m, d } = parseDateKey(dateKey);
-
-  const effective = effectivePaydayInMonth(y, m, paydayDay);
-
-  return Math.abs(d - effective) <= PAYDAY_TOLERANCE_DAYS;
-
+/**
+ * Salário antecipado (fim de semana, feriado) pertence ao ciclo do dia de pagamento.
+ * Move só a data usada nos cálculos, para ele não cair no ciclo anterior.
+ */
+export function alignSalaryDatesToPayday<T extends TransactionLike>(
+  txs: T[],
+  paydayDay: number,
+): T[] {
+  return txs.map((tx) => {
+    if (tx.category !== SALARY_CATEGORY || isTransactionOutflow(tx.amount, tx.accountType)) {
+      return tx;
+    }
+    const { key, distance } = nearestPayday(toLocalDateKey(tx.date), paydayDay);
+    if (distance === 0 || distance > PAYDAY_TOLERANCE_DAYS) return tx;
+    return { ...tx, date: new Date(`${key}T12:00:00-03:00`) };
+  });
 }
 
 

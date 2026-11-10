@@ -187,6 +187,7 @@ async function loadFinancialData(
             accountType: acc.type,
             personId: person.id,
             personName: person.name,
+            billForecastMonth: tx.billForecastMonth,
           });
         }
       }

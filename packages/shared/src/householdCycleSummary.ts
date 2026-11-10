@@ -29,6 +29,8 @@ export interface PersonCycleSummary {
   closingBalance: number;
   projectedSalaryIncome: number;
   pendingExpenses: number;
+  /** Saídas de caixa ainda previstas no ciclo, com faturas e sem compras no cartão. */
+  pendingCashExpenses: number;
   /** Pagamentos de fatura de cartão projetados no ciclo. */
   pendingBillPayments: number;
   pendingCreditBills: Array<{ title: string; dueDate: string; amount: number }>;
@@ -51,6 +53,7 @@ export interface HouseholdCycleSummary {
   closingBalance: number;
   projectedSalaryIncome: number;
   pendingExpenses: number;
+  pendingCashExpenses: number;
   pendingBillPayments: number;
   pendingCreditBills: Array<{ title: string; dueDate: string; amount: number }>;
   persons: PersonCycleSummary[];
@@ -66,13 +69,13 @@ export function computeNetWorth(input: {
   return roundMoney(input.bankBalance - input.creditDebt + investments);
 }
 
-/** Caixa + renda prevista − contas/faturas ainda pendentes neste período. */
+/** Caixa + renda prevista − o que ainda sai do caixa neste período, com faturas no vencimento. */
 export function stillMineThisPeriod(input: {
   bankBalance: number;
   projectedSalaryIncome: number;
-  pendingExpenses: number;
+  pendingCashExpenses: number;
 }): number {
-  return roundMoney(input.bankBalance + input.projectedSalaryIncome - input.pendingExpenses);
+  return roundMoney(input.bankBalance + input.projectedSalaryIncome - input.pendingCashExpenses);
 }
 
 export function cycleIncome(input: {
@@ -156,6 +159,7 @@ export function cycleForecastToPersonSummary(
     closingBalance: forecast.closingBalance,
     projectedSalaryIncome: forecast.pendingIncome,
     pendingExpenses: forecast.pendingExpenses,
+    pendingCashExpenses: forecast.pendingCashExpenses,
     pendingBillPayments: forecast.expenseBreakdown.creditBills,
     pendingCreditBills: forecast.expenseItems
       .filter((item) => item.kind === "creditBills")
@@ -197,6 +201,7 @@ export function aggregateHouseholdCycleSummary(
     closingBalance: sum((p) => p.closingBalance),
     projectedSalaryIncome: sum((p) => p.projectedSalaryIncome),
     pendingExpenses: sum((p) => p.pendingExpenses),
+    pendingCashExpenses: sum((p) => p.pendingCashExpenses),
     pendingBillPayments: sum((p) => p.pendingBillPayments),
     pendingCreditBills: persons.flatMap((p) => p.pendingCreditBills),
     persons,
