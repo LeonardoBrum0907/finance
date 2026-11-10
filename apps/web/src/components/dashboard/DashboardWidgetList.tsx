@@ -1,7 +1,10 @@
 import type { RefObject } from "react";
 import type {
+  AggregateSimulationImpactDTO,
+  CategoryChartSelection,
   CreditAccountSnapshot,
   DashboardPeriodSummary,
+  DashboardSummary,
   DashboardWidgetId,
   DashboardWidgetsState,
   HouseholdCycleSummary,
@@ -10,7 +13,15 @@ import type {
 } from "@finance/shared";
 import type { FinanceTileKey } from "./FinanceSummaryCard";
 import { HouseholdSummary } from "./HouseholdSummary";
+import { isCreditAccount, needsDashboardDetails } from "@finance/shared";
+import { CreditCardList } from "./CreditCardList";
+import { CycleProgressCard } from "./CycleProgressCard";
+import { GrowthChart } from "./GrowthChart";
+import { InsightsPanel } from "./InsightsPanel";
+import { InvestmentSnapshot } from "./InvestmentSnapshot";
 import { RecentTransactions } from "./RecentTransactions";
+import { SimulationImpactPanel } from "./SimulationImpactPanel";
+import { StatCards } from "./StatCards";
 import type { PersonFilter } from "./PersonSelector";
 
 interface Props {
@@ -31,6 +42,14 @@ interface Props {
   savingSimulation: boolean;
   creditAccounts: CreditAccountSnapshot[];
   selectedCycle?: NavigableCycle;
+  accounts: DashboardSummary["accounts"];
+  details?: DashboardSummary;
+  detailsFailed: boolean;
+  simulationImpact?: AggregateSimulationImpactDTO;
+  categorySelection: CategoryChartSelection | null;
+  onCategorySelect: (selection: CategoryChartSelection) => void;
+  onClearCategorySelection: () => void;
+  onSelectCycle: (cycleKey: string) => void;
 }
 
 const SUMMARY_TILES: readonly { widget: DashboardWidgetId; tile: FinanceTileKey }[] = [
@@ -57,6 +76,14 @@ export function DashboardWidgetList({
   savingSimulation,
   creditAccounts,
   selectedCycle,
+  accounts,
+  details,
+  detailsFailed,
+  simulationImpact,
+  categorySelection,
+  onCategorySelect,
+  onClearCategorySelection,
+  onSelectCycle,
 }: Props) {
   if (!anyWidgetEnabled) {
     return (
@@ -75,6 +102,8 @@ export function DashboardWidgetList({
 
   const visibleTiles = SUMMARY_TILES.filter(({ widget }) => widgets[widget]).map(({ tile }) => tile);
   const showPerPerson = widgets["per-person"];
+  const showTransactions = widgets["recent-transactions"];
+  const detailsCycle = details?.recentCycles?.find((c) => c.cycleKey === activeCycleKey);
 
   return (
     <>
@@ -88,15 +117,85 @@ export function DashboardWidgetList({
           showPerPerson={showPerPerson}
         />
       )}
-      {widgets["recent-transactions"] && (
+      {widgets["simulation-impact"] && simulationEnabled && simulationImpact && (
+        <SimulationImpactPanel
+          impact={simulationImpact}
+          onAddAnother={showTransactions ? () => onSimulateModalOpenChange(true) : undefined}
+        />
+      )}
+      {needsDashboardDetails(widgets) && !details && (
+        <div className="rounded-xl border border-app-border bg-app-surface p-6 text-sm text-muted-foreground">
+          {detailsFailed
+            ? "Não foi possível carregar alguns blocos. Tente novamente em instantes."
+            : "Carregando blocos..."}
+        </div>
+      )}
+      {details && (
+        <>
+          {widgets["cycle-progress"] &&
+            detailsCycle &&
+            activeCycleKey &&
+            details.paydayDay !== null && (
+              <CycleProgressCard
+                cycle={detailsCycle}
+                cycles={[detailsCycle]}
+                currencyCode={details.currencyCode}
+                paydayDay={details.paydayDay}
+                paydayCycleAnchor={details.paydayCycleAnchor}
+                selectedCycleKey={activeCycleKey}
+                onSelectCycle={onSelectCycle}
+              />
+            )}
+          {widgets["period-comparison"] && (
+            <StatCards
+              netWorth={details.netWorth}
+              accounts={details.accounts}
+              currencyCode={details.currencyCode}
+              period={details.period}
+              previousPeriod={details.previousPeriod}
+              periodMode="payday"
+              personId={personFilter}
+            />
+          )}
+          {widgets.investments && (
+            <InvestmentSnapshot
+              investments={details.investments}
+              currencyCode={details.currencyCode}
+            />
+          )}
+          {widgets["spending-evolution"] && (
+            <GrowthChart
+              data={details.monthlySeries}
+              months={1}
+              currencyCode={details.currencyCode}
+              growthMetrics={details.growthMetrics}
+              categories={details.categories}
+              previousCategories={details.previousCategories}
+              periodLabel={details.period.label}
+              periodMode="payday"
+              hideIncomeBreakdown={widgets["cycle-progress"]}
+              onCategorySelect={showTransactions ? onCategorySelect : undefined}
+              personId={personFilter}
+              availableNet={details.period.availableNet}
+            />
+          )}
+          {widgets.insights && (
+            <InsightsPanel insights={details.insights} personId={personFilter} />
+          )}
+        </>
+      )}
+      {widgets["credit-cards"] && accounts.some((acc) => isCreditAccount(acc.type)) && (
+        <CreditCardList accounts={accounts} />
+      )}
+      {showTransactions && (
         <RecentTransactions
           personId={personId}
           dashboardMonths={1}
           periodMode="payday"
           cycleKey={activeCycleKey ?? undefined}
           periodSummary={periodSummary}
-          categorySelection={null}
-          onClearCategorySelection={() => {}}
+          categorySelection={categorySelection}
+          onClearCategorySelection={onClearCategorySelection}
           sectionRef={transactionsRef}
           simulationEnabled={simulationEnabled}
           simulateModalOpen={simulateModalOpen}

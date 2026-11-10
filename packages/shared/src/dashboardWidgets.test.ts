@@ -5,6 +5,7 @@ import {
   DASHBOARD_WIDGETS,
   dashboardWidgetsPatchSchema,
   hasAnyEnabledDashboardWidget,
+  needsDashboardDetails,
   mergeDashboardWidgetPatch,
   parseStoredDashboardWidgets,
   resolveDashboardWidgets,
@@ -16,6 +17,7 @@ describe("resolveDashboardWidgets", () => {
     const resolved = resolveDashboardWidgets(null);
     assert.equal(resolved["net-worth"], true);
     assert.equal(resolved["recent-transactions"], true);
+    assert.equal(resolved["credit-cards"], false);
     assert.equal(Object.keys(resolved).length, DASHBOARD_WIDGETS.length);
   });
 
@@ -97,6 +99,23 @@ describe("dashboardWidgetsPatchSchema", () => {
       dashboardWidgetsPatchSchema.safeParse({ "household-summary": false }).success,
       false,
     );
+  });
+});
+
+describe("needsDashboardDetails", () => {
+  it("skips the extra fetch on the default dashboard", () => {
+    assert.equal(needsDashboardDetails(resolveDashboardWidgets(null)), false);
+  });
+
+  it("skips it for extras served by the summary", () => {
+    assert.equal(
+      needsDashboardDetails(resolveDashboardWidgets({ "credit-cards": true })),
+      false,
+    );
+  });
+
+  it("asks for it when a detail widget is on", () => {
+    assert.equal(needsDashboardDetails(resolveDashboardWidgets({ insights: true })), true);
   });
 });
 

@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  AggregateSimulationImpactDTO,
+  CategoryChartSelection,
   CreateSimulationScenarioInput,
   DashboardCycleSummaryResponse,
+  DashboardSummary,
   PersonDTO,
   SimulatedPurchaseInput,
   UserSettingsDTO,
@@ -11,6 +14,7 @@ import {
   hasAnyEnabledDashboardWidget,
   isCreditAccount,
   isPaydayDayConfigured,
+  needsDashboardDetails,
   parsePaydayCycleAnchor,
   resolveDashboardWidgets,
   simulatedPurchaseInputToPayload,
@@ -30,12 +34,25 @@ function summaryUrl(personId: PersonFilter, cycleKey?: string): string {
   return qs ? `/api/dashboard/summary?${qs}` : "/api/dashboard/summary";
 }
 
+function detailsUrl(personId: PersonFilter, cycleKey: string): string {
+  const params = new URLSearchParams({ months: "1", periodMode: "payday", cycleKey });
+  if (personId !== "all") params.set("personId", personId);
+  return `/api/dashboard?${params}`;
+}
+
+function impactUrl(personId: PersonFilter): string {
+  return personId === "all"
+    ? "/api/simulations/impact"
+    : `/api/simulations/impact?personId=${personId}`;
+}
+
 export function DashboardPage() {
   const { setDashboardPersonFilter } = useAssistant();
   const queryClient = useQueryClient();
   const [personId, setPersonId] = useState<PersonFilter>("all");
   const [selectedCycleKey, setSelectedCycleKey] = useState<string | null>(null);
   const [simulateModalOpen, setSimulateModalOpen] = useState(false);
+  const [categorySelection, setCategorySelection] = useState<CategoryChartSelection | null>(null);
   const transactionsRef = useRef<HTMLElement>(null);
 
   const settings = useQuery({
@@ -119,6 +136,33 @@ export function DashboardPage() {
   const activeCycleKey = data?.selectedCycleKey ?? selectedCycleKey;
   const selectedCycle = data?.navigableCycles.find((c) => c.cycleKey === activeCycleKey);
   const simulationEnabled = Boolean(selectedCycle?.isCurrent);
+
+  const details = useQuery({
+    queryKey: ["dashboard", personId, activeCycleKey],
+    queryFn: () => api.get<DashboardSummary>(detailsUrl(personId, activeCycleKey!)),
+    enabled: Boolean(data?.household && activeCycleKey) && needsDashboardDetails(dashboardWidgets),
+  });
+
+  const simulationImpact = useQuery({
+    queryKey: ["simulations-impact", personId],
+    queryFn: () => api.get<AggregateSimulationImpactDTO>(impactUrl(personId)),
+    enabled: simulationEnabled && dashboardWidgets["simulation-impact"],
+  });
+
+  useEffect(() => {
+    setCategorySelection(null);
+  }, [personId, activeCycleKey]);
+
+  const handleCategorySelect = useCallback((selection: CategoryChartSelection) => {
+    setCategorySelection(selection);
+    requestAnimationFrame(() => {
+      transactionsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
+
+  const handleClearCategorySelection = useCallback(() => {
+    setCategorySelection(null);
+  }, []);
 
   const creditAccountsForSimulation = useMemo(() => {
     if (!data) return [];
@@ -257,6 +301,14 @@ export function DashboardPage() {
           savingSimulation={saveSimulations.isPending}
           creditAccounts={creditAccountsForSimulation}
           selectedCycle={selectedCycle}
+          accounts={data.accounts}
+          details={details.data}
+          detailsFailed={details.isError}
+          simulationImpact={simulationImpact.data}
+          categorySelection={categorySelection}
+          onCategorySelect={handleCategorySelect}
+          onClearCategorySelection={handleClearCategorySelection}
+          onSelectCycle={setSelectedCycleKey}
         />
       )}
     </div>

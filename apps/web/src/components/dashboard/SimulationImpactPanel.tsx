@@ -8,7 +8,8 @@ import { formatCurrency } from "../../lib/format";
 interface Props {
   impact: AggregateSimulationImpactDTO;
   cycle?: DashboardCurrentCycle;
-  onAddAnother: () => void;
+  /** Sem valor, esconde o botão (o modal vive no bloco de transações). */
+  onAddAnother?: () => void;
 }
 
 export function SimulationImpactPanel({ impact, cycle, onAddAnother }: Props) {
@@ -57,14 +58,16 @@ export function SimulationImpactPanel({ impact, cycle, onAddAnother }: Props) {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onAddAnother}
-            className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Simular compra
-          </button>
+          {onAddAnother && (
+            <button
+              type="button"
+              onClick={onAddAnother}
+              className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Simular compra
+            </button>
+          )}
           <Link
             to="/simulador"
             className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
