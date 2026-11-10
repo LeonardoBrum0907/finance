@@ -31,6 +31,7 @@ export interface PersonCycleSummary {
   pendingExpenses: number;
   /** Pagamentos de fatura de cartão projetados no ciclo. */
   pendingBillPayments: number;
+  pendingCreditBills: Array<{ title: string; dueDate: string; amount: number }>;
 }
 
 export interface HouseholdCycleSummary {
@@ -51,6 +52,7 @@ export interface HouseholdCycleSummary {
   projectedSalaryIncome: number;
   pendingExpenses: number;
   pendingBillPayments: number;
+  pendingCreditBills: Array<{ title: string; dueDate: string; amount: number }>;
   persons: PersonCycleSummary[];
 }
 
@@ -155,6 +157,13 @@ export function cycleForecastToPersonSummary(
     projectedSalaryIncome: forecast.pendingIncome,
     pendingExpenses: forecast.pendingExpenses,
     pendingBillPayments: forecast.expenseBreakdown.creditBills,
+    pendingCreditBills: forecast.expenseItems
+      .filter((item) => item.kind === "creditBills")
+      .map((item) => ({
+        title: item.title,
+        dueDate: item.dueDate,
+        amount: item.amount,
+      })),
   };
 }
 
@@ -189,6 +198,7 @@ export function aggregateHouseholdCycleSummary(
     projectedSalaryIncome: sum((p) => p.projectedSalaryIncome),
     pendingExpenses: sum((p) => p.pendingExpenses),
     pendingBillPayments: sum((p) => p.pendingBillPayments),
+    pendingCreditBills: persons.flatMap((p) => p.pendingCreditBills),
     persons,
   };
 }

@@ -1,6 +1,5 @@
 import {
   aggregateHouseholdCycleSummary,
-  buildCreditBillSnapshot,
   buildNavigableCycles,
   cycleForecastToPersonSummary,
   getRecentPaydayCycles,
@@ -11,7 +10,7 @@ import {
   parsePaydayCycleAnchor,
   paydayCyclesToDateRange,
   resolveSelectedCycleKey,
-  type CreditBillSnapshot,
+  type CardForCycleBills,
   type DashboardCycleSummaryResponse,
   type HouseholdCycleSummary,
   type NavigableCycle,
@@ -22,10 +21,8 @@ import { prisma } from "../../prisma.js";
 import { effectiveTransactionCategory } from "../transactionCategory.js";
 import { serializeAccount } from "../serializeAccount.js";
 import { resolvePaydayCycle } from "../userSettings.js";
-import { getPluggyClient } from "../pluggy.js";
-import { isPluggyConfigured } from "../../env.js";
-import { pickLatestClosedBill } from "./creditBillSync.js";
 import { buildCycleForecastForKey } from "./cycleForecasts.js";
+import { loadCardsForCycleBills } from "./creditCardBills.js";
 import type { FinancialTransaction } from "./types.js";
 
 interface PersonPaydayConfig {
@@ -94,60 +91,6 @@ async function loadIncludeInvestmentsInNetWorth(userId: string): Promise<boolean
   return user.includeInvestmentsInNetWorth;
 }
 
-async function loadCreditBillSnapshots(
-  creditAccounts: Array<{
-    id: string;
-    name: string;
-    balance: number;
-    type: string | null;
-    pluggyAccountId: string;
-    balanceDueDate: Date | null;
-  }>,
-): Promise<CreditBillSnapshot[]> {
-  if (creditAccounts.length === 0) return [];
-
-  const pluggy = isPluggyConfigured() ? getPluggyClient() : null;
-  const closedBillCache = new Map<string, { totalAmount: number; dueDate: Date } | null>();
-
-  async function loadClosedBill(pluggyAccountId: string) {
-    if (closedBillCache.has(pluggyAccountId)) {
-      return closedBillCache.get(pluggyAccountId) ?? null;
-    }
-    if (!pluggy) {
-      closedBillCache.set(pluggyAccountId, null);
-      return null;
-    }
-    try {
-      const bills = await pluggy.fetchCreditCardBills(pluggyAccountId);
-      const closed = pickLatestClosedBill(bills.results ?? []);
-      const value = closed
-        ? { totalAmount: closed.totalAmount, dueDate: new Date(closed.dueDate) }
-        : null;
-      closedBillCache.set(pluggyAccountId, value);
-      return value;
-    } catch {
-      closedBillCache.set(pluggyAccountId, null);
-      return null;
-    }
-  }
-
-  const snapshots: CreditBillSnapshot[] = [];
-  for (const acc of creditAccounts) {
-    if (!isCreditAccount(acc.type)) continue;
-    const closedBill = await loadClosedBill(acc.pluggyAccountId);
-    snapshots.push(
-      buildCreditBillSnapshot({
-        accountId: acc.id,
-        accountName: acc.name,
-        balance: acc.balance,
-        balanceDueDate: acc.balanceDueDate,
-        closedBill,
-      }),
-    );
-  }
-  return snapshots;
-}
-
 async function loadFinancialData(
   userId: string,
   personId: string | undefined,
@@ -190,10 +133,13 @@ async function loadFinancialData(
   const creditAccountsRaw: Array<{
     id: string;
     name: string;
-    balance: number;
     type: string | null;
     pluggyAccountId: string;
+    billDueDay: number | null;
+    billCloseDay: number | null;
     balanceDueDate: Date | null;
+    balanceCloseDate: Date | null;
+    creditBrand: string | null;
     personId: string;
   }> = [];
 
@@ -218,10 +164,13 @@ async function loadFinancialData(
           creditAccountsRaw.push({
             id: acc.id,
             name: acc.name,
-            balance: acc.balance,
             type: acc.type,
             pluggyAccountId: acc.pluggyAccountId,
+            billDueDay: acc.billDueDay,
+            billCloseDay: acc.billCloseDay,
             balanceDueDate: acc.balanceDueDate,
+            balanceCloseDate: acc.balanceCloseDate,
+            creditBrand: acc.creditBrand,
             personId: person.id,
           });
         }
@@ -268,7 +217,7 @@ async function buildPersonSummary(
   navigableCycles: NavigableCycle[],
   allTxs: FinancialTransaction[],
   bankBalance: number,
-  creditBillSnapshots: CreditBillSnapshot[],
+  creditCards: CardForCycleBills[],
   balances: {
     creditDebt: number;
     investmentBalance: number;
@@ -290,7 +239,7 @@ async function buildPersonSummary(
     config.paydayCycleAnchor,
     config.personId,
     true,
-    creditBillSnapshots,
+    creditCards,
   );
 
   return cycleForecastToPersonSummary(
@@ -341,7 +290,10 @@ export async function buildDashboardCycleSummary(
     loadPersonInvestmentBalances(userId, personId),
   ]);
 
-  const allCreditBillSnapshots = await loadCreditBillSnapshots(creditAccountsRaw);
+  const allCreditCards = await loadCardsForCycleBills(
+    creditAccountsRaw,
+    financialTransactions,
+  );
 
   const navigableCycles = buildNavigableCycles(paydayDay!, paydayCycleAnchor);
   const selectedCycleKey = resolveSelectedCycleKey(navigableCycles, requestedCycleKey);
@@ -358,8 +310,8 @@ export async function buildDashboardCycleSummary(
     const personCreditIds = new Set(
       creditAccountsRaw.filter((a) => a.personId === person.id).map((a) => a.id),
     );
-    const personBillSnapshots = allCreditBillSnapshots.filter((s) =>
-      personCreditIds.has(s.accountId),
+    const personCards = allCreditCards.filter((card) =>
+      personCreditIds.has(card.accountId),
     );
 
     const summary = await buildPersonSummary(
@@ -369,7 +321,7 @@ export async function buildDashboardCycleSummary(
       navigableCycles,
       financialTransactions,
       bankBalance,
-      personBillSnapshots,
+      personCards,
       {
         creditDebt,
         investmentBalance,

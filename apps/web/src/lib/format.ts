@@ -38,6 +38,12 @@ export function formatSeriesLabel(point: { month: string; label?: string }): str
   return point.label ?? formatMonthLabel(point.month);
 }
 
+export function formatShortDateKey(dateKey: string): string {
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const date = new Date(year!, month! - 1, day!);
+  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+}
+
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("pt-BR", {
     day: "2-digit",

@@ -10,6 +10,7 @@ import {
   type SimulationVerdict,
   type SimulatorBaselineDTO,
   type PaydayCycleAnchor,
+  type CardForCycleBills,
 } from "@finance/shared";
 import { prisma } from "../../prisma.js";
 import { effectiveTransactionCategory } from "../transactionCategory.js";
@@ -24,6 +25,7 @@ import {
   toLocalMonthKey,
 } from "./aggregates.js";
 import { buildDashboardCycleForecasts } from "./cycleForecasts.js";
+import { loadCardsForUser } from "./creditCardBills.js";
 import { loadGoalsSummaryForUser } from "./goalsContext.js";
 import {
   resolveMonthlyContribution,
@@ -55,6 +57,7 @@ interface SimulatorContext {
     nextBillDueDate: string | null;
   }[];
   hasAccounts: boolean;
+  creditCards: CardForCycleBills[];
 }
 
 async function loadRecentTransactions(
@@ -187,6 +190,8 @@ async function loadSimulatorContext(
     }
   }
 
+  const creditCards = await loadCardsForUser(userId, personId, txs);
+
   return {
     userId,
     personId,
@@ -197,6 +202,7 @@ async function loadSimulatorContext(
     bankBalance,
     creditAccounts,
     hasAccounts,
+    creditCards,
   };
 }
 
@@ -242,6 +248,8 @@ async function computeCurrentSurplus(
       paydayDay,
       anchor,
       personId,
+      true,
+      ctx.creditCards,
     );
     return forecasts.current.closingBalance;
   }
@@ -398,6 +406,8 @@ export async function fetchSimulatorBaseline(
       ctx.paydayDay,
       ctx.paydayCycleAnchor,
       personId,
+      true,
+      ctx.creditCards,
     );
     if (forecasts.current.pendingIncome > 0) {
       projectedSalaryIncome = forecasts.current.pendingIncome;

@@ -89,6 +89,10 @@ model Account {
   minimumPayment       Float?
   balanceCloseDate     DateTime?
   balanceDueDate       DateTime?
+  /** Dia de vencimento informado (override da Pluggy, que pode estar atrasada). */
+  billDueDay           Int?
+  /** Dia de fechamento informado. Se vazio, usa vencimento − 7. */
+  billCloseDay         Int?
   connectionId         String
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
@@ -98,8 +102,27 @@ model Account {
   goalSources     GoalSource[]
   recurringBills  RecurringBill[]
   managedAccounts ManagedAccount[]
+  creditBills     CreditCardBill[]
 
   @@index([connectionId])
+}
+
+/** Fatura persistida da Pluggy (só fechadas no Open Finance). */
+model CreditCardBill {
+  id                   String    @id @default(cuid())
+  pluggyBillId         String    @unique
+  accountId            String
+  dueDate              DateTime
+  closingDate          DateTime?
+  totalAmount          Float
+  minimumPaymentAmount Float?
+  source               String    @default("pluggy")
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId, dueDate])
 }
 
 model Transaction {

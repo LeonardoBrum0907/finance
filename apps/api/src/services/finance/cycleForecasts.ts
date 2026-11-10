@@ -1,13 +1,13 @@
 import {
   buildCycleForecastBlock,
   buildCycleForecastPair,
-  buildPendingBillPayments,
+  buildCycleStatementPayments,
   getNextPaydayCycle,
   getPaydayCycleRangeByKey,
   managedAccountToSimulatedPurchase,
   splitPurchaseImpactsByKind,
   todayDateKeyInTimeZone,
-  type CreditBillSnapshot,
+  type CardForCycleBills,
   type CycleForecastBlock,
   type CycleForecastPair,
   type CycleForecastPendingInput,
@@ -45,15 +45,15 @@ function managedAccountsToPurchasesWithKind(
 
 function mergeCreditBillPayments(
   pending: CycleForecastPendingInput,
-  creditBillSnapshots: CreditBillSnapshot[] | undefined,
+  cards: CardForCycleBills[] | undefined,
   cycle: { from: string; to: string },
   today: string,
   txs: FinancialTransaction[],
 ): CycleForecastPendingInput {
-  if (!creditBillSnapshots || creditBillSnapshots.length === 0) return pending;
+  if (!cards || cards.length === 0) return pending;
 
-  const billPayments = buildPendingBillPayments(
-    creditBillSnapshots,
+  const billPayments = buildCycleStatementPayments(
+    cards,
     cycle,
     today,
     txs.map((tx) => ({
@@ -67,7 +67,7 @@ function mergeCreditBillPayments(
 
   return {
     ...pending,
-    creditBills: billPayments.total,
+    creditBills: Math.round(((pending.creditBills ?? 0) + billPayments.total) * 100) / 100,
     items: [
       ...(pending.items ?? []),
       ...billPayments.items.map((item) => ({
@@ -88,7 +88,7 @@ export async function buildDashboardCycleForecasts(
   paydayCycleAnchor: PaydayCycleAnchor,
   personId?: string,
   includeSimulations = true,
-  creditBillSnapshots?: CreditBillSnapshot[],
+  creditCards?: CardForCycleBills[],
 ): Promise<CycleForecastPair> {
   const currentCycle = buildCurrentCycleSummary(txs, paydayDay, paydayCycleAnchor, 0);
   const today = todayDateKeyInTimeZone();
@@ -97,7 +97,7 @@ export async function buildDashboardCycleForecasts(
 
   const currentPending = mergeCreditBillPayments(
     splitPurchaseImpactsByKind(purchases, currentCycle, today),
-    creditBillSnapshots,
+    creditCards,
     currentCycle,
     today,
     txs,
@@ -105,7 +105,7 @@ export async function buildDashboardCycleForecasts(
   const nextCycle = getNextPaydayCycle(currentCycle, paydayDay, paydayCycleAnchor);
   const nextPending = mergeCreditBillPayments(
     splitPurchaseImpactsByKind(purchases, nextCycle, today),
-    creditBillSnapshots,
+    creditCards,
     nextCycle,
     today,
     txs,
@@ -131,7 +131,7 @@ export async function buildCycleForecastForKey(
   paydayCycleAnchor: PaydayCycleAnchor,
   personId?: string,
   includeSimulations = true,
-  creditBillSnapshots?: CreditBillSnapshot[],
+  creditCards?: CardForCycleBills[],
 ): Promise<CycleForecastBlock> {
   const meta = getPaydayCycleRangeByKey(cycleKey, paydayDay, paydayCycleAnchor);
   const today = todayDateKeyInTimeZone();
@@ -143,7 +143,7 @@ export async function buildCycleForecastForKey(
       { cycleKey: meta.cycleKey, from: meta.from, to: meta.to },
       today,
     ),
-    creditBillSnapshots,
+    creditCards,
     { from: meta.from, to: meta.to },
     today,
     txs,

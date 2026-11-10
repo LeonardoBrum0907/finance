@@ -1,9 +1,10 @@
 import type { FastifyInstance } from "fastify";
-import { createConnectionSchema } from "@finance/shared";
+import { createConnectionSchema, isCreditAccount, updateCreditAccountSchema } from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
 import { isPluggyConfigured } from "../env.js";
 import { createConnectToken, syncConnection } from "../services/pluggy.js";
+import { serializeAccount } from "../services/serializeAccount.js";
 
 export async function connectionRoutes(app: FastifyInstance): Promise<void> {
   // Webhook publico da Pluggy (sem autenticacao de usuario)
@@ -96,6 +97,31 @@ export async function connectionRoutes(app: FastifyInstance): Promise<void> {
       if (!connection) return reply.code(404).send({ error: "Conexão não encontrada" });
       await prisma.bankConnection.delete({ where: { id } });
       return reply.send({ ok: true });
+    });
+
+    secured.patch("/api/accounts/:id", async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const parsed = updateCreditAccountSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? "Dados inválidos" });
+      }
+
+      const account = await prisma.account.findFirst({
+        where: { id, connection: { person: { userId: request.user!.sub } } },
+      });
+      if (!account) return reply.code(404).send({ error: "Conta não encontrada" });
+      if (!isCreditAccount(account.type)) {
+        return reply.code(400).send({ error: "Calendário de fatura só vale para cartão de crédito" });
+      }
+
+      const updated = await prisma.account.update({
+        where: { id },
+        data: {
+          ...(parsed.data.billDueDay !== undefined ? { billDueDay: parsed.data.billDueDay } : {}),
+          ...(parsed.data.billCloseDay !== undefined ? { billCloseDay: parsed.data.billCloseDay } : {}),
+        },
+      });
+      return reply.send(serializeAccount(updated));
     });
   });
 }

@@ -10,6 +10,7 @@ import {
   toneBorderClass,
   toneTextClass,
 } from "../../lib/cycleLabels";
+import { formatShortDateKey } from "../../lib/format";
 import { cardClass } from "./motion";
 
 export type FinanceMetrics = Pick<
@@ -26,6 +27,7 @@ export type FinanceMetrics = Pick<
   | "projectedSalaryIncome"
   | "pendingExpenses"
   | "pendingBillPayments"
+  | "pendingCreditBills"
 > & {
   isFuture?: boolean;
   isComplete?: boolean;
@@ -104,6 +106,7 @@ export function toFinanceMetrics(
     projectedSalaryIncome: summary.projectedSalaryIncome,
     pendingExpenses: summary.pendingExpenses,
     pendingBillPayments: summary.pendingBillPayments,
+    pendingCreditBills: summary.pendingCreditBills ?? [],
     isFuture: flags.isFuture,
     isComplete: flags.isComplete,
   };
@@ -137,7 +140,7 @@ export function FinanceSummaryCard({
       status: stillMineDisplay.status,
       hint: stillMineHint(metrics),
       extra:
-        metrics.pendingBillPayments > 0
+        metrics.pendingCreditBills.length === 0 && metrics.pendingBillPayments > 0
           ? `Faturas a pagar neste ciclo: ${formatPlainAmount(metrics.pendingBillPayments, currencyCode)}`
           : undefined,
       tone: toneForValue(stillMine),
@@ -191,6 +194,16 @@ export function FinanceSummaryCard({
                   {closingDelta > 0 ? "+" : ""}
                   {formatPlainAmount(closingDelta, currencyCode)} ao desligar conta
                 </p>
+              )}
+              {tile.key === "stillMine" && metrics.pendingCreditBills.length > 0 && (
+                <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                  {metrics.pendingCreditBills.map((bill) => (
+                    <li key={`${bill.title}-${bill.dueDate}`}>
+                      {bill.title} · {formatShortDateKey(bill.dueDate)} ·{" "}
+                      {formatPlainAmount(bill.amount, currencyCode)}
+                    </li>
+                  ))}
+                </ul>
               )}
               {tile.extra && (
                 <p className="mt-1 text-xs font-medium text-muted-foreground">{tile.extra}</p>

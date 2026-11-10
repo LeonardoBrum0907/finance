@@ -33,6 +33,8 @@ function serializePerson(person: {
       minimumPayment: number | null;
       balanceCloseDate: Date | null;
       balanceDueDate: Date | null;
+      billDueDay: number | null;
+      billCloseDay: number | null;
     }[];
   }[];
 }) {

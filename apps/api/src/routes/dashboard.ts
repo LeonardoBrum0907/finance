@@ -33,6 +33,7 @@ import { buildHouseholdArena } from "../services/finance/householdComparison.js"
 import { sumPendingManagedEntriesInRange } from "../services/finance/managedAccounts.js";
 import { buildDashboardCycleForecasts } from "../services/finance/cycleForecasts.js";
 import { buildDashboardCycleSummary } from "../services/finance/householdCycleSummary.js";
+import { loadCardsForUser } from "../services/finance/creditCardBills.js";
 
 const MIN_PAYDAY_CYCLES_FETCH = 12;
 
@@ -452,6 +453,8 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
             paydayDay,
             paydayCycleAnchor,
             personId,
+            true,
+            await loadCardsForUser(userId, personId, financialTransactions),
           )
         : null;
 

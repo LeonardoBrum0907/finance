@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { PersonDTO } from "@finance/shared";
+import type { PersonDTO, UpdateCreditAccountInput } from "@finance/shared";
 import { api } from "../lib/api";
 import { ConnectAccount } from "../components/ConnectAccount";
 import { ConnectionCard } from "../components/accounts/ConnectionCard";
@@ -28,6 +28,16 @@ export function AccountsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["people"] });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+
+  const saveBillCalendar = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: UpdateCreditAccountInput }) =>
+      api.patch(`/api/accounts/${id}`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["people"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     },
   });
 
@@ -85,6 +95,9 @@ export function AccountsPage() {
                           connection={conn}
                           onSync={(id) => syncMutation.mutate(id)}
                           onDisconnect={(id) => removeConnection.mutate(id)}
+                          onSaveBillCalendar={(id, body) =>
+                            saveBillCalendar.mutate({ id, body })
+                          }
                           syncing={
                             syncMutation.isPending &&
                             syncMutation.variables === conn.id
@@ -92,6 +105,11 @@ export function AccountsPage() {
                           disconnecting={
                             removeConnection.isPending &&
                             removeConnection.variables === conn.id
+                          }
+                          savingAccountId={
+                            saveBillCalendar.isPending
+                              ? saveBillCalendar.variables?.id ?? null
+                              : null
                           }
                         />
                       ))}

@@ -2,8 +2,13 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildCreditBillSnapshot,
+  buildCycleStatementPayments,
   buildPendingBillPayments,
+  closeDateForDue,
+  inferCloseDay,
   isCreditBillAlreadyPaid,
+  statementDueInCycle,
+  type CardForCycleBills,
   type CreditBillSnapshot,
 } from "./creditBill.js";
 import { buildCycleForecastBlock } from "./cycleForecast.js";
@@ -75,16 +80,15 @@ describe("buildPendingBillPayments", () => {
     assert.equal(result.items.length, 0);
   });
 
-  it("includes open bill when its due date falls in the cycle", () => {
+  it("does not treat the open card balance as a cash bill in the next cycle", () => {
     const result = buildPendingBillPayments(
       [snapshot],
       { from: "2026-07-26", to: "2026-08-25" },
       "2026-07-28",
       [],
     );
-    assert.equal(result.total, 350);
-    assert.equal(result.items.length, 1);
-    assert.equal(result.items[0]!.dueDate, "2026-08-10");
+    assert.equal(result.total, 0);
+    assert.equal(result.items.length, 0);
   });
 
   it("skips bill already paid on checking account", () => {
@@ -187,5 +191,123 @@ describe("creditBills in cycle forecast closing balance", () => {
     );
     // Compras no cartão permanecem só em realized — não somam de novo via creditBills
     assert.equal(withBill.realizedExpenses, withoutBill.realizedExpenses);
+  });
+});
+
+describe("statement calendar", () => {
+  it("places Itaú due 28 / close 21 after payday 25", () => {
+    assert.equal(inferCloseDay(28), 21);
+    assert.equal(closeDateForDue("2026-09-28", 21), "2026-09-21");
+    assert.equal(
+      statementDueInCycle({ from: "2026-08-25", to: "2026-09-24" }, 28),
+      "2026-08-28",
+    );
+    assert.equal(
+      statementDueInCycle({ from: "2026-08-25", to: "2026-09-24" }, 28, "2026-08-17"),
+      null,
+    );
+    assert.equal(
+      statementDueInCycle({ from: "2026-09-25", to: "2026-10-24" }, 28, "2026-08-17"),
+      "2026-09-28",
+    );
+  });
+
+  it("keeps Nubank due 11 inside the 25–24 payday cycle", () => {
+    assert.equal(inferCloseDay(11), 4);
+    assert.equal(
+      statementDueInCycle({ from: "2026-08-25", to: "2026-09-24" }, 11),
+      "2026-09-11",
+    );
+  });
+});
+
+describe("buildCycleStatementPayments", () => {
+  const itau: CardForCycleBills = {
+    accountId: "itau",
+    accountName: "ITAU MASTERCARD PLATINUM",
+    billDueDay: 28,
+    billCloseDay: 21,
+    balanceDueDate: "2026-08-17",
+    balanceCloseDate: null,
+    creditBrand: "MASTERCARD",
+    statements: [
+      { dueDate: "2026-08-17", closingDate: "2026-08-08", totalAmount: 313.65 },
+    ],
+    charges: [
+      { date: "2026-08-20", amount: 200 },
+      { date: "2026-09-02", amount: 80 },
+    ],
+  };
+
+  it("does not pull the used credit limit into the current payday cycle", () => {
+    const result = buildCycleStatementPayments(
+      [itau],
+      { from: "2026-08-25", to: "2026-09-24" },
+      "2026-09-06",
+      [],
+    );
+    assert.equal(result.total, 0);
+    assert.equal(result.items.length, 0);
+  });
+
+  it("estimates the September statement in the next payday cycle from charges after last close", () => {
+    const result = buildCycleStatementPayments(
+      [itau],
+      { from: "2026-09-25", to: "2026-10-24" },
+      "2026-09-26",
+      [],
+    );
+    assert.equal(result.items.length, 1);
+    assert.equal(result.items[0]!.dueDate, "2026-09-28");
+    assert.equal(result.items[0]!.estimated, true);
+    assert.equal(result.items[0]!.amount, 280);
+    assert.equal(result.items[0]!.closingDate, "2026-09-21");
+  });
+
+  it("uses the persisted closed bill when the due date falls in the cycle", () => {
+    const nubank: CardForCycleBills = {
+      accountId: "nu",
+      accountName: "gold",
+      billDueDay: 11,
+      billCloseDay: 4,
+      balanceDueDate: "2026-08-11",
+      balanceCloseDate: null,
+      creditBrand: "MASTERCARD",
+      statements: [
+        { dueDate: "2026-09-11", closingDate: "2026-09-04", totalAmount: 190.5 },
+      ],
+      charges: [{ date: "2026-08-20", amount: 9999 }],
+    };
+    const result = buildCycleStatementPayments(
+      [nubank],
+      { from: "2026-08-25", to: "2026-09-24" },
+      "2026-09-06",
+      [],
+    );
+    assert.equal(result.total, 190.5);
+    assert.equal(result.items[0]!.estimated, false);
+  });
+
+  it("skips a statement already paid from checking", () => {
+    const nubank: CardForCycleBills = {
+      accountId: "nu",
+      accountName: "gold",
+      billDueDay: 11,
+      billCloseDay: 4,
+      balanceDueDate: "2026-08-11",
+      balanceCloseDate: null,
+      creditBrand: null,
+      statements: [
+        { dueDate: "2026-09-11", closingDate: "2026-09-04", totalAmount: 190.5 },
+      ],
+      charges: [],
+    };
+    const result = buildCycleStatementPayments(
+      [nubank],
+      { from: "2026-08-25", to: "2026-09-24" },
+      "2026-09-12",
+      [billPaymentTx("2026-09-11", 190.5)],
+    );
+    assert.equal(result.total, 0);
   });
 });
