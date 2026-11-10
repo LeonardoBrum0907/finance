@@ -20,7 +20,8 @@ export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
   {
     id: "household-summary",
     title: "Resumo do ciclo",
-    description: "Saldo, fechamento do ciclo e fluxo de caixa da pessoa ou do conjunto.",
+    description:
+      "Patrimônio líquido, o que ainda é seu neste período e quanto ficou guardado no ciclo.",
     defaultEnabled: true,
   },
   {

@@ -4,6 +4,7 @@ import {
   buildNavigableCycles,
   cycleForecastToPersonSummary,
   getRecentPaydayCycles,
+  isActiveInvestment,
   isCreditAccount,
   isInvestmentAccount,
   isPaydayDayConfigured,
@@ -43,6 +44,54 @@ function computePersonBankBalance(
     total += acc.balance;
   }
   return total;
+}
+
+function computePersonCreditDebt(
+  accounts: Array<{ balance: number; type: string | null }>,
+): number {
+  let total = 0;
+  for (const acc of accounts) {
+    if (!isCreditAccount(acc.type)) continue;
+    total += Math.abs(acc.balance);
+  }
+  return total;
+}
+
+async function loadPersonInvestmentBalances(
+  userId: string,
+  personId?: string,
+): Promise<Map<string, number>> {
+  const rows = await prisma.investment.findMany({
+    where: {
+      connection: {
+        person: {
+          userId,
+          ...(personId ? { id: personId } : {}),
+        },
+      },
+    },
+    select: {
+      balance: true,
+      status: true,
+      connection: { select: { personId: true } },
+    },
+  });
+
+  const totals = new Map<string, number>();
+  for (const row of rows) {
+    if (!isActiveInvestment(row.status, row.balance)) continue;
+    const id = row.connection.personId;
+    totals.set(id, (totals.get(id) ?? 0) + row.balance);
+  }
+  return totals;
+}
+
+async function loadIncludeInvestmentsInNetWorth(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: userId },
+    select: { includeInvestmentsInNetWorth: true },
+  });
+  return user.includeInvestmentsInNetWorth;
 }
 
 async function loadCreditBillSnapshots(
@@ -220,6 +269,11 @@ async function buildPersonSummary(
   allTxs: FinancialTransaction[],
   bankBalance: number,
   creditBillSnapshots: CreditBillSnapshot[],
+  balances: {
+    creditDebt: number;
+    investmentBalance: number;
+    includeInvestments: boolean;
+  },
 ): Promise<PersonCycleSummary | null> {
   const paydayDay = config.paydayDay;
   if (!isPaydayDayConfigured(paydayDay)) return null;
@@ -244,6 +298,7 @@ async function buildPersonSummary(
     config.personName,
     bankBalance,
     forecast,
+    balances,
   );
 }
 
@@ -276,8 +331,15 @@ export async function buildDashboardCycleSummary(
     };
   }
 
-  const { accounts, financialTransactions, personConfigs, people, creditAccountsRaw } =
-    await loadFinancialData(userId, personId, paydayDay!, paydayCycleAnchor);
+  const [
+    { accounts, financialTransactions, personConfigs, people, creditAccountsRaw },
+    includeInvestments,
+    investmentBalances,
+  ] = await Promise.all([
+    loadFinancialData(userId, personId, paydayDay!, paydayCycleAnchor),
+    loadIncludeInvestmentsInNetWorth(userId),
+    loadPersonInvestmentBalances(userId, personId),
+  ]);
 
   const allCreditBillSnapshots = await loadCreditBillSnapshots(creditAccountsRaw);
 
@@ -291,6 +353,8 @@ export async function buildDashboardCycleSummary(
     const config = personConfigs.find((c) => c.personId === person.id)!;
     const personAccounts = person.connections.flatMap((c) => c.accounts);
     const bankBalance = computePersonBankBalance(personAccounts);
+    const creditDebt = computePersonCreditDebt(personAccounts);
+    const investmentBalance = investmentBalances.get(person.id) ?? 0;
     const personCreditIds = new Set(
       creditAccountsRaw.filter((a) => a.personId === person.id).map((a) => a.id),
     );
@@ -306,6 +370,11 @@ export async function buildDashboardCycleSummary(
       financialTransactions,
       bankBalance,
       personBillSnapshots,
+      {
+        creditDebt,
+        investmentBalance,
+        includeInvestments,
+      },
     );
     if (summary) personSummaries.push(summary);
   }

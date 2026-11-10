@@ -165,7 +165,7 @@ export function DashboardPage() {
             Painel
           </h1>
           <p className="mt-1 text-sm text-muted-foreground-dark">
-            Saldo, fechamento do ciclo e fluxo de caixa.
+            Patrimônio, o que ainda é seu neste período e quanto ficou guardado.
           </p>
         </div>
         {data && data.accounts.length > 0 && (
