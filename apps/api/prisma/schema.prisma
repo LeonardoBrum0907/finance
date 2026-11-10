@@ -16,6 +16,7 @@ model User {
   defaultPeriodMode            String   @default("calendar")
   includeInvestmentsInNetWorth Boolean  @default(true)
   theme                        String   @default("default")
+  dashboardWidgets             Json?
   aiTokensUsedThisMonth        Int      @default(0)
   aiUsagePeriod                String?
   createdAt          DateTime @default(now())

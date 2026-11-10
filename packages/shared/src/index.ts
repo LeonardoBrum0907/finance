@@ -187,6 +187,20 @@ export {
   type CheckingPaymentLike,
 } from "./creditBill";
 export {
+  DASHBOARD_WIDGET_IDS,
+  DASHBOARD_WIDGETS,
+  dashboardWidgetsPatchSchema,
+  hasAnyEnabledDashboardWidget,
+  isDashboardWidgetId,
+  mergeDashboardWidgetPatch,
+  parseStoredDashboardWidgets,
+  resolveDashboardWidgets,
+  type DashboardWidgetDefinition,
+  type DashboardWidgetId,
+  type DashboardWidgetsPatch,
+  type DashboardWidgetsState,
+} from "./dashboardWidgets";
+export {
   PERIOD_MODES,
   periodModeSchema,
   PAYDAY_CYCLE_ANCHORS,

@@ -1,5 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import { updateSettingsSchema, isPaydayDayConfigured } from "@finance/shared";
+import {
+  updateSettingsSchema,
+  isPaydayDayConfigured,
+  mergeDashboardWidgetPatch,
+} from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
 import { loadUserSettings } from "../services/userSettings.js";
@@ -19,21 +23,26 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const userId = request.user!.sub;
-    const { paydayDay, defaultPeriodMode, includeInvestmentsInNetWorth, theme } = parsed.data;
+    const {
+      paydayDay,
+      defaultPeriodMode,
+      includeInvestmentsInNetWorth,
+      theme,
+      dashboardWidgets,
+    } = parsed.data;
+
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { paydayDay: true, dashboardWidgets: true },
+    });
 
     if (defaultPeriodMode === "payday") {
-      const [current, people] = await Promise.all([
-        prisma.user.findUnique({
-          where: { id: userId },
-          select: { paydayDay: true },
-        }),
-        prisma.person.findMany({
-          where: { userId },
-          select: { paydayDay: true },
-        }),
-      ]);
+      const people = await prisma.person.findMany({
+        where: { userId },
+        select: { paydayDay: true },
+      });
       const effectivePayday =
-        paydayDay !== undefined ? paydayDay : current?.paydayDay;
+        paydayDay !== undefined ? paydayDay : currentUser?.paydayDay;
       const anyPersonPayday = people.some((p) => isPaydayDayConfigured(p.paydayDay));
       if (!isPaydayDayConfigured(effectivePayday) && !anyPersonPayday) {
         return reply.code(400).send({
@@ -51,6 +60,14 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
           ? { includeInvestmentsInNetWorth }
           : {}),
         ...(theme !== undefined ? { theme } : {}),
+        ...(dashboardWidgets !== undefined
+          ? {
+              dashboardWidgets: mergeDashboardWidgetPatch(
+                currentUser?.dashboardWidgets,
+                dashboardWidgets,
+              ),
+            }
+          : {}),
       },
     });
 

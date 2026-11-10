@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+import {
+  dashboardWidgetsPatchSchema,
+  type DashboardWidgetsState,
+} from "./dashboardWidgets";
 import { countsTowardCashFlow, isTransactionOutflow } from "./transactions";
 
 
@@ -44,6 +48,7 @@ export const updateSettingsSchema = z.object({
   defaultPeriodMode: periodModeSchema.optional(),
   includeInvestmentsInNetWorth: z.boolean().optional(),
   theme: appThemeSchema.optional(),
+  dashboardWidgets: dashboardWidgetsPatchSchema.optional(),
 });
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
 
@@ -53,6 +58,7 @@ export interface UserSettingsDTO {
   paydayConfigured: boolean;
   includeInvestmentsInNetWorth: boolean;
   theme: AppTheme;
+  dashboardWidgets: DashboardWidgetsState;
 }
 
 

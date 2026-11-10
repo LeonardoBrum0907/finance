@@ -5,7 +5,7 @@
   "terminals": [
     {
       "name": "dev",
-      "command": "bash scripts/sync-api-env-from-cloud.sh && eval \"$(bash scripts/export-api-env.sh)\" && pnpm exec prisma migrate deploy --schema apps/api/prisma/schema.prisma && pnpm dev",
+      "command": "bash scripts/sync-api-env-from-cloud.sh && eval \"$(bash scripts/export-api-env.sh)\" && pnpm exec prisma generate --schema apps/api/prisma/schema.prisma && pnpm exec prisma migrate deploy --schema apps/api/prisma/schema.prisma && pnpm dev",
       "description": "API (3333) + Web (5173)"
     }
   ],

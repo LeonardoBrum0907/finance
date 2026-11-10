@@ -13,6 +13,7 @@ import type {
 import { describePaydayCycleBounds, isPaydayDayConfigured } from "@finance/shared";
 import { api } from "../lib/api";
 import { useTheme } from "../lib/theme/useTheme";
+import { DashboardWidgetsSettings } from "../components/settings/DashboardWidgetsSettings";
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
@@ -269,6 +270,8 @@ export function SettingsPage() {
               </div>
             )}
           </div>
+
+          <DashboardWidgetsSettings />
 
           <div>
             <p className="mb-3 flex items-center gap-2 text-sm font-medium text-foreground/90">
