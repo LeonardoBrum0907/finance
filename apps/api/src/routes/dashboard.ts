@@ -37,6 +37,11 @@ import { loadCardsForUser } from "../services/finance/creditCardBills.js";
 
 const MIN_PAYDAY_CYCLES_FETCH = 12;
 
+/** Datas de fatura vêm à meia-noite UTC, que no Brasil ainda é o dia anterior. */
+function atNoonUtc(date: Date): Date {
+  return new Date(`${date.toISOString().slice(0, 10)}T12:00:00.000Z`);
+}
+
 export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
 
@@ -162,7 +167,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
         const bills = await pluggy.fetchCreditCardBills(pluggyAccountId);
         const closed = pickLatestClosedBill(bills.results ?? []);
         const value = closed
-          ? { amount: closed.totalAmount, dueDate: new Date(closed.dueDate) }
+          ? { amount: closed.totalAmount, dueDate: atNoonUtc(new Date(closed.dueDate)) }
           : null;
         closedBillCache.set(pluggyAccountId, value);
         return value;
@@ -186,7 +191,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
 
           const openBillDueDate =
             acc.type === "CREDIT"
-              ? resolveNextDueDate(acc.balanceDueDate)
+              ? resolveNextDueDate(acc.balanceDueDate ? atNoonUtc(acc.balanceDueDate) : null)
               : null;
           const openBillAmount =
             acc.type === "CREDIT" && Math.abs(acc.balance) > 0
@@ -225,6 +230,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
             financialTransactions.push({
               ...dto,
               date: tx.date,
+              billForecastMonth: tx.billForecastMonth,
             });
           }
         }

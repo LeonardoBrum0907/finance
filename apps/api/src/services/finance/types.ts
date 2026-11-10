@@ -10,6 +10,7 @@ export interface FinancialTransaction {
   accountType: string | null;
   personId: string;
   personName: string;
+  billForecastMonth?: string | null;
 }
 
 export interface FinancialAccount {

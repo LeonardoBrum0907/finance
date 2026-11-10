@@ -23,6 +23,7 @@ function forecast(overrides: Partial<CycleForecastBlock> = {}): CycleForecastBlo
     realizedNet: 3000,
     pendingIncome: 0,
     pendingExpenses: 500,
+    pendingCashExpenses: 500,
     closingBalance: 2500,
     expenseBreakdown: { recurring: 300, installments: 200, simulations: 0, bank: 0, creditBills: 0 },
     expenseItems: [],
@@ -107,6 +108,7 @@ describe("stillMineThisPeriod", () => {
       realizedNet: 3000,
       pendingIncome: 5000,
       pendingExpenses: 3000,
+      pendingCashExpenses: 3000,
       closingBalance: 5000,
     }));
     assert.equal(stillMineThisPeriod(summary), 12000);

@@ -101,6 +101,8 @@ export interface ManagedAccountForSimulation {
   simulationPayload: SimulationPayload | null;
   expectedAmount: number;
   totalInstallments: number | null;
+  /** Conta paga no cartão de crédito. */
+  paidByCard?: boolean;
   entries: {
     id: string;
     dueDate: string;

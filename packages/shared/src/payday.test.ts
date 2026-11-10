@@ -1,6 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  alignSalaryDatesToPayday,
+  classifyIncome,
+  estimateSalaryForCycle,
   estimateUpcomingCycleSalary,
   getPaydayCycleBounds,
   getPaydayCycleKey,
@@ -122,5 +125,44 @@ describe("resolveCycleSalaryProjection", () => {
 
     assert.equal(result.realizedSalary, 0);
     assert.equal(result.projectedSalary, 4800);
+  });
+});
+
+describe("alignSalaryDatesToPayday", () => {
+  const salary = (date: string, amount: number): TransactionLike => ({
+    date: new Date(`${date}T12:00:00-03:00`),
+    amount,
+    accountType: "BANK",
+    category: "Salário",
+    description: "Salário",
+  });
+
+  it("keeps an early salary in the cycle it pays and projects one salary", () => {
+    const txs = alignSalaryDatesToPayday(
+      [salary("2026-09-25", 4000), salary("2026-10-23", 4200)],
+      25,
+    );
+    const september = classifyIncome(txs, { from: "2026-09-25", to: "2026-10-24" }, 25);
+    assert.equal(september.salary, 4000);
+
+    const today = new Date("2026-11-10T12:00:00-03:00");
+    assert.equal(
+      estimateSalaryForCycle(txs, 25, "start", {
+        cycleKey: "2026-10-25",
+        from: "2026-10-25",
+        to: "2026-11-24",
+        isComplete: false,
+      }, today),
+      0,
+    );
+    assert.equal(
+      estimateSalaryForCycle(txs, 25, "start", {
+        cycleKey: "2026-11-25",
+        from: "2026-11-25",
+        to: "2026-12-24",
+        isComplete: false,
+      }, today),
+      4200,
+    );
   });
 });

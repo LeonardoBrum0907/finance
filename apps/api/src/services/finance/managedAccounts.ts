@@ -8,7 +8,7 @@ import type {
   ScenarioSimulationType,
   SimulationPayload,
 } from "@finance/shared";
-import { todayDateKeyInTimeZone } from "@finance/shared";
+import { isCreditAccount, todayDateKeyInTimeZone } from "@finance/shared";
 import type { ManagedAccount, ManagedAccountEntry, Prisma } from "@prisma/client";
 import { prisma } from "../../prisma.js";
 
@@ -443,12 +443,13 @@ export async function loadActiveManagedAccountsForImpact(
       status: "active",
       ...(personId ? { personId } : {}),
     },
-    include: { entries: true },
+    include: { entries: true, bankAccount: { select: { type: true } } },
   });
 
   return rows.map((row) => ({
     id: row.id,
     title: row.title,
+    paidByCard: isCreditAccount(row.bankAccount?.type),
     kind: row.kind as ManagedAccountKind,
     simulationType: (row.simulationType as ScenarioSimulationType | null) ?? null,
     simulationPayload: (row.simulationPayload as SimulationPayload | null) ?? null,

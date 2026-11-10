@@ -26,6 +26,7 @@ export type FinanceMetrics = Pick<
   | "closingBalance"
   | "projectedSalaryIncome"
   | "pendingExpenses"
+  | "pendingCashExpenses"
   | "pendingBillPayments"
   | "pendingCreditBills"
 > & {
@@ -114,6 +115,7 @@ export function toFinanceMetrics(
     closingBalance: summary.closingBalance,
     projectedSalaryIncome: summary.projectedSalaryIncome,
     pendingExpenses: summary.pendingExpenses,
+    pendingCashExpenses: summary.pendingCashExpenses,
     pendingBillPayments: summary.pendingBillPayments,
     pendingCreditBills: summary.pendingCreditBills ?? [],
     isFuture: flags.isFuture,

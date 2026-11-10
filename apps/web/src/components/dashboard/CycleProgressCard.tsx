@@ -272,13 +272,17 @@ export function CycleProgressCard({
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <BalanceHeroBox
               title="Sobra prevista"
-              balance={nextCycleForecast.closingBalance}
+              balance={
+                nextCycleForecast.closingBalance +
+                nextCycleForecast.pendingExpenses -
+                nextCycleForecast.pendingCashExpenses
+              }
               currencyCode={currencyCode}
               detailLines={[
                 nextCycleForecast.salaryKnown
                   ? `${CYCLE_COPY.expectedSalary} ${formatPlainAmount(nextCycleForecast.pendingIncome, currencyCode)}`
                   : CYCLE_COPY.salaryUnknown,
-                `${CYCLE_COPY.dueNextCycle} ${formatPlainAmount(nextCycleForecast.pendingExpenses, currencyCode)}`,
+                `${CYCLE_COPY.dueNextCycle} ${formatPlainAmount(nextCycleForecast.pendingCashExpenses, currencyCode)}`,
               ]}
             />
           </div>

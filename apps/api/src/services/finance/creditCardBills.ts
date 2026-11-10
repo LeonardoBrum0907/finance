@@ -1,6 +1,5 @@
 import {
   isCreditAccount,
-  isCreditCardBillPayment,
   isTransactionOutflow,
   toLocalDateKey,
   type CardForCycleBills,
@@ -153,12 +152,12 @@ export async function loadCardsForCycleBills(
         (tx) =>
           tx.accountId === acc.id &&
           isCreditAccount(tx.accountType) &&
-          isTransactionOutflow(tx.amount, tx.accountType) &&
-          !isCreditCardBillPayment(tx.category, tx.description),
+          isTransactionOutflow(tx.amount, tx.accountType),
       )
       .map((tx) => ({
         date: toLocalDateKey(tx.date),
         amount: Math.abs(tx.amount),
+        billMonth: tx.billForecastMonth ?? null,
       })),
   }));
 }
