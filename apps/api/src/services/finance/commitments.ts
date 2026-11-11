@@ -454,8 +454,8 @@ export function toTransactionDetailFields(
 }
 
 const CARD_INSTALLMENT_LOOKBACK_MONTHS = 12;
-/** Parcela de cartão vencida há mais que isso já foi cobrada na fatura. */
-const CARD_INSTALLMENT_ASSUME_PAID_DAYS = 10;
+/** Parcela de cartão vencida já foi cobrada na fatura, mesmo que a Pluggy ainda não a mostre. */
+const CARD_INSTALLMENT_ASSUME_PAID_DAYS = 0;
 
 function addMonthsKeepingDay(anchor: Date, months: number): Date {
   const day = anchor.getUTCDate();

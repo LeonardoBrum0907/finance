@@ -313,6 +313,7 @@ function deriveTitle(description: string, merchantName?: string | null): string 
 export function cleanMerchantTitle(text: string): string {
   return stripCardLocation(text.trim())
     .replace(/^(?:DL|DM|EBN|PPRO|PG|PAG)\s*\*\s*/i, "")
+    .replace(/^(.+?)\s*\*\s*\1$/i, "$1")
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 80);

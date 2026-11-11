@@ -125,7 +125,7 @@ export function managedAccountKindLabel(kind: ManagedAccountKind): string {
     case "fixed_recurring":
       return "Conta fixa";
     case "installment_plan":
-      return "Parcelamento manual";
+      return "Parcelamento";
     case "simulation":
       return "Simulação";
   }
