@@ -17,6 +17,7 @@ import { simulatorRoutes } from "./routes/simulator.js";
 import { simulationsRoutes } from "./routes/simulations.js";
 import { recurringBillRoutes } from "./routes/recurringBills.js";
 import { managedAccountRoutes } from "./routes/managedAccounts.js";
+import { startSyncScheduler } from "./services/syncScheduler.js";
 
 async function main() {
   const app = Fastify({
@@ -53,6 +54,9 @@ async function main() {
   await app.register(managedAccountRoutes);
 
   await app.listen({ port: env.port, host: "0.0.0.0" });
+
+  const stopSyncScheduler = startSyncScheduler(app.log);
+  app.addHook("onClose", async () => stopSyncScheduler());
 }
 
 main().catch((err) => {

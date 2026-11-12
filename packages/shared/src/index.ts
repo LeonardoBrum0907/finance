@@ -1209,3 +1209,10 @@ export interface SimulationResultDTO {
   creditImpact: SimulationCreditImpactDTO | null;
   warnings: string[];
 }
+
+export {
+  DEFAULT_SYNC_INTERVAL_HOURS,
+  isConnectionSyncDue,
+  parseSyncIntervalHours,
+  type SyncDueInput,
+} from "./syncSchedule";
