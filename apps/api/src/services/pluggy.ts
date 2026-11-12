@@ -70,10 +70,24 @@ async function fetchAllTransactions(
   return results as never;
 }
 
+const inFlightSyncs = new Map<string, Promise<void>>();
+
 /**
  * Sincroniza um Item da Pluggy: contas, saldos e extrato dos ultimos 365 dias.
+ * Chamadas simultaneas para a mesma conexao (botao, webhook, agendador)
+ * reaproveitam a mesma execucao em vez de rodar duas vezes.
  */
-export async function syncConnection(connectionId: string): Promise<void> {
+export function syncConnection(connectionId: string): Promise<void> {
+  const running = inFlightSyncs.get(connectionId);
+  if (running) return running;
+  const promise = runSyncConnection(connectionId).finally(() => {
+    inFlightSyncs.delete(connectionId);
+  });
+  inFlightSyncs.set(connectionId, promise);
+  return promise;
+}
+
+async function runSyncConnection(connectionId: string): Promise<void> {
   const connection = await prisma.bankConnection.findUnique({
     where: { id: connectionId },
   });

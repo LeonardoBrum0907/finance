@@ -1,6 +1,7 @@
 import { config } from "dotenv";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { parseSyncIntervalHours } from "@finance/shared";
 
 // Garante que o .env da API seja carregado mesmo quando o processo
 // é iniciado a partir da raiz do monorepo (pnpm dev).
@@ -30,6 +31,8 @@ export const env = {
     clientId: process.env.PLUGGY_CLIENT_ID ?? "",
     clientSecret: process.env.PLUGGY_CLIENT_SECRET ?? "",
   },
+  /** Intervalo do agendador de sync automática, em horas (0 desliga). */
+  syncIntervalHours: parseSyncIntervalHours(process.env.SYNC_INTERVAL_HOURS),
   ai: {
     provider: (process.env.AI_PROVIDER ?? "openai").toLowerCase(),
     model: process.env.AI_MODEL ?? "",

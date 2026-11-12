@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { AccountDTO, BankConnectionDTO, UpdateCreditAccountInput } from "@finance/shared";
 import { isCreditAccount } from "@finance/shared";
-import { formatCurrency } from "../../lib/format";
+import { formatCurrency, formatDateTime } from "../../lib/format";
 
 interface Props {
   connection: BankConnectionDTO;
@@ -133,6 +133,11 @@ export function ConnectionCard({
           </button>
         </div>
       </div>
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        {connection.lastSyncedAt
+          ? `Atualizado em ${formatDateTime(connection.lastSyncedAt)} · sincroniza sozinho a cada poucas horas`
+          : "Ainda não sincronizado"}
+      </p>
       <div className="mt-2 space-y-2">
         {connection.accounts.map((acc) => (
           <div key={acc.id} className="text-sm text-muted-foreground-dark">
