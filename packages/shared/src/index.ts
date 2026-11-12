@@ -84,6 +84,8 @@ export {
   type RecurringPatternCandidate,
   type RecurringBillForSimulation,
 } from "./recurringBills";
+export { groupCardInstallmentSeries } from "./cardInstallments";
+export type { CardInstallmentSeries, CardInstallmentTransaction } from "./cardInstallments";
 export {
   MANAGED_ACCOUNT_KINDS,
   MANAGED_ACCOUNT_SOURCES,

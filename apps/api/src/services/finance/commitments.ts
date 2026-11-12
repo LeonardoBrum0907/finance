@@ -8,8 +8,10 @@ import type {
 } from "@finance/shared";
 import {
   descriptionMatchesPersonName,
+  groupCardInstallmentSeries,
   isCreditAccount,
   isTransactionOutflow,
+  todayDateKeyInTimeZone,
 } from "@finance/shared";
 import type { PaymentCommitment, PaymentInstallment, Transaction } from "@prisma/client";
 import { prisma } from "../../prisma.js";
@@ -70,6 +72,7 @@ export function serializeCommitment(commitment: CommitmentWithInstallments): Pay
     totalInstallments: commitment.totalInstallments,
     dayOfMonth: commitment.dayOfMonth,
     status: commitment.status as CommitmentStatus,
+    source: commitment.source === "auto_detected" ? "auto_detected" : "manual",
     anchorTransactionId: commitment.anchorTransactionId,
     paidCount,
     pendingCount,
@@ -448,4 +451,162 @@ export function toTransactionDetailFields(
     commitment: commitmentDto,
     commitmentSummary,
   };
+}
+
+const CARD_INSTALLMENT_LOOKBACK_MONTHS = 12;
+/** Parcela de cartão vencida já foi cobrada na fatura, mesmo que a Pluggy ainda não a mostre. */
+const CARD_INSTALLMENT_ASSUME_PAID_DAYS = 0;
+
+function addMonthsKeepingDay(anchor: Date, months: number): Date {
+  const day = anchor.getUTCDate();
+  const target = new Date(anchor);
+  target.setUTCDate(1);
+  target.setUTCMonth(target.getUTCMonth() + months);
+  target.setUTCDate(clampDayOfMonth(target.getUTCFullYear(), target.getUTCMonth(), day));
+  return target;
+}
+
+/**
+ * Cria e atualiza compromissos a partir das compras parceladas do cartão ("Loja 1/3").
+ * As parcelas já lançadas ficam pagas com a transação. As anteriores ao histórico e as
+ * que venceram sem lançamento contam como pagas, porque o cartão cobra sozinho. As
+ * futuras ficam pendentes. Compromissos cancelados pelo usuário não voltam.
+ */
+export async function detectCardInstallmentPlans(userId: string): Promise<number> {
+  const dateFrom = new Date();
+  dateFrom.setMonth(dateFrom.getMonth() - CARD_INSTALLMENT_LOOKBACK_MONTHS);
+
+  const transactions = await prisma.transaction.findMany({
+    where: {
+      date: { gte: dateFrom },
+      account: { type: "CREDIT", connection: { person: { userId } } },
+    },
+    include: { account: { select: { type: true } } },
+  });
+
+  const series = groupCardInstallmentSeries(
+    transactions.map((tx) => ({
+      id: tx.id,
+      date: tx.date.toISOString(),
+      description: tx.description,
+      amount: tx.amount,
+      merchantName: tx.merchantName,
+      accountId: tx.accountId,
+      accountType: tx.account.type,
+    })),
+  );
+  if (series.length === 0) return 0;
+
+  const seriesTxIds = series.flatMap((plan) => [...plan.slots.values()].map((tx) => tx.id));
+  const [linkedInstallments, anchoredCommitments] = await Promise.all([
+    prisma.paymentInstallment.findMany({
+      where: { transactionId: { in: seriesTxIds } },
+      select: { transactionId: true, commitmentId: true },
+    }),
+    prisma.paymentCommitment.findMany({
+      where: { anchorTransactionId: { in: seriesTxIds } },
+      select: { id: true, anchorTransactionId: true },
+    }),
+  ]);
+  const commitmentByTx = new Map<string, string>();
+  for (const inst of linkedInstallments) commitmentByTx.set(inst.transactionId!, inst.commitmentId);
+  for (const c of anchoredCommitments) {
+    if (!commitmentByTx.has(c.anchorTransactionId!)) commitmentByTx.set(c.anchorTransactionId!, c.id);
+  }
+
+  const today = todayDateKeyInTimeZone();
+  const assumePaidBefore = new Date(`${today}T12:00:00.000Z`);
+  assumePaidBefore.setUTCDate(assumePaidBefore.getUTCDate() - CARD_INSTALLMENT_ASSUME_PAID_DAYS);
+
+  let created = 0;
+
+  for (const plan of series) {
+    const slots = [...plan.slots.entries()].sort((a, b) => a[0] - b[0]);
+    const [anchorSeq, anchorTx] = slots[0]!;
+    const anchorDate = new Date(anchorTx.date);
+
+    const existingId = slots.map(([, tx]) => commitmentByTx.get(tx.id)).find(Boolean);
+
+    if (existingId) {
+      const commitment = await prisma.paymentCommitment.findUnique({
+        where: { id: existingId },
+        include: { installments: true },
+      });
+      if (!commitment || commitment.status === "cancelled") continue;
+      if (commitment.totalInstallments !== plan.totalInstallments) continue;
+
+      let changed = false;
+      for (const [sequence, tx] of slots) {
+        const installment = commitment.installments.find((i) => i.sequence === sequence);
+        if (!installment || installment.transactionId) continue;
+        await prisma.paymentInstallment.update({
+          where: { id: installment.id },
+          data: {
+            status: "paid",
+            transactionId: tx.id,
+            paidAt: new Date(tx.date),
+            dueDate: new Date(tx.date),
+          },
+        });
+        changed = true;
+      }
+      if (commitment.source === "auto_detected") {
+        for (const installment of commitment.installments) {
+          if (installment.status !== "pending" || plan.slots.has(installment.sequence)) continue;
+          if (installment.dueDate >= assumePaidBefore) continue;
+          await prisma.paymentInstallment.update({
+            where: { id: installment.id },
+            data: { status: "paid" },
+          });
+          changed = true;
+        }
+      }
+      if (changed) await refreshCommitmentStatus(commitment.id);
+      continue;
+    }
+
+    const installments = Array.from({ length: plan.totalInstallments }, (_, idx) => {
+      const sequence = idx + 1;
+      const seen = plan.slots.get(sequence);
+      if (seen) {
+        return {
+          sequence,
+          amount: Math.abs(seen.amount),
+          dueDate: new Date(seen.date),
+          status: "paid",
+          transactionId: seen.id,
+          paidAt: new Date(seen.date),
+        };
+      }
+      const dueDate = addMonthsKeepingDay(anchorDate, sequence - anchorSeq);
+      const assumedPaid = sequence < anchorSeq || dueDate < assumePaidBefore;
+      return {
+        sequence,
+        amount: plan.installmentAmount,
+        dueDate,
+        status: assumedPaid ? "paid" : "pending",
+        transactionId: null,
+        paidAt: null,
+      };
+    });
+
+    const commitment = await prisma.paymentCommitment.create({
+      data: {
+        userId,
+        title: plan.title,
+        totalAmount: Math.round(plan.installmentAmount * plan.totalInstallments * 100) / 100,
+        installmentAmount: plan.installmentAmount,
+        totalInstallments: plan.totalInstallments,
+        dayOfMonth: anchorDate.getUTCDate(),
+        source: "auto_detected",
+        accountId: plan.accountId,
+        anchorTransactionId: anchorTx.id,
+        installments: { create: installments },
+      },
+    });
+    await refreshCommitmentStatus(commitment.id);
+    created += 1;
+  }
+
+  return created;
 }
