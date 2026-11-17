@@ -652,6 +652,8 @@ export interface DashboardPeriodSummary {
   committedExpenses?: number;
   /** Saldo disponível: net − committedExpenses. */
   availableNet?: number;
+  /** Salário ainda não recebido que já entra nas receitas do ciclo. */
+  projectedSalaryIncome?: number;
   periodMode?: PeriodMode;
   from?: string;
   to?: string;

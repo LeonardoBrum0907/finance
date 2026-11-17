@@ -332,8 +332,12 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
           )
         : null;
 
+    let focusProjectedSalary = 0;
+    let focusIsComplete = true;
+    let focusManualCommitted = 0;
     let period: {
       months: typeof months;
+      projectedSalaryIncome?: number;
       income: number;
       expenses: number;
       net: number;
@@ -364,6 +368,11 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
         paydayCycleAnchor,
         manualCommittedForFocus,
       );
+      focusIsComplete = focusCycleSummary.isComplete;
+      focusManualCommitted = focusCycleSummary.committedExpensesManual;
+      focusProjectedSalary = focusCycleSummary.isComplete
+        ? 0
+        : focusCycleSummary.projectedSalaryIncome;
       const endOffset = periods.endOffsetCycles ?? 0;
       const previousCycleKeys = getRecentPaydayCycles(
         1,
@@ -421,6 +430,26 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
             paydayCycleAnchor,
           )
         : getMonthlySeries(cycleTxs, periods.currentKeys);
+
+    // Ciclo ainda aberto: as compras do cartão da fatura já foram feitas (contam como
+    // gasto) e o salário que vai pagar a fatura entra como receita prevista.
+    if (periodMode === "payday" && focusCycleKey && !focusIsComplete) {
+      const point = monthlySeries.find((p) => p.month === focusCycleKey);
+      if (point) {
+        point.income = Math.round((point.income + focusProjectedSalary) * 100) / 100;
+        point.net = Math.round((point.income - point.expenses) * 100) / 100;
+        period = {
+          ...period,
+          income: point.income,
+          expenses: point.expenses,
+          net: point.net,
+          // As saídas agendadas já estão nas despesas; falta só o que é manual.
+          committedExpenses: focusManualCommitted,
+          availableNet: Math.round((point.net - focusManualCommitted) * 100) / 100,
+          projectedSalaryIncome: focusProjectedSalary,
+        };
+      }
+    }
 
     const categories = getCategoriesWithPercent(cycleTxs, periods.currentRange);
     const previousCategoriesRaw = getSpendingByCategory(
