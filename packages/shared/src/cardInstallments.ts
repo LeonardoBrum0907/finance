@@ -114,3 +114,11 @@ export function groupCardInstallmentSeries(
 
   return series.map(({ originMonths: _origins, ...rest }) => rest);
 }
+
+/**
+ * A Pluggy traz as parcelas futuras do cartão como transações com data futura
+ * ("Loja 2/5" no mês que vem). Só conta como paga a parcela já lançada até hoje.
+ */
+export function isCardInstallmentPosted(txDate: string, todayKey: string): boolean {
+  return txDate.slice(0, 10) <= todayKey;
+}

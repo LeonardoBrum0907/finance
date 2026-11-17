@@ -7,7 +7,7 @@ import {
   parseInstallmentMarker,
   type RecurringPatternTransaction,
 } from "./recurringBills.js";
-import { groupCardInstallmentSeries } from "./cardInstallments.js";
+import { groupCardInstallmentSeries, isCardInstallmentPosted } from "./cardInstallments.js";
 
 function card(
   id: string,
@@ -271,5 +271,35 @@ describe("groupCardInstallmentSeries", () => {
       { ...tx("d", "2026-08-05", "PIX ALUGUEL 05/08", -1500), accountType: "BANK" },
     ]);
     assert.equal(series.length, 0);
+  });
+});
+
+describe("parcelas futuras do cartão", () => {
+  const tx = (id: string, date: string, description: string) => ({
+    id,
+    date,
+    description,
+    amount: 120.5,
+    accountId: "cartao",
+    accountType: "CREDIT",
+  });
+
+  it("agrupa as parcelas futuras que a Pluggy já mostra na mesma compra", () => {
+    const series = groupCardInstallmentSeries([
+      tx("p1", "2026-11-11T23:41:58.000Z", "Htm*Curso Exemplo-Cur 1/5"),
+      tx("p2", "2026-12-11T03:00:00.000Z", "Htm*Curso Exemplo-Cur 2/5"),
+      tx("p3", "2027-01-11T03:00:00.000Z", "Htm*Curso Exemplo-Cur 3/5"),
+      tx("p4", "2027-02-11T03:00:00.000Z", "Htm*Curso Exemplo-Cur 4/5"),
+      tx("p5", "2027-03-11T03:00:00.000Z", "Htm*Curso Exemplo-Cur 5/5"),
+    ]);
+    assert.equal(series.length, 1);
+    assert.equal(series[0]!.totalInstallments, 5);
+    assert.deepEqual([...series[0]!.slots.keys()].sort(), [1, 2, 3, 4, 5]);
+  });
+
+  it("só considera paga a parcela com data até hoje", () => {
+    assert.equal(isCardInstallmentPosted("2026-11-11T23:41:58.000Z", "2026-11-17"), true);
+    assert.equal(isCardInstallmentPosted("2026-11-17T10:00:00.000Z", "2026-11-17"), true);
+    assert.equal(isCardInstallmentPosted("2026-12-11T03:00:00.000Z", "2026-11-17"), false);
   });
 });

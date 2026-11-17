@@ -9,6 +9,7 @@ import type {
 import {
   descriptionMatchesPersonName,
   groupCardInstallmentSeries,
+  isCardInstallmentPosted,
   isCreditAccount,
   isTransactionOutflow,
   todayDateKeyInTimeZone,
@@ -468,7 +469,8 @@ function addMonthsKeepingDay(anchor: Date, months: number): Date {
 
 /**
  * Cria e atualiza compromissos a partir das compras parceladas do cartão ("Loja 1/3").
- * As parcelas já lançadas ficam pagas com a transação. As anteriores ao histórico e as
+ * As parcelas já lançadas ficam pagas com a transação; as que a Pluggy mostra com data
+ * futura ficam ligadas à transação, mas pendentes até a data chegar. As anteriores ao histórico e as
  * que venceram sem lançamento contam como pagas, porque o cartão cobra sozinho. As
  * futuras ficam pendentes. Compromissos cancelados pelo usuário não voltam.
  */
@@ -536,19 +538,47 @@ export async function detectCardInstallmentPlans(userId: string): Promise<number
       if (commitment.totalInstallments !== plan.totalInstallments) continue;
 
       let changed = false;
+      let reopened = false;
       for (const [sequence, tx] of slots) {
         const installment = commitment.installments.find((i) => i.sequence === sequence);
-        if (!installment || installment.transactionId) continue;
-        await prisma.paymentInstallment.update({
-          where: { id: installment.id },
-          data: {
-            status: "paid",
-            transactionId: tx.id,
-            paidAt: new Date(tx.date),
-            dueDate: new Date(tx.date),
-          },
-        });
-        changed = true;
+        if (!installment) continue;
+        const posted = isCardInstallmentPosted(tx.date, today);
+
+        if (!installment.transactionId) {
+          await prisma.paymentInstallment.update({
+            where: { id: installment.id },
+            data: {
+              status: posted ? "paid" : "pending",
+              transactionId: tx.id,
+              paidAt: posted ? new Date(tx.date) : null,
+              dueDate: new Date(tx.date),
+            },
+          });
+          if (!posted && installment.status === "paid") reopened = true;
+          changed = true;
+          continue;
+        }
+        if (installment.transactionId !== tx.id) continue;
+
+        if (posted && installment.status === "pending") {
+          await prisma.paymentInstallment.update({
+            where: { id: installment.id },
+            data: { status: "paid", paidAt: new Date(tx.date) },
+          });
+          changed = true;
+        } else if (
+          !posted &&
+          installment.status === "paid" &&
+          commitment.source === "auto_detected"
+        ) {
+          // Parcela futura que a Pluggy já mostra: ainda não foi cobrada.
+          await prisma.paymentInstallment.update({
+            where: { id: installment.id },
+            data: { status: "pending", paidAt: null },
+          });
+          reopened = true;
+          changed = true;
+        }
       }
       if (commitment.source === "auto_detected") {
         for (const installment of commitment.installments) {
@@ -561,6 +591,12 @@ export async function detectCardInstallmentPlans(userId: string): Promise<number
           changed = true;
         }
       }
+      if (reopened && commitment.status === "completed") {
+        await prisma.paymentCommitment.update({
+          where: { id: commitment.id },
+          data: { status: "active" },
+        });
+      }
       if (changed) await refreshCommitmentStatus(commitment.id);
       continue;
     }
@@ -569,13 +605,14 @@ export async function detectCardInstallmentPlans(userId: string): Promise<number
       const sequence = idx + 1;
       const seen = plan.slots.get(sequence);
       if (seen) {
+        const posted = isCardInstallmentPosted(seen.date, today);
         return {
           sequence,
           amount: Math.abs(seen.amount),
           dueDate: new Date(seen.date),
-          status: "paid",
+          status: posted ? "paid" : "pending",
           transactionId: seen.id,
-          paidAt: new Date(seen.date),
+          paidAt: posted ? new Date(seen.date) : null,
         };
       }
       const dueDate = addMonthsKeepingDay(anchorDate, sequence - anchorSeq);
