@@ -8,7 +8,12 @@ import type {
   ScenarioSimulationType,
   SimulationPayload,
 } from "@finance/shared";
-import { isCreditAccount, todayDateKeyInTimeZone } from "@finance/shared";
+import {
+  cardChargeDueDateKey,
+  isCreditAccount,
+  toLocalDateKey,
+  todayDateKeyInTimeZone,
+} from "@finance/shared";
 import type { ManagedAccount, ManagedAccountEntry, Prisma } from "@prisma/client";
 import { prisma } from "../../prisma.js";
 
@@ -450,6 +455,7 @@ export async function loadActiveManagedAccountsForImpact(
     id: row.id,
     title: row.title,
     paidByCard: isCreditAccount(row.bankAccount?.type),
+    cardAccountId: isCreditAccount(row.bankAccount?.type) ? row.bankAccountId : null,
     kind: row.kind as ManagedAccountKind,
     simulationType: (row.simulationType as ScenarioSimulationType | null) ?? null,
     simulationPayload: (row.simulationPayload as SimulationPayload | null) ?? null,
@@ -469,6 +475,9 @@ export async function loadActiveManagedAccountsForImpact(
   }));
 }
 
+/** Folga para trazer cobranças no cartão feitas antes do ciclo, mas pagas na fatura dele. */
+const CARD_CHARGE_LOOKBACK_DAYS = 45;
+
 export async function sumPendingManagedEntriesInRange(
   userId: string,
   from: Date,
@@ -477,12 +486,15 @@ export async function sumPendingManagedEntriesInRange(
 ): Promise<number> {
   await backfillManagedAccounts(userId);
 
+  const queryFrom = new Date(from);
+  queryFrom.setUTCDate(queryFrom.getUTCDate() - CARD_CHARGE_LOOKBACK_DAYS);
+
   const entries = await prisma.managedAccountEntry.findMany({
     where: {
       status: "pending",
       // Já ligada a uma transação: entra no painel pela própria transação.
       transactionId: null,
-      dueDate: { gte: from, lte: to },
+      dueDate: { gte: queryFrom, lte: to },
       managedAccount: {
         userId,
         ...(personId ? { personId } : {}),
@@ -490,10 +502,56 @@ export async function sumPendingManagedEntriesInRange(
         kind: { in: ["installment_plan", "fixed_recurring"] },
       },
     },
-    select: { amount: true },
+    select: {
+      amount: true,
+      dueDate: true,
+      managedAccount: {
+        select: {
+          kind: true,
+          bankAccount: {
+            select: {
+              id: true,
+              type: true,
+              billDueDay: true,
+              billCloseDay: true,
+              balanceDueDate: true,
+              balanceCloseDate: true,
+              creditBills: { select: { dueDate: true, closingDate: true, totalAmount: true } },
+            },
+          },
+        },
+      },
+    },
   });
 
-  return entries.reduce((sum, entry) => sum + entry.amount, 0);
+  const fromKey = from.toISOString().slice(0, 10);
+  const toKey = to.toISOString().slice(0, 10);
+  let total = 0;
+  for (const entry of entries) {
+    let dueKey = toLocalDateKey(entry.dueDate);
+    const card = entry.managedAccount.bankAccount;
+    // Conta fixa no cartão conta no ciclo em que vence a fatura da cobrança.
+    if (entry.managedAccount.kind === "fixed_recurring" && card && isCreditAccount(card.type)) {
+      dueKey =
+        cardChargeDueDateKey(
+          {
+            accountId: card.id,
+            billDueDay: card.billDueDay,
+            billCloseDay: card.billCloseDay,
+            balanceDueDate: card.balanceDueDate ? toLocalDateKey(card.balanceDueDate) : null,
+            balanceCloseDate: card.balanceCloseDate ? toLocalDateKey(card.balanceCloseDate) : null,
+            statements: card.creditBills.map((bill) => ({
+              dueDate: toLocalDateKey(bill.dueDate),
+              closingDate: bill.closingDate ? toLocalDateKey(bill.closingDate) : null,
+              totalAmount: bill.totalAmount,
+            })),
+          },
+          { date: dueKey },
+        ) ?? dueKey;
+    }
+    if (dueKey >= fromKey && dueKey <= toKey) total += entry.amount;
+  }
+  return total;
 }
 
 export async function getManagedAccountById(

@@ -103,6 +103,8 @@ export interface ManagedAccountForSimulation {
   totalInstallments: number | null;
   /** Conta paga no cartão de crédito. */
   paidByCard?: boolean;
+  /** Cartão em que a conta é cobrada (para achar o vencimento da fatura). */
+  cardAccountId?: string | null;
   entries: {
     id: string;
     dueDate: string;
