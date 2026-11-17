@@ -9,6 +9,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type {
+  BillCyclesResult,
   ManagedAccountDTO,
   PersonDTO,
   RecurringBillDTO,
@@ -16,6 +17,7 @@ import type {
   UpdateRecurringBillInput,
 } from "@finance/shared";
 import {
+  billCycleKeyForPayment,
   managedAccountLegacyId,
   managedAccountToCommitmentDTO,
   managedAccountToRecurringBillDTO,
@@ -66,6 +68,8 @@ interface Props {
   periodMode?: "payday" | "calendar";
   currentCycleFrom?: string;
   currentCycleTo?: string;
+  /** Fatura selecionada: o impacto e o status das contas passam a ser dessa fatura. */
+  billCycle?: BillCycleSelection;
   onTabChange: (tab: AccountsTab) => void;
   onDetect: () => void;
   onNewSimulation: () => void;
@@ -97,6 +101,7 @@ export function AccountsSection({
   periodMode = "calendar",
   currentCycleFrom,
   currentCycleTo,
+  billCycle,
   onTabChange,
   onDetect,
   onNewSimulation,
@@ -342,11 +347,9 @@ export function AccountsSection({
         <div className="grid gap-3 lg:grid-cols-2">
           {filteredItems.map((account) => {
             if (account.kind === "fixed_recurring") {
-              const cycleImpact = accountPendingInCycle(
-                account,
-                currentCycleFrom,
-                currentCycleTo,
-              );
+              const cycleImpact = billCycle
+                ? pendingInBillCycle(account, billCycle)
+                : accountPendingInCycle(account, currentCycleFrom, currentCycleTo);
               return (
                 <RecurringBillAccountCard
                   key={account.id}
@@ -355,6 +358,7 @@ export function AccountsSection({
                   periodMode={periodMode}
                   currentCycleFrom={currentCycleFrom}
                   currentCycleTo={currentCycleTo}
+                  billCycle={billCycle}
                   cycleImpact={cycleImpact}
                   onToggle={() =>
                     onToggleBill
@@ -386,11 +390,9 @@ export function AccountsSection({
             const scenario = managedAccountToScenarioDTO(account);
             if (!scenario) return null;
 
-            const cycleImpact = accountPendingInCycle(
-              account,
-              currentCycleFrom,
-              currentCycleTo,
-            );
+            const cycleImpact = billCycle
+              ? pendingInBillCycle(account, billCycle)
+              : accountPendingInCycle(account, currentCycleFrom, currentCycleTo);
 
             return (
               <ScenarioCard
@@ -425,6 +427,33 @@ export function AccountsSection({
       />
     </section>
   );
+}
+
+export interface BillCycleSelection {
+  cycleKey: string;
+  label: string;
+  result: BillCyclesResult;
+}
+
+function entryInBillCycle(
+  account: ManagedAccountDTO,
+  entry: ManagedAccountDTO["entries"][number],
+  billCycle: BillCycleSelection,
+): boolean {
+  const date = entry.dueDate.slice(0, 10);
+  const key = billCycleKeyForPayment(billCycle.result, {
+    date,
+    cardAccountId: account.bankAccountId,
+    // Parcelas do cartão já vencem com a fatura.
+    billMonth: account.kind === "installment_plan" ? date.slice(0, 7) : null,
+  });
+  return key === billCycle.cycleKey;
+}
+
+function pendingInBillCycle(account: ManagedAccountDTO, billCycle: BillCycleSelection): number {
+  return account.entries
+    .filter((entry) => entry.status === "pending" && entryInBillCycle(account, entry, billCycle))
+    .reduce((sum, entry) => sum + entry.amount, 0);
 }
 
 function formatCurrentMonthLabel(monthKey: string): string {
@@ -462,6 +491,7 @@ function RecurringBillAccountCard({
   periodMode = "calendar",
   currentCycleFrom,
   currentCycleTo,
+  billCycle,
   cycleImpact = 0,
   onToggle,
   onEdit,
@@ -472,6 +502,7 @@ function RecurringBillAccountCard({
   periodMode?: "payday" | "calendar";
   currentCycleFrom?: string;
   currentCycleTo?: string;
+  billCycle?: BillCycleSelection;
   cycleImpact?: number;
   onToggle: () => void;
   onEdit: () => void;
@@ -479,17 +510,22 @@ function RecurringBillAccountCard({
 }) {
   const today = todayDateKeyInTimeZone();
   const monthKey = today.slice(0, 7);
-  const currentEntry = findCurrentPeriodEntry(
-    account,
-    periodMode,
-    currentCycleFrom,
-    currentCycleTo,
-  );
-  const periodLabel =
-    periodMode === "payday" && currentCycleFrom && currentCycleTo
+  const currentEntry = billCycle
+    ? account.entries.find((entry) => entryInBillCycle(account, entry, billCycle))
+    : findCurrentPeriodEntry(account, periodMode, currentCycleFrom, currentCycleTo);
+  const periodLabel = billCycle
+    ? billCycle.label
+    : periodMode === "payday" && currentCycleFrom && currentCycleTo
       ? `${currentCycleFrom} – ${currentCycleTo}`
       : formatCurrentMonthLabel(monthKey);
-  const periodPrefix = periodMode === "payday" ? "Neste ciclo" : "Este mês";
+  const periodPrefix = billCycle ? "Neste ciclo" : periodMode === "payday" ? "Neste ciclo" : "Este mês";
+  // Cobrada no cartão: vence junto com a fatura.
+  const paidByCard =
+    !!billCycle && billCycle.result.cards.some((card) => card.accountId === account.bankAccountId);
+  const billDueDate = paidByCard
+    ? billCycle!.result.cycles.find((cycle) => cycle.cycleKey === billCycle!.cycleKey)?.dueDate
+    : undefined;
+  const entryDueKey = billDueDate ?? currentEntry?.dueDate.slice(0, 10);
 
   let monthStatusLabel = "Sem cobrança";
   let monthStatusClass = "border-app-border bg-app-bg/60 text-muted-foreground";
@@ -501,7 +537,7 @@ function RecurringBillAccountCard({
     monthStatusLabel = "Ignorado";
     monthStatusClass = "border-app-border bg-app-bg/60 text-muted-foreground";
   } else if (currentEntry?.status === "pending") {
-    const dueDateKey = currentEntry.dueDate.slice(0, 10);
+    const dueDateKey = entryDueKey ?? currentEntry.dueDate.slice(0, 10);
     monthStatusLabel = dueDateKey < today ? "Pendente · atrasado" : "Pendente";
     monthStatusClass = "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300";
   }
@@ -535,7 +571,8 @@ function RecurringBillAccountCard({
           </p>
           {account.status === "active" && cycleImpact > 0 && (
             <p className="mt-1 text-xs text-muted-foreground">
-              Impacto no ciclo: {formatCurrency(cycleImpact, currencyCode)}
+              {billCycle ? "Impacto nesta fatura" : "Impacto no ciclo"}:{" "}
+              {formatCurrency(cycleImpact, currencyCode)}
             </p>
           )}
           {account.status === "active" && (
@@ -548,10 +585,10 @@ function RecurringBillAccountCard({
               >
                 {monthStatusLabel}
               </span>
-              {currentEntry && (
+              {currentEntry && entryDueKey && (
                 <span className="text-[10px] text-muted-foreground">
-                  Venc.{" "}
-                  {new Date(currentEntry.dueDate).toLocaleDateString("pt-BR", {
+                  {paidByCard ? "Na fatura de" : "Venc."}{" "}
+                  {new Date(`${entryDueKey}T12:00:00`).toLocaleDateString("pt-BR", {
                     day: "2-digit",
                     month: "2-digit",
                   })}

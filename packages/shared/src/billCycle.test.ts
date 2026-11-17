@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildBillCycles, type BillCycleInput } from "./billCycle.js";
+import { billCycleKeyForPayment, buildBillCycles, type BillCycleInput } from "./billCycle.js";
 
 function input(overrides: Partial<BillCycleInput> = {}): BillCycleInput {
   return {
@@ -76,5 +76,20 @@ describe("buildBillCycles", () => {
     const current = result.cycles.find((c) => c.cycleKey === "2026-11")!;
     assert.equal(current.money!.salary, 0);
     assert.equal(current.money!.salaryAfterDue, "2026-11-30");
+  });
+
+  it("diz em que fatura cai cada saída", () => {
+    const result = buildBillCycles(input())!;
+    // Cobrança no cartão em 19/11 cai na fatura de novembro; em 25/11, na de dezembro.
+    assert.equal(billCycleKeyForPayment(result, { date: "2026-11-19", cardAccountId: "cartao" }), "2026-11");
+    assert.equal(billCycleKeyForPayment(result, { date: "2026-11-25", cardAccountId: "cartao" }), "2026-12");
+    // Parcela do cartão já sabe a fatura.
+    assert.equal(
+      billCycleKeyForPayment(result, { date: "2026-12-28", cardAccountId: "cartao", billMonth: "2026-12" }),
+      "2026-12",
+    );
+    // Pix em 23/11 sai do dinheiro que paga a fatura de 28/11.
+    assert.equal(billCycleKeyForPayment(result, { date: "2026-11-23" }), "2026-11");
+    assert.equal(billCycleKeyForPayment(result, { date: "2026-11-29" }), "2026-12");
   });
 });

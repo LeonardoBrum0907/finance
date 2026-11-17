@@ -517,11 +517,13 @@ function offsetCycleKey(
 
   let key = cycleKey;
 
-  for (let i = 0; i < offset; i++) {
+  // Offset positivo volta no tempo; negativo avança (ciclos futuros).
+  const step = offset < 0 ? 1 : -1;
+  for (let i = 0; i < Math.abs(offset); i++) {
 
     const { y, m } = parseDateKey(key);
 
-    const prev = addMonths(y, m, -1);
+    const prev = addMonths(y, m, step);
 
     key = paydayDateInMonth(prev.y, prev.m, paydayDay);
 
@@ -532,6 +534,7 @@ function offsetCycleKey(
 }
 
 const MAX_CYCLE_OFFSET_LOOKUP = 120;
+const FUTURE_CYCLE_OFFSET_LOOKUP = 12;
 
 /**
  * Quantos ciclos `selectedCycleKey` está atrás do ciclo atual (0 = ciclo atual).
@@ -549,6 +552,13 @@ export function getPaydayCycleEndOffset(
   for (let offset = 1; offset <= MAX_CYCLE_OFFSET_LOOKUP; offset++) {
     key = offsetCycleKey(key, paydayDay, 1);
     if (key === selectedCycleKey) return offset;
+  }
+
+  // Ciclos futuros: offset negativo.
+  key = currentKey;
+  for (let offset = 1; offset <= FUTURE_CYCLE_OFFSET_LOOKUP; offset++) {
+    key = offsetCycleKey(key, paydayDay, -1);
+    if (key === selectedCycleKey) return -offset;
   }
 
   return null;

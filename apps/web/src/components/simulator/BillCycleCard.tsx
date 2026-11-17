@@ -20,7 +20,7 @@ const MONTHS = [
   "dezembro",
 ];
 
-function monthLabel(cycleKey: string): string {
+export function billCycleLabel(cycleKey: string): string {
   const [year, month] = cycleKey.split("-").map(Number);
   return `Fatura de ${MONTHS[month! - 1]} ${year}`;
 }
@@ -43,10 +43,22 @@ interface Props {
   currentCycleKey: string;
   currencyCode: string;
   closingDelta?: number | null;
+  /** Fatura escolhida (controlada pela página); sem ela, o card guarda a escolha sozinho. */
+  selectedKey?: string | null;
+  onSelect?: (cycleKey: string) => void;
 }
 
-export function BillCycleCard({ cycles, currentCycleKey, currencyCode, closingDelta }: Props) {
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+export function BillCycleCard({
+  cycles,
+  currentCycleKey,
+  currencyCode,
+  closingDelta,
+  selectedKey: controlledKey,
+  onSelect,
+}: Props) {
+  const [localKey, setLocalKey] = useState<string | null>(null);
+  const selectedKey = controlledKey !== undefined ? controlledKey : localKey;
+  const setSelectedKey = (key: string) => (onSelect ? onSelect(key) : setLocalKey(key));
   const activeKey = selectedKey ?? currentCycleKey;
   const index = Math.max(
     0,
@@ -89,7 +101,7 @@ export function BillCycleCard({ cycles, currentCycleKey, currencyCode, closingDe
             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               {statusLabel(cycle, cycle.cycleKey === currentCycleKey)}
             </p>
-            <p className="text-sm font-medium text-foreground">{monthLabel(cycle.cycleKey)}</p>
+            <p className="text-sm font-medium text-foreground">{billCycleLabel(cycle.cycleKey)}</p>
           </div>
           <button
             type="button"

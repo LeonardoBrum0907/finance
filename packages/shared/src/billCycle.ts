@@ -1,4 +1,4 @@
-import { cardChargeDueDateKey } from "./cardPaymentDate.js";
+import { cardChargeDueDateKey, type CardPaymentCalendar } from "./cardPaymentDate.js";
 import {
   addDaysToDateKey,
   closeDateForDue,
@@ -97,6 +97,27 @@ export interface BillCycleSummary {
 export interface BillCyclesResult {
   currentCycleKey: string;
   cycles: BillCycleSummary[];
+  /** Calendário dos cartões, para saber em que fatura cai cada cobrança. */
+  cards: CardPaymentCalendar[];
+}
+
+/**
+ * Em que ciclo da fatura cai uma saída. No cartão, é a fatura da cobrança; na conta
+ * corrente, o ciclo cujo vencimento é o primeiro na data da saída ou depois dela.
+ */
+export function billCycleKeyForPayment(
+  result: Pick<BillCyclesResult, "cycles" | "cards">,
+  payment: { date: string; cardAccountId?: string | null; billMonth?: string | null },
+): string | null {
+  const card = payment.cardAccountId
+    ? result.cards.find((c) => c.accountId === payment.cardAccountId)
+    : undefined;
+  if (card) {
+    if (payment.billMonth) return payment.billMonth;
+    return cardChargeDueDateKey(card, { date: payment.date })?.slice(0, 7) ?? null;
+  }
+  const date = payment.date.slice(0, 10);
+  return result.cycles.find((cycle) => cycle.dueDate >= date)?.cycleKey ?? null;
 }
 
 const SALARY_MATCH_DAYS = 4;
@@ -304,5 +325,16 @@ export function buildBillCycles(input: BillCycleInput): BillCyclesResult | null 
     });
   }
 
-  return { currentCycleKey: currentMonth, cycles };
+  return {
+    currentCycleKey: currentMonth,
+    cycles,
+    cards: input.cards.map((card) => ({
+      accountId: card.accountId,
+      billDueDay: card.billDueDay,
+      billCloseDay: card.billCloseDay,
+      balanceDueDate: card.balanceDueDate,
+      balanceCloseDate: card.balanceCloseDate,
+      statements: card.statements,
+    })),
+  };
 }
