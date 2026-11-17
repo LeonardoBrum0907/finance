@@ -6,9 +6,12 @@ import {
   groupCategoryForDashboard,
   isTransactionOutflow,
   sanitizeFineGrainedCategory,
+  toBillPaymentDates,
+  toLocalDateKey,
   updateTransactionCategorySchema,
 } from "@finance/shared";
 import { prisma } from "../prisma.js";
+import { loadCardsForUser } from "../services/finance/creditCardBills.js";
 import { authenticate } from "../auth.js";
 import {
   getRecentMonthKeys,
@@ -78,6 +81,8 @@ function computeSummary(items: TransactionDTO[]): {
   return { income, expenses, net: income - expenses };
 }
 
+const CARD_PURCHASE_LOOKBACK_DAYS = 70;
+
 export async function transactionRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
 
@@ -129,7 +134,18 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
       range = monthKeysToDateRange(monthKeys);
     }
 
-    const dateFrom = range.from ? new Date(`${range.from}T00:00:00.000Z`) : new Date(0);
+    // Ciclo por salário: compra no cartão entra no ciclo em que vence a fatura dela,
+    // então busca compras de até ~2 meses antes e filtra pelo vencimento da fatura.
+    const byBillDueDate = periodMode === "payday" && paydayDay !== null && !!range.from;
+    const cards = byBillDueDate ? await loadCardsForUser(userId, personId, []) : [];
+    const queryFrom = range.from
+      ? byBillDueDate
+        ? new Date(Date.parse(`${range.from}T12:00:00.000Z`) - CARD_PURCHASE_LOOKBACK_DAYS * 86_400_000)
+            .toISOString()
+            .slice(0, 10)
+        : range.from
+      : null;
+    const dateFrom = queryFrom ? new Date(`${queryFrom}T00:00:00.000Z`) : new Date(0);
     const dateTo = range.to ? new Date(`${range.to}T23:59:59.999Z`) : new Date();
 
     const transactions = await prisma.transaction.findMany({
@@ -164,7 +180,32 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
       orderBy: { date: "desc" },
     });
 
-    const allDtos: TransactionDTO[] = transactions.map((tx) => toTransactionDtoFields(tx));
+    const inPeriod = byBillDueDate
+      ? (() => {
+          const shifted = toBillPaymentDates(
+            transactions.map((tx) => ({
+              id: tx.id,
+              date: tx.date,
+              amount: tx.amount,
+              accountId: tx.account.id,
+              accountType: tx.account.type,
+              billForecastMonth: tx.billForecastMonth,
+            })),
+            cards,
+          );
+          const keep = new Set(
+            shifted
+              .filter((tx) => {
+                const key = toLocalDateKey(tx.date);
+                return key >= range.from! && (!range.to || key <= range.to);
+              })
+              .map((tx) => tx.id),
+          );
+          return transactions.filter((tx) => keep.has(tx.id));
+        })()
+      : transactions;
+
+    const allDtos: TransactionDTO[] = inPeriod.map((tx) => toTransactionDtoFields(tx));
 
     const summaryMap = await loadCommitmentSummariesForTransactions(
       request.user!.sub,
