@@ -18,7 +18,7 @@ import type {
 import { managedAccountToScenarioDTO, managedAccountLegacyId } from "@finance/shared";
 import { api } from "../lib/api";
 import { AssistantSpotlightButton } from "../components/chat/AssistantSpotlightButton";
-import { BillCycleCard } from "../components/simulator/BillCycleCard";
+import { BillCycleCard, billCycleLabel } from "../components/simulator/BillCycleCard";
 import { PersonSelector, type PersonFilter } from "../components/dashboard/PersonSelector";
 import { SimulationResults } from "../components/simulator/SimulationResults";
 import { AccountsSection, type AccountsTab } from "../components/simulator/AccountsSection";
@@ -56,6 +56,7 @@ export function SimulatorPage() {
 
   const [personId, setPersonId] = useState<PersonFilter>("all");
   const [selectedCycleKey, setSelectedCycleKey] = useState<string | null>(null);
+  const [selectedBillKey, setSelectedBillKey] = useState<string | null>(null);
   const [accountsTab, setAccountsTab] = useState<AccountsTab>("active");
   const [showManageTabs, setShowManageTabs] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<SimulationResultDTO | null>(null);
@@ -106,6 +107,7 @@ export function SimulatorPage() {
 
   useEffect(() => {
     setSelectedCycleKey(null);
+    setSelectedBillKey(null);
   }, [personId]);
 
   const invalidateAll = useCallback(() => {
@@ -258,6 +260,12 @@ export function SimulatorPage() {
   );
 
   const effectivePersonId = personId === "all" ? undefined : personId;
+  const billResult = billCycles.data?.currentCycleKey ? (billCycles.data as BillCyclesResult) : null;
+  const billKey = selectedBillKey ?? billResult?.currentCycleKey ?? null;
+  const billSelection =
+    billResult && billKey
+      ? { cycleKey: billKey, label: billCycleLabel(billKey), result: billResult }
+      : undefined;
   const data = summary.data;
   const activeCycleKey = data?.selectedCycleKey ?? selectedCycleKey;
   const selectedCycle = data?.navigableCycles.find((c) => c.cycleKey === activeCycleKey);
@@ -320,6 +328,8 @@ export function SimulatorPage() {
           currentCycleKey={billCycles.data.currentCycleKey}
           currencyCode={data?.currencyCode ?? "BRL"}
           closingDelta={lastToggleDelta}
+          selectedKey={selectedBillKey}
+          onSelect={setSelectedBillKey}
         />
       )}
 
@@ -337,6 +347,7 @@ export function SimulatorPage() {
           periodMode="payday"
           currentCycleFrom={selectedCycle?.from}
           currentCycleTo={selectedCycle?.to}
+          billCycle={billSelection}
           showManageTabs={showManageTabs}
           onShowManageTabsChange={setShowManageTabs}
           onTabChange={setAccountsTab}
