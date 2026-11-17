@@ -103,7 +103,9 @@ export function summarizeForecastCashFlow(
   let bankCommitted = 0;
   let bankCommittedCash = 0;
   if (asOfKey < range.to) {
-    const committedFrom = addDaysToDateKey(asOfKey, 1);
+    // Num ciclo futuro, só conta o que cai dentro dele (não o que vem antes do início).
+    const tomorrow = addDaysToDateKey(asOfKey, 1);
+    const committedFrom = tomorrow > range.from ? tomorrow : range.from;
     if (committedFrom <= range.to) {
       bankCommitted = summarizeForecastTransactions(txs, {
         from: committedFrom,

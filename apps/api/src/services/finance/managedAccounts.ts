@@ -456,7 +456,10 @@ export async function loadActiveManagedAccountsForImpact(
     expectedAmount: row.expectedAmount,
     totalInstallments: row.totalInstallments,
     entries: row.entries
+      // Parcela pendente já ligada a uma transação (ex.: parcela futura do cartão que a
+      // Pluggy já mostra) entra na projeção pela própria transação; contar aqui dobraria.
       .filter((entry) => entry.dueDate <= horizon)
+      .filter((entry) => !(entry.status === "pending" && entry.transactionId))
       .map((entry) => ({
         id: entry.id,
         dueDate: entry.dueDate.toISOString(),
@@ -477,6 +480,8 @@ export async function sumPendingManagedEntriesInRange(
   const entries = await prisma.managedAccountEntry.findMany({
     where: {
       status: "pending",
+      // Já ligada a uma transação: entra no painel pela própria transação.
+      transactionId: null,
       dueDate: { gte: from, lte: to },
       managedAccount: {
         userId,
