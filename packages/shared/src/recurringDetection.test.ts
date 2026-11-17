@@ -7,7 +7,11 @@ import {
   parseInstallmentMarker,
   type RecurringPatternTransaction,
 } from "./recurringBills.js";
-import { groupCardInstallmentSeries, isCardInstallmentPosted } from "./cardInstallments.js";
+import {
+  cardBillDueDateKey,
+  groupCardInstallmentSeries,
+  isCardInstallmentPaid,
+} from "./cardInstallments.js";
 
 function card(
   id: string,
@@ -297,9 +301,22 @@ describe("parcelas futuras do cartão", () => {
     assert.deepEqual([...series[0]!.slots.keys()].sort(), [1, 2, 3, 4, 5]);
   });
 
-  it("só considera paga a parcela com data até hoje", () => {
-    assert.equal(isCardInstallmentPosted("2026-11-11T23:41:58.000Z", "2026-11-17"), true);
-    assert.equal(isCardInstallmentPosted("2026-11-17T10:00:00.000Z", "2026-11-17"), true);
-    assert.equal(isCardInstallmentPosted("2026-12-11T03:00:00.000Z", "2026-11-17"), false);
+  it("considera a parcela paga só quando a fatura dela vence", () => {
+    // Lançada em 06/11, mas na fatura que vence em 28/12: ainda não paga em 17/11.
+    assert.equal(isCardInstallmentPaid("2026-11-06T03:00:00.000Z", "2026-12-28", "2026-11-17"), false);
+    assert.equal(isCardInstallmentPaid("2026-11-06T03:00:00.000Z", "2026-12-28", "2026-12-28"), true);
+    // Data posterior ao vencimento: a fatura já venceu, então está paga.
+    assert.equal(isCardInstallmentPaid("2026-11-30T03:00:00.000Z", "2026-11-28", "2026-11-28"), true);
+    // Sem fatura conhecida, vale a data da parcela.
+    assert.equal(isCardInstallmentPaid("2026-12-11T03:00:00.000Z", null, "2026-11-17"), false);
+    assert.equal(isCardInstallmentPaid("2026-11-11T03:00:00.000Z", null, "2026-11-17"), true);
+  });
+
+  it("calcula o vencimento da fatura da parcela", () => {
+    assert.equal(cardBillDueDateKey("2026-12", 28), "2026-12-28");
+    assert.equal(cardBillDueDateKey("2027-02", 30), "2027-02-28");
+    assert.equal(cardBillDueDateKey("2026-11", 28, ["2026-10-28T12:00:00.000Z", "2026-11-26T12:00:00.000Z"]), "2026-11-26");
+    assert.equal(cardBillDueDateKey(null, 28), null);
+    assert.equal(cardBillDueDateKey("2026-12", null), null);
   });
 });
