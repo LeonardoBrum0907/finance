@@ -220,7 +220,8 @@ export function DashboardPage() {
     [saveSimulations],
   );
 
-  const periodSummaryForTransactions = data?.household
+  // No ciclo da fatura, o rodapé da lista soma as próprias transações listadas.
+  const periodSummaryForTransactions = data?.household && !billResult
     ? {
         months: 1 as const,
         income: data.household.realizedNet > 0 ? data.household.realizedNet : 0,
