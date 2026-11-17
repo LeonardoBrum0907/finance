@@ -1,10 +1,11 @@
 import type { FastifyInstance } from "fastify";
-import { accountNetWorthContribution, getRecentPaydayCycles, getPaydayCycleRange, getPaydayCycleRangeByKey, paydayCyclesToDateRange, isInvestmentAccount, isPaydayDayConfigured } from "@finance/shared";
+import { accountNetWorthContribution, getRecentPaydayCycles, getPaydayCycleRange, getPaydayCycleRangeByKey, paydayCyclesToDateRange, isInvestmentAccount, isPaydayDayConfigured, toBillPaymentDates } from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
 import type { FinancialTransaction } from "../services/finance/types.js";
 import { effectiveTransactionCategory } from "../services/transactionCategory.js";
 import { serializeAccount } from "../services/serializeAccount.js";
+import { buildBillCyclesForUser } from "../services/finance/billCycles.js";
 import { resolveNextDueDate } from "../services/finance/creditBill.js";
 import { pickLatestClosedBill } from "../services/finance/creditBillSync.js";
 import { getPluggyClient } from "../services/pluggy.js";
@@ -52,6 +53,15 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       cycleKey: query.cycleKey?.trim() || undefined,
     });
     return reply.send(summary);
+  });
+
+  app.get("/api/bill-cycles", async (request, reply) => {
+    const query = request.query as { personId?: string };
+    const result = await buildBillCyclesForUser(
+      request.user!.sub,
+      query.personId?.trim() || undefined,
+    );
+    return reply.send(result ?? { currentCycleKey: null, cycles: [] });
   });
 
   app.get("/api/dashboard", async (request, reply) => {
@@ -289,10 +299,17 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
+    // Regra do ciclo: compra no cartão conta no ciclo em que a fatura dela vence.
+    const creditCards = await loadCardsForUser(userId, personId, financialTransactions);
+    const cycleTxs =
+      periodMode === "payday" && paydayDay !== null
+        ? toBillPaymentDates(financialTransactions, creditCards)
+        : financialTransactions;
+
     const currentCycle =
       paydayDay !== null
         ? buildCurrentCycleSummary(
-            financialTransactions,
+            cycleTxs,
             paydayDay,
             paydayCycleAnchor,
             manualCommittedForCurrent,
@@ -307,7 +324,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     const recentCycles =
       paydayDay !== null
         ? buildRecentCycleSummaries(
-            financialTransactions,
+            cycleTxs,
             paydayDay,
             undefined,
             paydayCycleAnchor,
@@ -341,7 +358,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
 
     if (periodMode === "payday" && paydayDay !== null && focusCycleKey) {
       const focusCycleSummary = buildCycleSummary(
-        financialTransactions,
+        cycleTxs,
         paydayDay,
         focusCycleKey,
         paydayCycleAnchor,
@@ -355,7 +372,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
         paydayCycleAnchor,
       );
       const previousCycleSummary = buildCycleSummary(
-        financialTransactions,
+        cycleTxs,
         paydayDay,
         previousCycleKeys[0],
         paydayCycleAnchor,
@@ -376,8 +393,8 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
         periods.periodMode,
       );
     } else {
-      const currentTotals = summarizeTransactions(financialTransactions, periods.currentRange);
-      const previousTotals = summarizeTransactions(financialTransactions, periods.previousRange);
+      const currentTotals = summarizeTransactions(cycleTxs, periods.currentRange);
+      const previousTotals = summarizeTransactions(cycleTxs, periods.previousRange);
       period = {
         months,
         ...currentTotals,
@@ -398,23 +415,23 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     const monthlySeries =
       periodMode === "payday" && paydayDay !== null
         ? getPaydayCycleSeries(
-            financialTransactions,
+            cycleTxs,
             periods.currentKeys,
             paydayDay,
             paydayCycleAnchor,
           )
-        : getMonthlySeries(financialTransactions, periods.currentKeys);
+        : getMonthlySeries(cycleTxs, periods.currentKeys);
 
-    const categories = getCategoriesWithPercent(financialTransactions, periods.currentRange);
+    const categories = getCategoriesWithPercent(cycleTxs, periods.currentRange);
     const previousCategoriesRaw = getSpendingByCategory(
-      financialTransactions,
+      cycleTxs,
       periods.previousRange,
     );
     const previousCategories = previousCategoriesRaw.map((c) => ({
       ...c,
       percent: 0,
     }));
-    const topExpenses = getTopExpenses(financialTransactions, periods.currentRange, 1);
+    const topExpenses = getTopExpenses(cycleTxs, periods.currentRange, 1);
 
     const insights = buildDashboardInsights({
       period,
@@ -431,7 +448,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       previousPeriod,
       currentRange: periods.currentRange,
       previousRange: periods.previousRange,
-      txs: financialTransactions,
+      txs: cycleTxs,
       paydayDay,
       paydayCycleAnchor,
       periodMode: periods.periodMode,
@@ -460,7 +477,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
             paydayCycleAnchor,
             personId,
             true,
-            await loadCardsForUser(userId, personId, financialTransactions),
+            creditCards,
           )
         : null;
 

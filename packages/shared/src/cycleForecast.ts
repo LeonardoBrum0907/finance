@@ -49,6 +49,8 @@ export interface CycleForecastExpenseItem {
   kind: "recurring" | "installments" | "simulations" | "bank" | "creditBills";
   /** Cobrado no cartão: só vira saída de caixa quando a fatura vence. */
   paidByCard?: boolean;
+  /** Fatura ainda estimada pelas compras conhecidas (a Pluggy ainda não a fechou). */
+  estimated?: boolean;
 }
 
 export interface CycleForecastBlock {
@@ -259,8 +261,16 @@ export function buildCycleForecastBlock(params: {
     (item) => includeSimulations || item.kind !== "simulations",
   );
 
+  // Cobrança no cartão que cai numa fatura ainda estimada não está nas compras conhecidas
+  // dessa fatura: ela soma ao caixa da fatura. Nas demais, a fatura já a cobre.
+  const estimatedBillDueDates = new Set(
+    expenseItems
+      .filter((item) => item.kind === "creditBills" && item.estimated)
+      .map((item) => item.dueDate),
+  );
   const onCardTotal = expenseItems.reduce(
-    (sum, item) => sum + (item.paidByCard ? item.amount : 0),
+    (sum, item) =>
+      sum + (item.paidByCard && !estimatedBillDueDates.has(item.dueDate) ? item.amount : 0),
     0,
   );
   const bankCash = pending.bank ?? cashFlow.bankCommittedCash;

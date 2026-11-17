@@ -504,6 +504,11 @@ export async function detectCardInstallmentPlans(userId: string): Promise<number
   }
   const isPaid = (tx: { id: string; date: string }, todayKey: string) =>
     isCardInstallmentPaid(tx.date, billDueByTx.get(tx.id) ?? null, todayKey);
+  /** A parcela vence junto com a fatura em que cai (ou na própria data, sem fatura). */
+  const dueDateFor = (tx: { id: string; date: string }) => {
+    const billDue = billDueByTx.get(tx.id);
+    return billDue ? new Date(`${billDue}T12:00:00.000Z`) : new Date(tx.date);
+  };
 
   const series = groupCardInstallmentSeries(
     transactions.map((tx) => ({
@@ -544,7 +549,8 @@ export async function detectCardInstallmentPlans(userId: string): Promise<number
   for (const plan of series) {
     const slots = [...plan.slots.entries()].sort((a, b) => a[0] - b[0]);
     const [anchorSeq, anchorTx] = slots[0]!;
-    const anchorDate = new Date(anchorTx.date);
+    const anchorDate = dueDateFor(anchorTx);
+    const expectedDue = (sequence: number) => addMonthsKeepingDay(anchorDate, sequence - anchorSeq);
 
     const existingId = slots.map(([, tx]) => commitmentByTx.get(tx.id)).find(Boolean);
 
@@ -562,6 +568,7 @@ export async function detectCardInstallmentPlans(userId: string): Promise<number
         const installment = commitment.installments.find((i) => i.sequence === sequence);
         if (!installment) continue;
         const posted = isPaid(tx, today);
+        const due = dueDateFor(tx);
 
         if (!installment.transactionId) {
           await prisma.paymentInstallment.update({
@@ -569,8 +576,8 @@ export async function detectCardInstallmentPlans(userId: string): Promise<number
             data: {
               status: posted ? "paid" : "pending",
               transactionId: tx.id,
-              paidAt: posted ? new Date(tx.date) : null,
-              dueDate: new Date(tx.date),
+              paidAt: posted ? due : null,
+              dueDate: due,
             },
           });
           if (!posted && installment.status === "paid") reopened = true;
@@ -579,33 +586,35 @@ export async function detectCardInstallmentPlans(userId: string): Promise<number
         }
         if (installment.transactionId !== tx.id) continue;
 
+        const data: { dueDate?: Date; status?: string; paidAt?: Date | null } = {};
+        if (installment.dueDate.getTime() !== due.getTime()) data.dueDate = due;
         if (posted && installment.status === "pending") {
-          await prisma.paymentInstallment.update({
-            where: { id: installment.id },
-            data: { status: "paid", paidAt: new Date(tx.date) },
-          });
-          changed = true;
+          data.status = "paid";
+          data.paidAt = due;
         } else if (
           !posted &&
           installment.status === "paid" &&
           commitment.source === "auto_detected"
         ) {
           // Parcela numa fatura que ainda não venceu: ainda não foi paga.
-          await prisma.paymentInstallment.update({
-            where: { id: installment.id },
-            data: { status: "pending", paidAt: null },
-          });
+          data.status = "pending";
+          data.paidAt = null;
           reopened = true;
+        }
+        if (Object.keys(data).length > 0) {
+          await prisma.paymentInstallment.update({ where: { id: installment.id }, data });
           changed = true;
         }
       }
       if (commitment.source === "auto_detected") {
         for (const installment of commitment.installments) {
           if (installment.status !== "pending" || plan.slots.has(installment.sequence)) continue;
-          if (installment.dueDate >= assumePaidBefore) continue;
+          const due = expectedDue(installment.sequence);
+          const assumedPaid = due < assumePaidBefore;
+          if (!assumedPaid && installment.dueDate.getTime() === due.getTime()) continue;
           await prisma.paymentInstallment.update({
             where: { id: installment.id },
-            data: { status: "paid" },
+            data: { dueDate: due, ...(assumedPaid ? { status: "paid" } : {}) },
           });
           changed = true;
         }
@@ -625,16 +634,17 @@ export async function detectCardInstallmentPlans(userId: string): Promise<number
       const seen = plan.slots.get(sequence);
       if (seen) {
         const posted = isPaid(seen, today);
+        const due = dueDateFor(seen);
         return {
           sequence,
           amount: Math.abs(seen.amount),
-          dueDate: new Date(seen.date),
+          dueDate: due,
           status: posted ? "paid" : "pending",
           transactionId: seen.id,
-          paidAt: posted ? new Date(seen.date) : null,
+          paidAt: posted ? due : null,
         };
       }
-      const dueDate = addMonthsKeepingDay(anchorDate, sequence - anchorSeq);
+      const dueDate = expectedDue(sequence);
       const assumedPaid = sequence < anchorSeq || dueDate < assumePaidBefore;
       return {
         sequence,

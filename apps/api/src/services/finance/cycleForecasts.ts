@@ -3,10 +3,12 @@ import {
   buildCycleForecastBlock,
   buildCycleForecastPair,
   buildCycleStatementPayments,
+  cardChargeDueDateKey,
   getNextPaydayCycle,
   getPaydayCycleRangeByKey,
   managedAccountToSimulatedPurchase,
   splitPurchaseImpactsByKind,
+  toBillPaymentDates,
   todayDateKeyInTimeZone,
   type CardForCycleBills,
   type CycleForecastBlock,
@@ -32,13 +34,36 @@ function toTransactionLike(txs: FinancialTransaction[]): TransactionLike[] {
   }));
 }
 
+/**
+ * Conta fixa paga no cartão cai no ciclo em que vence a fatura da cobrança, igual às
+ * compras do cartão. Parcelamentos do cartão já guardam o vencimento da fatura.
+ */
+function moveCardRecurringToBillDueDate(
+  account: ManagedAccountForSimulation,
+  purchase: SimulatedPurchase,
+  cards: CardForCycleBills[] | undefined,
+): SimulatedPurchase {
+  if (account.kind !== "fixed_recurring" || !account.cardAccountId || !cards) return purchase;
+  const card = cards.find((c) => c.accountId === account.cardAccountId);
+  if (!card) return purchase;
+  return {
+    ...purchase,
+    installments: purchase.installments.map((inst) => ({
+      ...inst,
+      dueDate: cardChargeDueDateKey(card, { date: inst.dueDate }) ?? inst.dueDate,
+    })),
+  };
+}
+
 function managedAccountsToPurchasesWithKind(
   accounts: ManagedAccountForSimulation[],
+  cards?: CardForCycleBills[],
 ): Array<SimulatedPurchase & { accountKind: string; paidByCard: boolean }> {
   const purchases: Array<SimulatedPurchase & { accountKind: string; paidByCard: boolean }> = [];
   for (const account of accounts) {
-    const purchase = managedAccountToSimulatedPurchase(account);
-    if (!purchase) continue;
+    const original = managedAccountToSimulatedPurchase(account);
+    if (!original) continue;
+    const purchase = moveCardRecurringToBillDueDate(account, original, cards);
     purchases.push({
       ...purchase,
       accountKind: account.kind,
@@ -84,6 +109,7 @@ function mergeCreditBillPayments(
         dueDate: item.dueDate,
         amount: item.amount,
         kind: "creditBills" as const,
+        estimated: item.estimated,
       })),
     ],
   };
@@ -102,7 +128,8 @@ export async function buildDashboardCycleForecasts(
   const currentCycle = buildCurrentCycleSummary(txs, paydayDay, paydayCycleAnchor, 0);
   const today = todayDateKeyInTimeZone();
   const managedAccounts = await loadActiveManagedAccountsForImpact(userId, personId);
-  const purchases = managedAccountsToPurchasesWithKind(managedAccounts);
+  const purchases = managedAccountsToPurchasesWithKind(managedAccounts, creditCards);
+  const cycleTxs = creditCards ? toBillPaymentDates(txs, creditCards) : txs;
 
   const currentPending = mergeCreditBillPayments(
     splitPurchaseImpactsByKind(purchases, currentCycle, today),
@@ -121,7 +148,7 @@ export async function buildDashboardCycleForecasts(
   );
 
   return buildCycleForecastPair({
-    txs: toTransactionLike(txs),
+    txs: toTransactionLike(cycleTxs),
     currentCycle,
     paydayDay,
     anchor: paydayCycleAnchor,
@@ -146,7 +173,8 @@ export async function buildCycleForecastForKey(
   const meta = getPaydayCycleRangeByKey(cycleKey, paydayDay, paydayCycleAnchor);
   const today = todayDateKeyInTimeZone();
   const managedAccounts = await loadActiveManagedAccountsForImpact(userId, personId);
-  const purchases = managedAccountsToPurchasesWithKind(managedAccounts);
+  const purchases = managedAccountsToPurchasesWithKind(managedAccounts, creditCards);
+  const cycleTxs = creditCards ? toBillPaymentDates(txs, creditCards) : txs;
   const pending = mergeCreditBillPayments(
     splitPurchaseImpactsByKind(
       purchases,
@@ -160,7 +188,7 @@ export async function buildCycleForecastForKey(
   );
 
   return buildCycleForecastBlock({
-    txs: toTransactionLike(txs),
+    txs: toTransactionLike(cycleTxs),
     cycle: {
       cycleKey: meta.cycleKey,
       from: meta.from,

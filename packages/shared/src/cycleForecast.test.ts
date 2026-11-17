@@ -194,3 +194,41 @@ describe("buildPendingExpensesFromPurchases", () => {
     assert.equal(july.items[0]!.title, "Aluguel");
   });
 });
+
+describe("caixa da fatura estimada", () => {
+  it("soma ao caixa a assinatura no cartão que cai numa fatura ainda estimada", () => {
+    const block = buildCycleForecastBlock({
+      txs: [],
+      cycle: { cycleKey: "2026-11-25", from: "2026-11-25", to: "2026-12-24", isComplete: false },
+      paydayDay: 25,
+      today: "2026-11-17",
+      pending: {
+        recurring: 50,
+        creditBills: 1000,
+        items: [
+          { id: "r1", title: "Assinatura", dueDate: "2026-11-28", amount: 50, kind: "recurring", paidByCard: true },
+          { id: "b1", title: "Fatura estimada", dueDate: "2026-11-28", amount: 1000, kind: "creditBills", estimated: true },
+        ],
+      },
+    });
+    assert.equal(block.pendingCashExpenses, 1050);
+  });
+
+  it("não soma de novo quando a fatura já foi fechada pela Pluggy", () => {
+    const block = buildCycleForecastBlock({
+      txs: [],
+      cycle: { cycleKey: "2026-11-25", from: "2026-11-25", to: "2026-12-24", isComplete: false },
+      paydayDay: 25,
+      today: "2026-11-17",
+      pending: {
+        recurring: 50,
+        creditBills: 1000,
+        items: [
+          { id: "r1", title: "Assinatura", dueDate: "2026-11-28", amount: 50, kind: "recurring", paidByCard: true },
+          { id: "b1", title: "Fatura", dueDate: "2026-11-28", amount: 1000, kind: "creditBills" },
+        ],
+      },
+    });
+    assert.equal(block.pendingCashExpenses, 1000);
+  });
+});
