@@ -173,7 +173,7 @@ export async function syncFromCommitment(commitmentId: string): Promise<void> {
   if (!commitment) return;
 
   const personId = commitment.anchorTx?.account.connection.personId ?? null;
-  const bankAccountId = commitment.anchorTx?.accountId ?? null;
+  const bankAccountId = commitment.anchorTx?.accountId ?? commitment.accountId ?? null;
   const accountData = {
     userId: commitment.userId,
     personId,
@@ -182,7 +182,7 @@ export async function syncFromCommitment(commitmentId: string): Promise<void> {
     notes: commitment.notes,
     kind: "installment_plan",
     simulationType: null,
-    source: "transaction",
+    source: commitment.source === "auto_detected" ? "auto_detected" : "transaction",
     status: mapCommitmentStatus(commitment.status),
     expectedAmount: commitment.installmentAmount,
     totalAmount: commitment.totalAmount,

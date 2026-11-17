@@ -166,6 +166,10 @@ model PaymentCommitment {
   totalInstallments   Int
   dayOfMonth          Int?
   status              String   @default("active")
+  /** "manual" (criado a partir de uma transação) ou "auto_detected" (parcelas n/m do cartão). */
+  source              String   @default("manual")
+  /** Cartão das parcelas, para compromissos detectados automaticamente. */
+  accountId           String?
   anchorTransactionId String?  @unique
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt

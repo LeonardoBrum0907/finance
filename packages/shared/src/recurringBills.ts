@@ -8,6 +8,7 @@ import {
 import {
   isCreditAccount,
   isCreditCardBillPayment,
+  isPixOnCreditLeg,
   isSamePersonTransfer,
   isTransactionOutflow,
 } from "./transactions.js";
@@ -105,9 +106,17 @@ export interface RecurringPatternCandidate {
 
 const DEFAULT_AMOUNT_TOLERANCE_RATIO = 0.15;
 const DEFAULT_AMOUNT_TOLERANCE_MIN = 5;
+/** Datas de lançamento no cartão variam alguns dias de um mês para o outro. */
 const MIN_INTERVAL_DAYS = 25;
-const MAX_INTERVAL_DAYS = 35;
+const MAX_INTERVAL_DAYS = 40;
+/** Intervalo que cobre um mês sem cobrança (ou uma data que atrasou) dentro da sequência. */
+const MIN_SKIP_INTERVAL_DAYS = 41;
+const MAX_SKIP_INTERVAL_DAYS = 70;
+const MIN_OCCURRENCES_WITH_SKIP = 3;
 const MIN_OCCURRENCES = 2;
+const MIN_OCCURRENCES_FOR_TRANSFERS = 3;
+const TRANSFER_AMOUNT_TOLERANCE_RATIO = 0.1;
+const SIGNATURE_MERGE_TOLERANCE_RATIO = 0.1;
 const MIN_OCCURRENCES_FOR_DISCRETIONARY = 3;
 const MIN_OCCURRENCES_FOR_DONATIONS = 3;
 const NOISY_PAYEE_MIN_TXS = 4;
@@ -127,9 +136,19 @@ const DISCRETIONARY_GROUPS = new Set<DashboardCategoryGroup>([
   "Transporte",
 ]);
 
-const EXCLUDED_CATEGORY_GROUPS = new Set<DashboardCategoryGroup>([
+/** Categorias de transferência que podem ser pagamento a terceiros (aluguel, diarista, escola). */
+const THIRD_PARTY_TRANSFER_CATEGORIES = new Set([
   "Transferências",
-  "Tarifas e impostos",
+  "Transferência - PIX",
+  "Transferência - TED",
+  "Transferência - DOC",
+  "Transferência - Boleto",
+  "Transferências para terceiros",
+  "Transferência para terceiros",
+  "PIX",
+  "TED",
+  "DOC",
+  "Boleto",
 ]);
 
 const EXCLUDED_DESCRIPTION_MARKERS = [
@@ -140,7 +159,6 @@ const EXCLUDED_DESCRIPTION_MARKERS = [
   "iof",
   "juros de mora",
   "juros de d",
-  "mensalidade - plano do cart",
   "compra no debito",
   "compra no débito",
   "encargos refinanciamento",
@@ -177,25 +195,56 @@ export function amountsMatch(a: number, b: number, tolerance?: number): boolean 
   return Math.abs(Math.abs(a) - Math.abs(b)) <= tol;
 }
 
+const KNOWN_CITY_SUFFIX_RE =
+  /SAO PAULOBRA|SAO PAULO BRA|CURITIBABRA|HORTOLANDIABRA|CAMPINASBRA|VALINHOSBRA|MONTE MORBRA|GUAYNABOBRA|SAN FRANCISCOUSA|NEW YORKUSA|MOUNTAIN VIEWUSA|SEATTLEUSA|PALO ALTOUSA|DUBLINIRL|LONDONGBR|AMSTERDAMNLD|LUXEMBOURGLUX/gi;
+
+/** Fatura de cartão traz "MERCHANT(até 22 letras)CIDADEPAÍS" sem espaço entre as partes. */
+const GLUED_COUNTRY_SUFFIX_RE = /\S(?:BRA|USA|IRL|GBR|NLD|LUX|CAN|DEU|FRA|ESP|PRT|SGP)$/;
+const CARD_MERCHANT_WIDTH = 22;
+
+/** Prefixos de processadora de pagamento que variam para o mesmo serviço. */
+const PROCESSOR_PREFIX_RE = /^(?:DL|DM|EBN|PPRO|PG|PAG)\s*\*\s*/;
+
+const IOF_INTERNATIONAL_PREFIX_RE = /^IOF INTERNACIONAL\s*-\s*/;
+
+function stripCardLocation(raw: string): string {
+  const withoutKnownCity = raw.replace(KNOWN_CITY_SUFFIX_RE, " ").trim();
+  if (withoutKnownCity !== raw.trim()) return withoutKnownCity;
+  if (raw.length > CARD_MERCHANT_WIDTH + 3 && GLUED_COUNTRY_SUFFIX_RE.test(raw)) {
+    return raw.slice(0, CARD_MERCHANT_WIDTH);
+  }
+  return raw;
+}
+
+function dedupeRepeatedWords(text: string): string {
+  const words = text.split(" ");
+  return words.filter((word, idx) => idx === 0 || word !== words[idx - 1]).join(" ");
+}
+
 /** Normaliza descrição/merchant para assinatura de matching. */
 export function normalizeBillSignature(description: string, merchantName?: string | null): string {
   const raw = (merchantName?.trim() || description.trim()).toUpperCase();
-  return raw
+  const iofMatch = raw.match(IOF_INTERNATIONAL_PREFIX_RE);
+  if (iofMatch) {
+    const rest = normalizeBillSignature(raw.slice(iofMatch[0].length));
+    return rest ? `IOF ${rest}` : "IOF";
+  }
+  const cleaned = stripCardLocation(raw)
+    .replace(PROCESSOR_PREFIX_RE, " ")
     .replace(/\|\s*[^|]+$/g, " ")
     .replace(/\b\d{2}\/\d{2}(\/\d{2,4})?\b/g, " ")
     .replace(/\b\d{4}-\d{2}-\d{2}\b/g, " ")
     .replace(/\b(BA|ECPC|CPK)\d*\b/g, " ")
     .replace(/\b\d+\b/g, " ")
-    .replace(/^(DL\*|DM\s+\*|EBN\s+\*)/g, " ")
-    .replace(/SAO PAULOBRA|SAO PAULO BRA|CURITIBABRA|HORTOLANDIABRA|CAMPINASBRA|VALINHOSBRA|MONTE MORBRA|GUAYNABOBRA/gi, " ")
     .replace(/[^\w\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+  return dedupeRepeatedWords(cleaned);
 }
 
 const DATE_LIKE_IN_TEXT = /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b|\b\d{2}\/\d{4}\b/g;
 const INSTALLMENT_PARCELA_RE = /parcela\s*(\d{1,2})\s*(?:\/|de)\s*(\d{1,2})/i;
-const INSTALLMENT_SLASH_RE = /\b(\d{1,2})\s*\/\s*(\d{1,2})\b/;
+const INSTALLMENT_SLASH_RE = /(?<!\d)(\d{1,2})\s*\/\s*(\d{1,2})(?!\d)/;
 
 function installmentPairFromMatch(match: RegExpMatchArray | null): { current: number; total: number } | null {
   if (!match) return null;
@@ -253,11 +302,21 @@ function deriveTitle(description: string, merchantName?: string | null): string 
   const merchant = merchantName?.trim();
   if (merchant) return merchant.slice(0, 80);
   let title = description.trim().replace(/\|.*$/g, "").trim();
-  title = title
-    .replace(/SAO PAULOBRA|SAO PAULO BRA|CURITIBABRA|HORTOLANDIABRA|CAMPINASBRA|VALINHOSBRA|MONTE MORBRA|GUAYNABOBRA/gi, "")
+  const iofMatch = title.toUpperCase().match(IOF_INTERNATIONAL_PREFIX_RE);
+  if (iofMatch) {
+    return `IOF - ${deriveTitle(title.slice(iofMatch[0].length))}`.slice(0, 80);
+  }
+  return cleanMerchantTitle(title);
+}
+
+/** Nome legível do estabelecimento: sem cidade/país colados e sem prefixo de processadora. */
+export function cleanMerchantTitle(text: string): string {
+  return stripCardLocation(text.trim())
+    .replace(/^(?:DL|DM|EBN|PPRO|PG|PAG)\s*\*\s*/i, "")
+    .replace(/^(.+?)\s*\*\s*\1$/i, "$1")
     .replace(/\s+/g, " ")
-    .trim();
-  return title.slice(0, 80);
+    .trim()
+    .slice(0, 80);
 }
 
 function resolveDashboardGroup(category: string | null | undefined): DashboardCategoryGroup | null {
@@ -273,15 +332,50 @@ function descriptionHasExcludedMarker(description: string): boolean {
 /** Indica se a transação pode entrar na detecção de contas fixas. */
 export function isRecurringBillCandidateTransaction(tx: RecurringPatternTransaction): boolean {
   if (!isTransactionOutflow(tx.amount, tx.accountType)) return false;
-  if (isCreditCardBillPayment(tx.category, tx.description)) return false;
-  if (descriptionHasExcludedMarker(tx.description)) return false;
+  const cardCharge = isCreditAccount(tx.accountType);
+  // Cobrança no cartão nunca é pagamento de fatura; a categoria "Pagamento de cartão"
+  // vem em tarifas do próprio cartão (ex.: mensalidade do plano).
+  if (isCreditCardBillPayment(cardCharge ? null : tx.category, tx.description)) return false;
+  const internationalIof = isInternationalIofCharge(tx.description);
+  if (!internationalIof && descriptionHasExcludedMarker(tx.description)) return false;
   if (descriptionLooksLikeInstallment(tx.description, tx.merchantName, tx.accountType)) return false;
   if (isSamePersonTransfer(tx.category, tx.description, tx.personName)) return false;
 
   const group = resolveDashboardGroup(tx.category);
-  if (group && EXCLUDED_CATEGORY_GROUPS.has(group)) return false;
+  if (group === "Tarifas e impostos" && !internationalIof && !isCardPlanFee(tx.description)) {
+    return false;
+  }
+  if (group === "Transferências" && !cardCharge) {
+    if (isPixOnCreditLeg(tx.description)) return false;
+    return THIRD_PARTY_TRANSFER_CATEGORIES.has(tx.category ?? "");
+  }
 
   return true;
+}
+
+/** IOF cobrado junto de uma compra internacional (ex.: assinatura em dólar). */
+function isInternationalIofCharge(description: string): boolean {
+  return IOF_INTERNATIONAL_PREFIX_RE.test(description.trim().toUpperCase());
+}
+
+function isCardPlanFee(description: string): boolean {
+  return description.toLowerCase().includes("mensalidade - plano do cart");
+}
+
+/** PIX, TED ou boleto pago da conta corrente a terceiros. */
+function isBankTransfer(tx: RecurringPatternTransaction): boolean {
+  if (isCreditAccount(tx.accountType)) return false;
+  return resolveDashboardGroup(tx.category) === "Transferências";
+}
+
+/** Transferência só vira conta fixa com valor estável: PIX avulso para pessoas varia muito. */
+function transferChainIsStable(chain: RecurringPatternTransaction[]): boolean {
+  if (chain.length < MIN_OCCURRENCES_FOR_TRANSFERS) return false;
+  const amounts = chain.map((tx) => Math.abs(tx.amount)).sort((a, b) => a - b);
+  const median = amounts[Math.floor(amounts.length / 2)]!;
+  return amounts.every(
+    (amount) => Math.abs(amount - median) <= median * TRANSFER_AMOUNT_TOLERANCE_RATIO + 0.005,
+  );
 }
 
 function chainAmountsCompatible(
@@ -356,6 +450,19 @@ function isNoisyIrregularPayee(
   return chain.length / group.length < NOISY_PAYEE_MIN_CHAIN_RATIO;
 }
 
+type GapKind = "monthly" | "skip" | "none";
+
+function classifyGap(days: number): GapKind {
+  if (isMonthlyInterval(days)) return "monthly";
+  if (days >= MIN_SKIP_INTERVAL_DAYS && days <= MAX_SKIP_INTERVAL_DAYS) return "skip";
+  return "none";
+}
+
+/**
+ * Maior sequência mensal do grupo. Aceita um mês sem cobrança entre duas cobranças
+ * (descritor diferente, atraso do banco), desde que a sequência tenha 3+ cobranças.
+ * Em empate fica a sequência mais recente, para a última cobrança ser a real.
+ */
 function findLongestMonthlyChain(txs: RecurringPatternTransaction[]): RecurringPatternTransaction[] {
   if (txs.length < MIN_OCCURRENCES) return [];
 
@@ -366,63 +473,127 @@ function findLongestMonthlyChain(txs: RecurringPatternTransaction[]): RecurringP
   for (let start = 0; start < sorted.length; start++) {
     const chain: RecurringPatternTransaction[] = [sorted[start]!];
     let lastDate = toDateKey(sorted[start]!.date);
+    let skips = 0;
 
     for (let i = start + 1; i < sorted.length; i++) {
       const tx = sorted[i]!;
-      const gap = diffDays(lastDate, toDateKey(tx.date));
-      if (!isMonthlyInterval(gap)) continue;
+      const gapKind = classifyGap(diffDays(lastDate, toDateKey(tx.date)));
+      if (gapKind === "none") continue;
       if (!chainAmountsCompatible(chain[0]!.amount, tx.amount, chain[0]!.category)) continue;
+      if (gapKind === "skip") skips += 1;
       chain.push(tx);
       lastDate = toDateKey(tx.date);
     }
 
-    if (chain.length > bestChain.length) {
+    if (skips > 0 && chain.length < MIN_OCCURRENCES_WITH_SKIP) continue;
+    // Gasto do dia a dia (posto, mercado) precisa de meses seguidos para virar conta fixa.
+    const chainGroup = resolveDashboardGroup(chain[0]!.category);
+    if (skips > 0 && chainGroup && DISCRETIONARY_GROUPS.has(chainGroup)) continue;
+
+    const bestEnd = bestChain.length ? toDateKey(bestChain[bestChain.length - 1]!.date) : "";
+    if (
+      chain.length > bestChain.length ||
+      (chain.length === bestChain.length && toDateKey(chain[chain.length - 1]!.date) > bestEnd)
+    ) {
       bestChain = chain;
     }
   }
 
   if (bestChain.length < MIN_OCCURRENCES || !qualifiesAsRecurringBill(bestChain)) return [];
+  if (isBankTransfer(bestChain[0]!) && !transferChainIsStable(bestChain)) return [];
   if (isNoisyIrregularPayee(txs, bestChain)) return [];
   return bestChain;
+}
+
+function signatureWords(signature: string): string[] {
+  return signature.split(" ").filter(Boolean);
+}
+
+function isWordPrefix(prefix: string[], words: string[]): boolean {
+  if (prefix.length === 0 || prefix.length >= words.length) return false;
+  return prefix.every((word, idx) => words[idx] === word);
+}
+
+/**
+ * Junta descritores do mesmo serviço ("GOOGLE PRIME" e "GOOGLE PRIME VIDEO") quando o
+ * nome mais curto é prefixo do mais longo e o valor bate com o do grupo curto.
+ */
+function mergePrefixSignatureGroups(
+  groups: Map<string, { accountId: string; signature: string; txs: RecurringPatternTransaction[] }>,
+): void {
+  const entries = [...groups.values()].sort(
+    (a, b) => signatureWords(b.signature).length - signatureWords(a.signature).length,
+  );
+
+  for (const source of entries) {
+    const words = signatureWords(source.signature);
+    const targets = entries
+      .filter(
+        (target) =>
+          target !== source &&
+          target.accountId === source.accountId &&
+          target.txs.length > 0 &&
+          isWordPrefix(signatureWords(target.signature), words),
+      )
+      .sort((a, b) => signatureWords(b.signature).length - signatureWords(a.signature).length);
+    if (targets.length === 0) continue;
+
+    const remaining: RecurringPatternTransaction[] = [];
+    for (const tx of source.txs) {
+      const target = targets.find((candidate) => {
+        const anchor = dominantAmount(candidate.txs);
+        return Math.abs(Math.abs(tx.amount) - anchor) <= anchor * SIGNATURE_MERGE_TOLERANCE_RATIO;
+      });
+      if (target) target.txs.push(tx);
+      else remaining.push(tx);
+    }
+    source.txs = remaining;
+  }
 }
 
 export function detectRecurringPatterns(
   transactions: RecurringPatternTransaction[],
 ): RecurringPatternCandidate[] {
   const eligible = transactions.filter(isRecurringBillCandidateTransaction);
-  const groups = new Map<string, RecurringPatternTransaction[]>();
+  const groups = new Map<
+    string,
+    { accountId: string; signature: string; txs: RecurringPatternTransaction[] }
+  >();
 
   for (const tx of eligible) {
     const signature = normalizeBillSignature(tx.description, tx.merchantName);
     if (!signature) continue;
     const key = `${tx.accountId}::${signature}`;
-    const list = groups.get(key) ?? [];
-    list.push(tx);
-    groups.set(key, list);
+    const group = groups.get(key) ?? { accountId: tx.accountId, signature, txs: [] };
+    group.txs.push(tx);
+    groups.set(key, group);
   }
+
+  mergePrefixSignatureGroups(groups);
 
   const candidates: RecurringPatternCandidate[] = [];
 
-  for (const [, txs] of groups) {
+  for (const { signature, txs } of groups.values()) {
     const chain = findLongestMonthlyChain(txs);
     if (chain.length < MIN_OCCURRENCES) continue;
 
-    const first = chain[0]!;
-    const signature = normalizeBillSignature(first.description, first.merchantName);
-    const amounts = chain.map((t) => Math.abs(t.amount));
-    const expectedAmount = roundMoney(amounts.reduce((s, a) => s + a, 0) / amounts.length);
     const lastTx = chain[chain.length - 1]!;
+    const titleTx =
+      [...chain]
+        .reverse()
+        .find((tx) => normalizeBillSignature(tx.description, tx.merchantName) === signature) ??
+      lastTx;
     const dayOfMonth = new Date(`${toDateKey(lastTx.date)}T12:00:00.000Z`).getUTCDate();
 
     candidates.push({
       matchSignature: signature,
-      title: deriveTitle(first.description, first.merchantName),
-      payeeName: extractPayeeFromDescription(first.description),
-      category: first.category ?? null,
-      expectedAmount,
+      title: deriveTitle(titleTx.description, titleTx.merchantName),
+      payeeName: extractPayeeFromDescription(titleTx.description),
+      category: titleTx.category ?? null,
+      expectedAmount: roundMoney(Math.abs(lastTx.amount)),
       dayOfMonth,
-      accountId: first.accountId,
-      personId: first.personId ?? "",
+      accountId: lastTx.accountId,
+      personId: lastTx.personId ?? "",
       transactions: chain,
     });
   }

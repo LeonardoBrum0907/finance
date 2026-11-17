@@ -50,7 +50,7 @@ const TYPE_FILTERS: { key: AccountTypeFilter; label: string }[] = [
   { key: "fixed_recurring", label: "Conta fixa" },
   { key: "simulation", label: "Simulação" },
   { key: "future_account", label: "Conta futura" },
-  { key: "installment_plan", label: "Parcelamento manual" },
+  { key: "installment_plan", label: "Parcelamento" },
 ];
 
 interface Props {
@@ -178,7 +178,7 @@ export function AccountsSection({
             <h2 className="font-display text-lg font-bold text-foreground">Contas</h2>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Contas fixas, parcelamentos manuais, simulações e despesas futuras em um só lugar.
+            Contas fixas, parcelamentos, simulações e despesas futuras em um só lugar.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -216,7 +216,7 @@ export function AccountsSection({
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {activeCounts.fixed} fixa(s) · {activeCounts.simulation} simulação(ões) ·{" "}
-                {activeCounts.installment} parcela(s) manual(is)
+                {activeCounts.installment} parcelamento(s)
               </p>
             </div>
             <div className="text-left sm:text-right">
@@ -635,6 +635,11 @@ function CommitmentAccountCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <AccountKindBadge account={account} />
+            {account.source === "auto_detected" && (
+              <span className="rounded-full border border-app-border bg-app-bg/60 px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                Auto
+              </span>
+            )}
           </div>
           <p className="mt-2 truncate font-display text-sm font-semibold text-foreground">
             {account.title}
