@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   AggregateSimulationImpactDTO,
+  BillCyclesResult,
   CategoryChartSelection,
   CreateSimulationScenarioInput,
   DashboardCycleSummaryResponse,
@@ -20,7 +21,7 @@ import {
   simulatedPurchaseInputToPayload,
 } from "@finance/shared";
 import { api } from "../lib/api";
-import { CycleNavigator } from "../components/dashboard/CycleNavigator";
+import { BillCycleCard } from "../components/simulator/BillCycleCard";
 import { DashboardSkeleton } from "../components/dashboard/DashboardSkeleton";
 import { DashboardWidgetList } from "../components/dashboard/DashboardWidgetList";
 import { PersonSelector, type PersonFilter } from "../components/dashboard/PersonSelector";
@@ -51,6 +52,7 @@ export function DashboardPage() {
   const queryClient = useQueryClient();
   const [personId, setPersonId] = useState<PersonFilter>("all");
   const [selectedCycleKey, setSelectedCycleKey] = useState<string | null>(null);
+  const [selectedBillKey, setSelectedBillKey] = useState<string | null>(null);
   const [simulateModalOpen, setSimulateModalOpen] = useState(false);
   const [categorySelection, setCategorySelection] = useState<CategoryChartSelection | null>(null);
   const transactionsRef = useRef<HTMLElement>(null);
@@ -111,7 +113,16 @@ export function DashboardPage() {
       queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
       queryClient.invalidateQueries({ queryKey: ["simulations-impact"] });
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["bill-cycles"] });
     },
+  });
+
+  const billCycles = useQuery({
+    queryKey: ["bill-cycles", personId],
+    queryFn: () =>
+      api.get<BillCyclesResult | { currentCycleKey: null; cycles: [] }>(
+        personId === "all" ? "/api/bill-cycles" : `/api/bill-cycles?personId=${personId}`,
+      ),
   });
 
   const data = summary.data;
@@ -126,7 +137,29 @@ export function DashboardPage() {
 
   useEffect(() => {
     setSelectedCycleKey(null);
+    setSelectedBillKey(null);
   }, [personId]);
+
+  // O painel segue o ciclo da fatura: cada fatura mostra o ciclo de salário em que ela vence.
+  const billResult = billCycles.data?.currentCycleKey ? (billCycles.data as BillCyclesResult) : null;
+  const navigableCycles = data?.navigableCycles;
+  const paydayKeyForDue = useCallback(
+    (dueDate: string) =>
+      navigableCycles?.find((c) => c.from <= dueDate && dueDate <= c.to)?.cycleKey ?? null,
+    [navigableCycles],
+  );
+  const painelBillCycles = useMemo(
+    () => (billResult ? billResult.cycles.filter((c) => paydayKeyForDue(c.dueDate)) : []),
+    [billResult, paydayKeyForDue],
+  );
+  const billKey = selectedBillKey ?? billResult?.currentCycleKey ?? null;
+  const selectedBill = painelBillCycles.find((c) => c.cycleKey === billKey);
+
+  useEffect(() => {
+    if (!selectedBill) return;
+    const key = paydayKeyForDue(selectedBill.dueDate);
+    if (key && key !== selectedCycleKey) setSelectedCycleKey(key);
+  }, [selectedBill, paydayKeyForDue, selectedCycleKey]);
 
   useEffect(() => {
     setDashboardPersonFilter(personId);
@@ -219,13 +252,6 @@ export function DashboardPage() {
               people={people.data ?? []}
               onChange={setPersonId}
             />
-            {data.navigableCycles.length > 0 && activeCycleKey && (
-              <CycleNavigator
-                cycles={data.navigableCycles}
-                selectedCycleKey={activeCycleKey}
-                onSelectCycle={setSelectedCycleKey}
-              />
-            )}
           </div>
         )}
       </div>
@@ -283,7 +309,18 @@ export function DashboardPage() {
           </p>
         </div>
       ) : (
+        <>
+        {billResult && painelBillCycles.length > 0 && (
+          <BillCycleCard
+            cycles={painelBillCycles}
+            currentCycleKey={billResult.currentCycleKey}
+            currencyCode={data.currencyCode}
+            selectedKey={selectedBillKey}
+            onSelect={setSelectedBillKey}
+          />
+        )}
         <DashboardWidgetList
+          hideCycleTiles={!!billResult && painelBillCycles.length > 0}
           widgets={dashboardWidgets}
           anyWidgetEnabled={anyWidgetEnabled}
           household={data.household}
@@ -310,6 +347,7 @@ export function DashboardPage() {
           onClearCategorySelection={handleClearCategorySelection}
           onSelectCycle={setSelectedCycleKey}
         />
+        </>
       )}
     </div>
   );

@@ -26,6 +26,8 @@ import type { PersonFilter } from "./PersonSelector";
 
 interface Props {
   widgets: DashboardWidgetsState;
+  /** O card "Ciclo da fatura" já mostra o que sobra: esconde os blocos do ciclo de salário. */
+  hideCycleTiles?: boolean;
   anyWidgetEnabled: boolean;
   household: HouseholdCycleSummary;
   currencyCode: string;
@@ -60,6 +62,7 @@ const SUMMARY_TILES: readonly { widget: DashboardWidgetId; tile: FinanceTileKey 
 
 export function DashboardWidgetList({
   widgets,
+  hideCycleTiles = false,
   anyWidgetEnabled,
   household,
   currencyCode,
@@ -100,7 +103,9 @@ export function DashboardWidgetList({
     );
   }
 
-  const visibleTiles = SUMMARY_TILES.filter(({ widget }) => widgets[widget]).map(({ tile }) => tile);
+  const visibleTiles = SUMMARY_TILES.filter(({ widget }) => widgets[widget])
+    .map(({ tile }) => tile)
+    .filter((tile) => !hideCycleTiles || tile === "netWorth");
   const showPerPerson = widgets["per-person"];
   const showTransactions = widgets["recent-transactions"];
   const detailsCycle = details?.recentCycles?.find((c) => c.cycleKey === activeCycleKey);

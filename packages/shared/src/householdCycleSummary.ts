@@ -209,6 +209,8 @@ export function aggregateHouseholdCycleSummary(
 }
 
 /** Ciclos navegáveis: histórico recente + atual + próximo. */
+const FUTURE_NAVIGABLE_CYCLES = 2;
+
 export function buildNavigableCycles(
   paydayDay: number,
   anchor: PaydayCycleAnchor = DEFAULT_PAYDAY_CYCLE_ANCHOR,
@@ -238,16 +240,21 @@ export function buildNavigableCycles(
     };
   });
 
-  const nextMeta = getPaydayCycleRangeByKey(nextCycle.cycleKey, paydayDay, anchor);
-  cycles.push({
-    cycleKey: nextCycle.cycleKey,
-    from: nextCycle.from,
-    to: nextCycle.to,
-    label: formatPaydayCycleLabel(nextCycle.from, nextCycle.to),
-    isComplete: nextMeta.isComplete,
-    isFuture: today < nextCycle.from,
-    isCurrent: false,
-  });
+  // Dois ciclos à frente: a fatura aberta e a seguinte já têm projeção.
+  let upcoming = nextCycle;
+  for (let i = 0; i < FUTURE_NAVIGABLE_CYCLES; i++) {
+    const meta = getPaydayCycleRangeByKey(upcoming.cycleKey, paydayDay, anchor);
+    cycles.push({
+      cycleKey: upcoming.cycleKey,
+      from: upcoming.from,
+      to: upcoming.to,
+      label: formatPaydayCycleLabel(upcoming.from, upcoming.to),
+      isComplete: meta.isComplete,
+      isFuture: today < upcoming.from,
+      isCurrent: false,
+    });
+    upcoming = getNextPaydayCycle(upcoming, paydayDay, anchor);
+  }
 
   return cycles;
 }
@@ -261,5 +268,6 @@ export function resolveSelectedCycleKey(
   }
   const current = navigableCycles.find((cycle) => cycle.isCurrent);
   if (current) return current.cycleKey;
-  return navigableCycles[navigableCycles.length - 2]?.cycleKey ?? navigableCycles[0]!.cycleKey;
+  const lastStarted = [...navigableCycles].reverse().find((cycle) => !cycle.isFuture);
+  return lastStarted?.cycleKey ?? navigableCycles[0]!.cycleKey;
 }

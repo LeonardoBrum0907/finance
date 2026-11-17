@@ -195,13 +195,13 @@ describe("aggregateHouseholdCycleSummary", () => {
 });
 
 describe("buildNavigableCycles", () => {
-  it("includes past cycles, current and next", () => {
+  it("includes past cycles, current and the next two", () => {
     const cycles = buildNavigableCycles(25, "end", 3);
     assert.ok(cycles.length >= 4);
     const current = cycles.find((c) => c.isCurrent);
     assert.ok(current);
     const future = cycles.filter((c) => c.isFuture);
-    assert.equal(future.length, 1);
+    assert.equal(future.length, 2);
   });
 });
 
