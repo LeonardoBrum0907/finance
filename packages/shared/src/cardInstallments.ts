@@ -116,9 +116,32 @@ export function groupCardInstallmentSeries(
 }
 
 /**
- * A Pluggy traz as parcelas futuras do cartão como transações com data futura
- * ("Loja 2/5" no mês que vem). Só conta como paga a parcela já lançada até hoje.
+ * Dia de vencimento (AAAA-MM-DD) da fatura em que a parcela cai. Usa o vencimento
+ * real da fatura quando a Pluggy o informa; senão, o dia de vencimento do cartão.
  */
-export function isCardInstallmentPosted(txDate: string, todayKey: string): boolean {
-  return txDate.slice(0, 10) <= todayKey;
+export function cardBillDueDateKey(
+  billMonth: string | null | undefined,
+  billDueDay: number | null | undefined,
+  knownBillDueDates: string[] = [],
+): string | null {
+  if (!billMonth || !/^\d{4}-\d{2}$/.test(billMonth)) return null;
+  const known = knownBillDueDates.find((key) => key.startsWith(billMonth));
+  if (known) return known.slice(0, 10);
+  if (!billDueDay || billDueDay < 1) return null;
+  const [year, month] = billMonth.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year!, month!, 0)).getUTCDate();
+  return `${billMonth}-${String(Math.min(billDueDay, lastDay)).padStart(2, "0")}`;
+}
+
+/**
+ * A parcela do cartão só conta como paga quando a fatura dela vence: enquanto a
+ * fatura está aberta, ela ainda não foi paga. Sem fatura conhecida, vale a data da
+ * parcela (a Pluggy traz as parcelas futuras com data futura).
+ */
+export function isCardInstallmentPaid(
+  txDate: string,
+  billDueDateKey: string | null,
+  todayKey: string,
+): boolean {
+  return (billDueDateKey ?? txDate.slice(0, 10)) <= todayKey;
 }

@@ -8,8 +8,9 @@ import type {
 } from "@finance/shared";
 import {
   descriptionMatchesPersonName,
+  cardBillDueDateKey,
   groupCardInstallmentSeries,
-  isCardInstallmentPosted,
+  isCardInstallmentPaid,
   isCreditAccount,
   isTransactionOutflow,
   todayDateKeyInTimeZone,
@@ -469,8 +470,8 @@ function addMonthsKeepingDay(anchor: Date, months: number): Date {
 
 /**
  * Cria e atualiza compromissos a partir das compras parceladas do cartão ("Loja 1/3").
- * As parcelas já lançadas ficam pagas com a transação; as que a Pluggy mostra com data
- * futura ficam ligadas à transação, mas pendentes até a data chegar. As anteriores ao histórico e as
+ * Cada parcela vista fica ligada à transação e só conta como paga quando a fatura em
+ * que ela cai vence; até lá fica pendente. As anteriores ao histórico e as
  * que venceram sem lançamento contam como pagas, porque o cartão cobra sozinho. As
  * futuras ficam pendentes. Compromissos cancelados pelo usuário não voltam.
  */
@@ -483,8 +484,26 @@ export async function detectCardInstallmentPlans(userId: string): Promise<number
       date: { gte: dateFrom },
       account: { type: "CREDIT", connection: { person: { userId } } },
     },
-    include: { account: { select: { type: true } } },
+    include: {
+      account: {
+        select: { type: true, billDueDay: true, creditBills: { select: { dueDate: true } } },
+      },
+    },
   });
+
+  const billDueByTx = new Map<string, string | null>();
+  for (const tx of transactions) {
+    billDueByTx.set(
+      tx.id,
+      cardBillDueDateKey(
+        tx.billForecastMonth,
+        tx.account.billDueDay,
+        tx.account.creditBills.map((bill) => bill.dueDate.toISOString()),
+      ),
+    );
+  }
+  const isPaid = (tx: { id: string; date: string }, todayKey: string) =>
+    isCardInstallmentPaid(tx.date, billDueByTx.get(tx.id) ?? null, todayKey);
 
   const series = groupCardInstallmentSeries(
     transactions.map((tx) => ({
@@ -542,7 +561,7 @@ export async function detectCardInstallmentPlans(userId: string): Promise<number
       for (const [sequence, tx] of slots) {
         const installment = commitment.installments.find((i) => i.sequence === sequence);
         if (!installment) continue;
-        const posted = isCardInstallmentPosted(tx.date, today);
+        const posted = isPaid(tx, today);
 
         if (!installment.transactionId) {
           await prisma.paymentInstallment.update({
@@ -571,7 +590,7 @@ export async function detectCardInstallmentPlans(userId: string): Promise<number
           installment.status === "paid" &&
           commitment.source === "auto_detected"
         ) {
-          // Parcela futura que a Pluggy já mostra: ainda não foi cobrada.
+          // Parcela numa fatura que ainda não venceu: ainda não foi paga.
           await prisma.paymentInstallment.update({
             where: { id: installment.id },
             data: { status: "pending", paidAt: null },
@@ -605,7 +624,7 @@ export async function detectCardInstallmentPlans(userId: string): Promise<number
       const sequence = idx + 1;
       const seen = plan.slots.get(sequence);
       if (seen) {
-        const posted = isCardInstallmentPosted(seen.date, today);
+        const posted = isPaid(seen, today);
         return {
           sequence,
           amount: Math.abs(seen.amount),

@@ -84,7 +84,11 @@ export {
   type RecurringPatternCandidate,
   type RecurringBillForSimulation,
 } from "./recurringBills";
-export { groupCardInstallmentSeries, isCardInstallmentPosted } from "./cardInstallments";
+export {
+  cardBillDueDateKey,
+  groupCardInstallmentSeries,
+  isCardInstallmentPaid,
+} from "./cardInstallments";
 export type { CardInstallmentSeries, CardInstallmentTransaction } from "./cardInstallments";
 export {
   MANAGED_ACCOUNT_KINDS,
