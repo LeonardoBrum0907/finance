@@ -129,6 +129,23 @@ describe("summarizeForecastCashFlow", () => {
     assert.equal(result.expenses, 100);
     assert.equal(result.bankCommitted, 50);
   });
+
+  it("num ciclo futuro, ignora gastos agendados antes do início do ciclo", () => {
+    const txs: TransactionLike[] = [
+      expenseTx("2026-11-30", 800), // ainda no ciclo anterior
+      expenseTx("2026-12-11", 100), // ciclo anterior também
+      expenseTx("2027-01-11", 100), // dentro do ciclo consultado
+    ];
+
+    const result = summarizeForecastCashFlow(
+      txs,
+      { from: "2026-12-25", to: "2027-01-24" },
+      "2026-11-17",
+    );
+
+    assert.equal(result.expenses, 0);
+    assert.equal(result.bankCommitted, 100);
+  });
 });
 
 describe("buildPendingExpensesFromPurchases", () => {
