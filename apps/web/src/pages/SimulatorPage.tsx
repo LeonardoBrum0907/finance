@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Calculator } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import type {
+  BillCyclesResult,
   CreateSimulationScenarioInput,
   DashboardCycleSummaryResponse,
   DetectRecurringBillsResponse,
@@ -17,8 +18,7 @@ import type {
 import { managedAccountToScenarioDTO, managedAccountLegacyId } from "@finance/shared";
 import { api } from "../lib/api";
 import { AssistantSpotlightButton } from "../components/chat/AssistantSpotlightButton";
-import { CycleNavigator } from "../components/dashboard/CycleNavigator";
-import { FinanceSummaryCard, toFinanceMetrics } from "../components/dashboard/FinanceSummaryCard";
+import { BillCycleCard } from "../components/simulator/BillCycleCard";
 import { PersonSelector, type PersonFilter } from "../components/dashboard/PersonSelector";
 import { SimulationResults } from "../components/simulator/SimulationResults";
 import { AccountsSection, type AccountsTab } from "../components/simulator/AccountsSection";
@@ -80,6 +80,14 @@ export function SimulatorPage() {
     queryFn: () => api.get<DashboardCycleSummaryResponse>(summaryUrl(personId, cycleKeyForApi)),
   });
 
+  const billCycles = useQuery({
+    queryKey: ["bill-cycles", personId],
+    queryFn: () =>
+      api.get<BillCyclesResult | { currentCycleKey: null; cycles: [] }>(
+        personId === "all" ? "/api/bill-cycles" : `/api/bill-cycles?personId=${personId}`,
+      ),
+  });
+
   const accounts = useQuery({
     queryKey: ["accounts", personId, accountsTab],
     queryFn: async () => {
@@ -104,6 +112,7 @@ export function SimulatorPage() {
     queryClient.invalidateQueries({ queryKey: ["accounts"] });
     queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     queryClient.invalidateQueries({ queryKey: ["simulations-impact"] });
+    queryClient.invalidateQueries({ queryKey: ["bill-cycles"] });
   }, [queryClient]);
 
   const runScenario = useMutation({
@@ -283,13 +292,6 @@ export function SimulatorPage() {
               }}
             />
           )}
-          {data && data.navigableCycles.length > 0 && activeCycleKey && (
-            <CycleNavigator
-              cycles={data.navigableCycles}
-              selectedCycleKey={activeCycleKey}
-              onSelectCycle={setSelectedCycleKey}
-            />
-          )}
           <AssistantSpotlightButton
             label="Analisar com IA"
             message="Quero simular uma compra — quanto posso gastar sem comprometer minhas metas?"
@@ -312,15 +314,12 @@ export function SimulatorPage() {
         </div>
       )}
 
-      {data?.household && displayMetrics && (
-        <FinanceSummaryCard
-          title="Impacto no ciclo"
-          metrics={toFinanceMetrics(displayMetrics, {
-            isFuture: data.household.isFuture,
-            isComplete: data.household.isComplete,
-          })}
-          currencyCode={data.currencyCode}
-          closingDelta={lastToggleDelta ?? undefined}
+      {billCycles.data?.currentCycleKey && billCycles.data.cycles.length > 0 && (
+        <BillCycleCard
+          cycles={billCycles.data.cycles}
+          currentCycleKey={billCycles.data.currentCycleKey}
+          currencyCode={data?.currencyCode ?? "BRL"}
+          closingDelta={lastToggleDelta}
         />
       )}
 

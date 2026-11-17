@@ -5,6 +5,7 @@ import { authenticate } from "../auth.js";
 import type { FinancialTransaction } from "../services/finance/types.js";
 import { effectiveTransactionCategory } from "../services/transactionCategory.js";
 import { serializeAccount } from "../services/serializeAccount.js";
+import { buildBillCyclesForUser } from "../services/finance/billCycles.js";
 import { resolveNextDueDate } from "../services/finance/creditBill.js";
 import { pickLatestClosedBill } from "../services/finance/creditBillSync.js";
 import { getPluggyClient } from "../services/pluggy.js";
@@ -52,6 +53,15 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       cycleKey: query.cycleKey?.trim() || undefined,
     });
     return reply.send(summary);
+  });
+
+  app.get("/api/bill-cycles", async (request, reply) => {
+    const query = request.query as { personId?: string };
+    const result = await buildBillCyclesForUser(
+      request.user!.sub,
+      query.personId?.trim() || undefined,
+    );
+    return reply.send(result ?? { currentCycleKey: null, cycles: [] });
   });
 
   app.get("/api/dashboard", async (request, reply) => {
