@@ -34,6 +34,7 @@ services:
       # ou aponte DATABASE_URL para o Postgres da VPS.
       DATABASE_URL: ${DATABASE_URL:-postgresql://finance:finance@db:5432/finance?schema=public}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-}
       PLUGGY_CLIENT_ID: ${PLUGGY_CLIENT_ID:-}
       PLUGGY_CLIENT_SECRET: ${PLUGGY_CLIENT_SECRET:-}
       AI_PROVIDER: ${AI_PROVIDER:-openai}
