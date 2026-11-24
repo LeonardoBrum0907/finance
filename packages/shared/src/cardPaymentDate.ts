@@ -75,3 +75,43 @@ export function toBillPaymentDates<
     return dueKey ? { ...tx, date: dateKeyToNoonUtc(dueKey) } : tx;
   });
 }
+
+/**
+ * Quantos dias antes do início do período buscar compras do cartão: uma compra
+ * logo depois do fechamento só vence uns 40 dias depois e ainda cai no período.
+ */
+export const CARD_CHARGE_LOOKBACK_DAYS = 62;
+
+/**
+ * Transações que pertencem ao período pela regra do ciclo: compra no cartão pela
+ * data de vencimento da fatura, o resto pela própria data. Devolve os objetos
+ * originais (a data da compra fica como está) com `billDueDate` nas compras do
+ * cartão, para a lista bater com os totais do painel.
+ *
+ * @example selectByCycleDate(txs, cards, "2026-11-25", "2026-12-24")
+ */
+export function selectByCycleDate<
+  T extends {
+    date: Date;
+    amount: number;
+    accountId: string;
+    accountType?: string | null;
+    billForecastMonth?: string | null;
+  },
+>(
+  txs: T[],
+  cards: CardPaymentCalendar[],
+  from: string,
+  to: string,
+): Array<T & { billDueDate: string | null }> {
+  const cycleDated = toBillPaymentDates(txs, cards);
+  const selected: Array<T & { billDueDate: string | null }> = [];
+  txs.forEach((tx, index) => {
+    const cycleDate = cycleDated[index]!.date;
+    const key = toLocalDateKey(cycleDate);
+    if (key < from || key > to) return;
+    const moved = cycleDate !== tx.date;
+    selected.push({ ...tx, billDueDate: moved ? key : null });
+  });
+  return selected;
+}
