@@ -53,10 +53,13 @@ async function main() {
   await app.register(recurringBillRoutes);
   await app.register(managedAccountRoutes);
 
+  // O Fastify não aceita addHook depois do listen, então o hook é registrado antes.
+  let stopSyncScheduler: (() => void) | undefined;
+  app.addHook("onClose", async () => stopSyncScheduler?.());
+
   await app.listen({ port: env.port, host: "0.0.0.0" });
 
-  const stopSyncScheduler = startSyncScheduler(app.log);
-  app.addHook("onClose", async () => stopSyncScheduler());
+  stopSyncScheduler = startSyncScheduler(app.log);
 }
 
 main().catch((err) => {
