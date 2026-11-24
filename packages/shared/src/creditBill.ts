@@ -336,6 +336,8 @@ export interface CardForCycleBills {
   creditBrand: string | null;
   statements: PersistedCardStatement[];
   charges: CardStatementCharge[];
+  /** Créditos de pagamento da fatura lançados no cartão (valor positivo). */
+  payments?: Array<{ date: string; amount: number }>;
 }
 
 export interface CycleStatementPaymentItem extends CreditBillPaymentItem {
