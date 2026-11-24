@@ -573,7 +573,10 @@ export interface BankConnectionDTO {
   connectorName: string | null;
   connectorImageUrl: string | null;
   status: string;
+  /** Quando o app buscou na Pluggy. */
   lastSyncedAt: string | null;
+  /** Quando a Pluggy leu o banco (pode ser um dia antes de lastSyncedAt). */
+  pluggyUpdatedAt?: string | null;
   accounts: AccountDTO[];
 }
 
@@ -594,10 +597,10 @@ export interface AccountDTO {
   balanceDueDate?: string | null;
   billDueDay?: number | null;
   billCloseDay?: number | null;
-  /** Fatura já fechada (Pluggy Bills). */
+  /** Última fatura fechada: a publicada pela Pluggy ou a somada pelas compras marcadas com ela. */
   closedBillAmount?: number | null;
   closedBillDueDate?: string | null;
-  /** Fatura em aberto — saldo Pluggy do ciclo atual. */
+  /** Compras depois do fechamento da última fatura (não é o saldo da Pluggy, que é o limite usado). */
   openBillAmount?: number | null;
   openBillDueDate?: string | null;
   /** @deprecated Use openBillAmount */
@@ -1241,3 +1244,12 @@ export {
 } from "./syncSchedule";
 
 export { parseAllowRegistration, type RegistrationStatusDTO } from "./registration";
+export {
+  deriveUnpublishedBills,
+  isCardBillPayment,
+  summarizeCardBills,
+  type CardBillSummary,
+  type CardChargeWithBill,
+  type DerivedCardBill,
+  type PublishedCardBill,
+} from "./cardBillFromCharges";
