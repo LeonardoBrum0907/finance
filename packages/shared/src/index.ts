@@ -1257,3 +1257,8 @@ export {
   type DerivedCardBill,
   type PublishedCardBill,
 } from "./cardBillFromCharges";
+export {
+  resolveExpectedSalary,
+  type ExpectedSalary,
+  type SalaryEntry,
+} from "./expectedSalary";
