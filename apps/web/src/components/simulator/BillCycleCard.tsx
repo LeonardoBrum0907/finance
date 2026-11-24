@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, CreditCard, PiggyBank, Wallet } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  CreditCard,
+  PiggyBank,
+  Undo2,
+  Wallet,
+} from "lucide-react";
 import type { BillCycleSummary } from "@finance/shared";
 import { formatPlainAmount, toneBorderClass, toneTextClass } from "../../lib/cycleLabels";
 import { formatShortDateKey } from "../../lib/format";
@@ -38,6 +46,16 @@ function tone(value: number): "positive" | "negative" | "neutral" {
   return "neutral";
 }
 
+/** Período do ciclo: termina no pagamento das faturas, não numa data fixa. */
+function cyclePeriodLabel(cycle: BillCycleSummary): string {
+  if (!cycle.periodFrom || !cycle.periodTo) return "";
+  const range = `Ciclo de ${formatShortDateKey(cycle.periodFrom)} a ${formatShortDateKey(cycle.periodTo)}`;
+  if (cycle.paidSource === "manual") return `${range} · marcada como paga`;
+  if (cycle.paidSource === "assumed") return `${range} · pagamento não encontrado, considerada paga no vencimento`;
+  if (cycle.paidOn) return `${range} · fechou quando a fatura foi paga`;
+  return `${range} (previsto) · fecha quando você pagar a fatura`;
+}
+
 interface Props {
   cycles: BillCycleSummary[];
   currentCycleKey: string;
@@ -46,6 +64,10 @@ interface Props {
   /** Fatura escolhida (controlada pela página); sem ela, o card guarda a escolha sozinho. */
   selectedKey?: string | null;
   onSelect?: (cycleKey: string) => void;
+  /** "Marcar fatura como paga": sem ele, o botão não aparece (simulador). */
+  onMarkPaid?: (cycleKey: string) => void;
+  onUnmarkPaid?: (cycleKey: string) => void;
+  markingPaid?: boolean;
 }
 
 export function BillCycleCard({
@@ -55,6 +77,9 @@ export function BillCycleCard({
   closingDelta,
   selectedKey: controlledKey,
   onSelect,
+  onMarkPaid,
+  onUnmarkPaid,
+  markingPaid = false,
 }: Props) {
   const [localKey, setLocalKey] = useState<string | null>(null);
   const selectedKey = controlledKey !== undefined ? controlledKey : localKey;
@@ -82,6 +107,13 @@ export function BillCycleCard({
             Compras de {formatShortDateKey(cycle.purchaseFrom)} a{" "}
             {formatShortDateKey(cycle.purchaseTo)} · vence em {formatShortDateKey(cycle.dueDate)}
           </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{cyclePeriodLabel(cycle)}</p>
+          <BillPaidButton
+            cycle={cycle}
+            onMarkPaid={onMarkPaid}
+            onUnmarkPaid={onUnmarkPaid}
+            busy={markingPaid}
+          />
         </div>
         <div
           className="inline-flex items-center gap-1 rounded-lg border border-app-border bg-app-bg p-1"
@@ -211,5 +243,35 @@ export function BillCycleCard({
         </div>
       </div>
     </section>
+  );
+}
+
+function BillPaidButton({
+  cycle,
+  onMarkPaid,
+  onUnmarkPaid,
+  busy,
+}: {
+  cycle: BillCycleSummary;
+  onMarkPaid?: (cycleKey: string) => void;
+  onUnmarkPaid?: (cycleKey: string) => void;
+  busy: boolean;
+}) {
+  const buttonClass =
+    "mt-2 inline-flex items-center gap-1.5 rounded-lg border border-app-border px-2.5 py-1 text-xs font-medium text-foreground transition hover:bg-app-bg disabled:opacity-50";
+  if (cycle.paidSource === "manual" && onUnmarkPaid) {
+    return (
+      <button type="button" disabled={busy} onClick={() => onUnmarkPaid(cycle.cycleKey)} className={buttonClass}>
+        <Undo2 className="h-3.5 w-3.5" />
+        Desfazer "paga"
+      </button>
+    );
+  }
+  if (cycle.status !== "closed" || !onMarkPaid) return null;
+  return (
+    <button type="button" disabled={busy} onClick={() => onMarkPaid(cycle.cycleKey)} className={buttonClass}>
+      <CheckCircle2 className="h-3.5 w-3.5" />
+      Marcar fatura como paga
+    </button>
   );
 }

@@ -1,4 +1,5 @@
 import {
+  isCardBillPayment,
   isCreditAccount,
   isTransactionOutflow,
   toLocalDateKey,
@@ -161,5 +162,19 @@ export async function loadCardsForCycleBills(
         amount: Math.abs(tx.amount),
         billMonth: tx.billForecastMonth ?? null,
       })),
+    payments: cardBillPaymentsOf(acc.id, txs, stored.filter((bill) => bill.accountId === acc.id)),
   }));
+}
+
+/** Créditos de pagamento da fatura lançados no cartão, para saber quando ela foi paga. */
+function cardBillPaymentsOf(
+  accountId: string,
+  txs: FinancialTransaction[],
+  bills: Array<{ totalAmount: number }>,
+): Array<{ date: string; amount: number }> {
+  const knownTotals = bills.map((bill) => bill.totalAmount);
+  return txs
+    .filter((tx) => tx.accountId === accountId && isCreditAccount(tx.accountType))
+    .filter((tx) => isCardBillPayment(tx, knownTotals))
+    .map((tx) => ({ date: toLocalDateKey(tx.date), amount: Math.abs(tx.amount) }));
 }

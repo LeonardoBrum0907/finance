@@ -46,7 +46,13 @@ const EMPTY_SUMMARY: CardBillSummary = {
 };
 
 const PAYMENT_TOLERANCE = 0.01;
-const PAYMENT_DESCRIPTIONS = ["pagamento recebido", "pagamento efetuado", "pagamento de fatura"];
+const PAYMENT_DESCRIPTIONS = [
+  "pagamento recebido",
+  "pagamento efetuado",
+  "pagamento de fatura",
+  // Itaú lança o pagamento no cartão como "PAGAMENTO FATURA".
+  "pagamento fatura",
+];
 
 function roundMoney(value: number): number {
   return Math.round(value * 100) / 100;

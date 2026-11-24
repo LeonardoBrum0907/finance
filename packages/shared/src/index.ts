@@ -227,7 +227,18 @@ export {
   type BillCycleStatus,
   type BillCycleSummary,
   type BillCyclesResult,
+  type ManualBillPaid,
 } from "./billCycle";
+export {
+  cyclePeriodEnd,
+  dateBillGotCovered,
+  resolveCardBillPaid,
+  resolveCyclePaid,
+  type BillPaid,
+  type BillPaidSource,
+  type BillPaymentEvent,
+} from "./billPaidDate";
+export { selectByBillCycle, type BillCyclePeriod } from "./billCycleTransactions";
 export {
   DASHBOARD_WIDGET_IDS,
   DASHBOARD_WIDGETS,

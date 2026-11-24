@@ -6,7 +6,9 @@ import {
   groupCategoryForDashboard,
   isTransactionOutflow,
   sanitizeFineGrainedCategory,
+  selectByBillCycle,
   selectByCycleDate,
+  type BillCyclePeriod,
   CARD_CHARGE_LOOKBACK_DAYS,
   updateTransactionCategorySchema,
 } from "@finance/shared";
@@ -21,6 +23,7 @@ import {
 import { loadUserSettings, resolvePaydayCycle, resolvePeriodMode } from "../services/userSettings.js";
 import { toTransactionDtoFields } from "../services/transactionCategory.js";
 import { loadCardsForUser } from "../services/finance/creditCardBills.js";
+import { buildBillCyclesForUser } from "../services/finance/billCycles.js";
 import { upsertCategoryMapping } from "../services/categoryMapping.js";
 import { recategorizeUserTransactions } from "../services/categoryPipeline.js";
 import {
@@ -94,6 +97,31 @@ async function selectTransactionsForCycle<
   return selectByCycleDate(withType, cards, from, to);
 }
 
+type CycleSelection =
+  | { kind: "none" }
+  | { kind: "payday"; from: string; to: string }
+  | { kind: "bill"; cycle: BillCyclePeriod };
+
+/** Ciclo da fatura escolhido no painel: período do pagamento anterior até o desta fatura. */
+async function resolveBillCyclePeriod(
+  userId: string,
+  personId: string | undefined,
+  billCycleKey: string,
+): Promise<BillCyclePeriod | null> {
+  const result = await buildBillCyclesForUser(userId, personId);
+  const cycle = result?.cycles.find((c) => c.cycleKey === billCycleKey);
+  if (!cycle) return null;
+  return { cycleKey: cycle.cycleKey, periodFrom: cycle.periodFrom, periodTo: cycle.periodTo };
+}
+
+async function selectTransactionsForBillCycle<
+  T extends { date: Date; amount: number; accountId: string; billForecastMonth: string | null; account: { type: string | null } },
+>(userId: string, personId: string | undefined, txs: T[], cycle: BillCyclePeriod) {
+  const cards = await loadCardsForUser(userId, personId, []);
+  const withType = txs.map((tx) => ({ ...tx, accountType: tx.account.type }));
+  return selectByBillCycle(withType, cards, cycle);
+}
+
 export async function transactionRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
 
@@ -111,6 +139,8 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
       type?: string;
       periodMode?: string;
       cycleKey?: string;
+      /** Mês da fatura (AAAA-MM): a lista segue o ciclo da fatura do painel. */
+      billCycle?: string;
     };
 
     const months = parseDashboardMonths(query.months);
@@ -130,8 +160,15 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
     const { paydayDay, paydayCycleAnchor } = await resolvePaydayCycle(userId, personId);
     const periodMode = resolvePeriodMode(query.periodMode, settings, paydayDay);
 
+    const billCycleKey = query.billCycle?.trim() || undefined;
+    const billCycle = billCycleKey
+      ? await resolveBillCyclePeriod(userId, personId, billCycleKey)
+      : null;
+
     let range: { from?: string; to?: string };
-    if (periodMode === "payday" && paydayDay !== null) {
+    if (billCycle) {
+      range = { from: billCycle.periodFrom, to: billCycle.periodTo };
+    } else if (periodMode === "payday" && paydayDay !== null) {
       const periods = resolvePeriodRanges(
         months,
         periodMode,
@@ -145,7 +182,12 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
       range = monthKeysToDateRange(monthKeys);
     }
 
-    const byBillDue = periodMode === "payday" && paydayDay !== null && !!range.from && !!range.to;
+    const selection: CycleSelection = billCycle
+      ? { kind: "bill", cycle: billCycle }
+      : periodMode === "payday" && paydayDay !== null && range.from && range.to
+        ? { kind: "payday", from: range.from, to: range.to }
+        : { kind: "none" };
+    const byBillDue = selection.kind !== "none";
     const dateFrom = range.from ? new Date(`${range.from}T00:00:00.000Z`) : new Date(0);
     // No ciclo, a compra no cartão entra pelo vencimento da fatura: busca compras de antes do período.
     if (byBillDue) dateFrom.setUTCDate(dateFrom.getUTCDate() - CARD_CHARGE_LOOKBACK_DAYS);
@@ -183,9 +225,12 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
       orderBy: { date: "desc" },
     });
 
-    const transactions = byBillDue
-      ? await selectTransactionsForCycle(request.user!.sub, personId, fetched, range.from!, range.to!)
-      : fetched.map((tx) => ({ ...tx, billDueDate: null }));
+    const transactions =
+      selection.kind === "bill"
+        ? await selectTransactionsForBillCycle(userId, personId, fetched, selection.cycle)
+        : selection.kind === "payday"
+          ? await selectTransactionsForCycle(userId, personId, fetched, selection.from, selection.to)
+          : fetched.map((tx) => ({ ...tx, billDueDate: null }));
 
     const allDtos: TransactionDTO[] = transactions.map((tx) => ({
       ...toTransactionDtoFields(tx),

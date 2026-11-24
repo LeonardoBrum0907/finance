@@ -11,6 +11,7 @@ import {
   type BillCycleCardItem,
   type BillCycleScheduledItem,
   type BillCyclesResult,
+  type ManualBillPaid,
   type SalaryEntry,
 } from "@finance/shared";
 import { prisma } from "../../prisma.js";
@@ -33,6 +34,16 @@ function salaryEntries(txs: FinancialTransaction[]): SalaryEntry[] {
         tx.category === SALARY_CATEGORY,
     )
     .map((tx) => ({ date: toLocalDateKey(tx.date), amount: Math.abs(tx.amount) }));
+}
+
+/** Faturas que a pessoa marcou como pagas nos cartões do painel. */
+async function loadManualPaidBills(accountIds: string[]): Promise<ManualBillPaid[]> {
+  const marks = await prisma.cardBillPaidMark.findMany({ where: { accountId: { in: accountIds } } });
+  return marks.map((mark) => ({
+    accountId: mark.accountId,
+    billMonth: mark.billMonth,
+    paidOn: mark.paidOn.toISOString().slice(0, 10),
+  }));
 }
 
 export async function buildBillCyclesForUser(
@@ -160,5 +171,6 @@ export async function buildBillCyclesForUser(
       })),
     scheduledCash,
     scheduledCard,
+    manualPaidBills: await loadManualPaidBills(cards.map((card) => card.accountId)),
   });
 }

@@ -35,6 +35,8 @@ interface Props {
   personFilter?: string;
   personId: PersonFilter;
   activeCycleKey: string | null;
+  /** Fatura escolhida no card "Ciclo da fatura" (AAAA-MM). */
+  billCycleKey?: string | null;
   periodSummary?: DashboardPeriodSummary;
   transactionsRef: RefObject<HTMLElement | null>;
   simulationEnabled: boolean;
@@ -70,6 +72,7 @@ export function DashboardWidgetList({
   personFilter,
   personId,
   activeCycleKey,
+  billCycleKey,
   periodSummary,
   transactionsRef,
   simulationEnabled,
@@ -198,6 +201,7 @@ export function DashboardWidgetList({
           dashboardMonths={1}
           periodMode="payday"
           cycleKey={activeCycleKey ?? undefined}
+          billCycleKey={billCycleKey ?? undefined}
           periodSummary={periodSummary}
           categorySelection={categorySelection}
           onClearCategorySelection={onClearCategorySelection}

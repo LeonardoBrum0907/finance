@@ -92,4 +92,54 @@ describe("buildBillCycles", () => {
     assert.equal(billCycleKeyForPayment(result, { date: "2026-11-23" }), "2026-11");
     assert.equal(billCycleKeyForPayment(result, { date: "2026-11-29" }), "2026-12");
   });
+
+  it("o ciclo vai do pagamento da fatura anterior até o vencimento previsto e conta o salário", () => {
+    const result = buildBillCycles(input({ today: "2026-11-24" }))!;
+    assert.equal(result.openCycleKey, "2026-11");
+    const november = result.cycles.find((c) => c.cycleKey === "2026-11")!;
+    assert.equal(november.status, "closed");
+    assert.equal(november.paidOn, null);
+    assert.equal(november.periodFrom, "2026-10-29");
+    assert.equal(november.periodTo, "2026-11-28");
+    assert.equal(november.money!.salaryDate, "2026-11-25");
+  });
+
+  it("fecha o ciclo no dia em que a fatura é paga, mesmo antes do vencimento", () => {
+    const base = input({ today: "2026-11-27" });
+    base.cards[0]!.payments = [{ date: "2026-11-26", amount: 2550 }];
+    const result = buildBillCycles(base)!;
+    const november = result.cycles.find((c) => c.cycleKey === "2026-11")!;
+    assert.equal(november.status, "paid");
+    assert.equal(november.paidOn, "2026-11-26");
+    assert.equal(november.paidSource, "card");
+    assert.equal(november.periodTo, "2026-11-26");
+    const december = result.cycles.find((c) => c.cycleKey === "2026-12")!;
+    assert.equal(december.periodFrom, "2026-11-27");
+    assert.equal(result.openCycleKey, "2026-12");
+  });
+
+  it("fatura vencida e não paga segue aberta até hoje", () => {
+    const result = buildBillCycles(input({ today: "2026-11-30" }))!;
+    const november = result.cycles.find((c) => c.cycleKey === "2026-11")!;
+    assert.equal(november.status, "closed");
+    assert.equal(november.periodTo, "2026-11-30");
+    assert.equal(result.openCycleKey, "2026-11");
+  });
+
+  it("aceita a fatura marcada como paga à mão", () => {
+    const result = buildBillCycles(
+      input({
+        today: "2026-11-24",
+        manualPaidBills: [{ accountId: "cartao", billMonth: "2026-11", paidOn: "2026-11-24" }],
+      }),
+    )!;
+    const november = result.cycles.find((c) => c.cycleKey === "2026-11")!;
+    assert.equal(november.paidOn, "2026-11-24");
+    assert.equal(november.paidSource, "manual");
+    assert.equal(november.money, null);
+    // O salário de 25/11 cai depois do pagamento: vai para o ciclo de dezembro.
+    const december = result.cycles.find((c) => c.cycleKey === "2026-12")!;
+    assert.equal(december.money!.salaryDate, "2026-11-25");
+  });
 });
+

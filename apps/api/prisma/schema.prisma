@@ -105,6 +105,7 @@ model Account {
   recurringBills  RecurringBill[]
   managedAccounts ManagedAccount[]
   creditBills     CreditCardBill[]
+  billPaidMarks   CardBillPaidMark[]
 
   @@index([connectionId])
 }
@@ -125,6 +126,21 @@ model CreditCardBill {
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@index([accountId, dueDate])
+}
+
+/// Fatura que a pessoa marcou como paga ("Marcar fatura como paga") quando o app
+/// não reconhece o pagamento no extrato. O ciclo da fatura fecha nesse dia.
+model CardBillPaidMark {
+  id        String   @id @default(cuid())
+  accountId String
+  /// Mês da fatura (AAAA-MM).
+  billMonth String
+  paidOn    DateTime
+  createdAt DateTime @default(now())
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, billMonth])
 }
 
 model Transaction {
