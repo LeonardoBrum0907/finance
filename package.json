@@ -8,6 +8,7 @@
     "dev:api": "pnpm --filter @finance/api dev",
     "dev:web": "pnpm --filter @finance/web dev",
     "build": "pnpm -r build",
+    "test": "pnpm -r --if-present test",
     "db:migrate": "pnpm --filter @finance/api db:migrate",
     "db:generate": "pnpm --filter @finance/api db:generate",
     "db:studio": "pnpm --filter @finance/api db:studio",
