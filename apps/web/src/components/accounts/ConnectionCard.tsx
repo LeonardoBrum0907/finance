@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { AccountDTO, BankConnectionDTO, UpdateCreditAccountInput } from "@finance/shared";
 import { isCreditAccount } from "@finance/shared";
 import { formatCurrency, formatDateTime } from "../../lib/format";
+import { CreditAccountBills } from "./CreditAccountBills";
 
 interface Props {
   connection: BankConnectionDTO;
@@ -15,6 +16,17 @@ interface Props {
 
 const inputClass =
   "w-16 rounded-md border border-app-border bg-app-surface px-2 py-1 text-sm text-foreground outline-none focus:border-brand focus:ring-1 focus:ring-brand/20";
+
+/**
+ * A Pluggy lê o banco mais ou menos uma vez por dia; o app só busca o que ela já leu.
+ * Mostrar só a hora da busca fazia um saldo de ontem parecer de agora.
+ */
+function syncStatusText(connection: BankConnectionDTO): string {
+  if (!connection.lastSyncedAt) return "Ainda não sincronizado";
+  const checked = `app conferiu ${formatDateTime(connection.lastSyncedAt)}`;
+  if (!connection.pluggyUpdatedAt) return `Atualizado em ${formatDateTime(connection.lastSyncedAt)}`;
+  return `Dados do banco de ${formatDateTime(connection.pluggyUpdatedAt)} · ${checked}`;
+}
 
 function parseBillDay(value: string): number | null {
   const trimmed = value.trim();
@@ -133,18 +145,21 @@ export function ConnectionCard({
           </button>
         </div>
       </div>
-      <p className="mt-1 text-[11px] text-muted-foreground">
-        {connection.lastSyncedAt
-          ? `Atualizado em ${formatDateTime(connection.lastSyncedAt)} · sincroniza sozinho a cada poucas horas`
-          : "Ainda não sincronizado"}
-      </p>
+      <p className="mt-1 text-[11px] text-muted-foreground">{syncStatusText(connection)}</p>
       <div className="mt-2 space-y-2">
         {connection.accounts.map((acc) => (
           <div key={acc.id} className="text-sm text-muted-foreground-dark">
-            <div className="flex justify-between">
-              <span>{acc.name}</span>
-              <span>{formatCurrency(acc.balance, acc.currencyCode)}</span>
-            </div>
+            {isCreditAccount(acc.type) ? (
+              <>
+                <span>{acc.name}</span>
+                <CreditAccountBills account={acc} />
+              </>
+            ) : (
+              <div className="flex justify-between gap-3">
+                <span>{acc.name}</span>
+                <span className="shrink-0">{formatCurrency(acc.balance, acc.currencyCode)}</span>
+              </div>
+            )}
             {isCreditAccount(acc.type) && onSaveBillCalendar && (
               <CreditBillCalendarForm
                 account={acc}
