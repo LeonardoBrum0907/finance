@@ -6,6 +6,7 @@ import { authRoutes } from "./routes/auth.js";
 import { peopleRoutes } from "./routes/people.js";
 import { connectionRoutes } from "./routes/connections.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
+import { billCyclePaymentRoutes } from "./routes/billCyclePayments.js";
 import { transactionRoutes } from "./routes/transactions.js";
 import { commitmentRoutes } from "./routes/commitments.js";
 import { chatRoutes } from "./routes/chat.js";
@@ -41,6 +42,7 @@ async function main() {
   await app.register(peopleRoutes);
   await app.register(connectionRoutes);
   await app.register(dashboardRoutes);
+  await app.register(billCyclePaymentRoutes);
   await app.register(transactionRoutes);
   await app.register(commitmentRoutes);
   await app.register(chatRoutes);
