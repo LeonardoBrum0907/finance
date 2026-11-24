@@ -62,6 +62,8 @@ export async function persistPluggyCreditCardBills(
           closingDate: closingDate ?? null,
           totalAmount: bill.totalAmount,
           minimumPaymentAmount: bill.minimumPaymentAmount ?? null,
+          // A fatura oficial substitui a que o app montou pelas compras (source "transactions").
+          source: "pluggy",
         },
       });
     }

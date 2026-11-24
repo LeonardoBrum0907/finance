@@ -10,6 +10,7 @@ import {
   processSyncedTransactions,
 } from "./categoryPipeline.js";
 import { persistPluggyCreditCardBills } from "./finance/creditCardBills.js";
+import { persistDerivedCardBills } from "./finance/derivedCardBills.js";
 
 let client: PluggyClient | null = null;
 
@@ -102,6 +103,7 @@ async function runSyncConnection(connectionId: string): Promise<void> {
       connectorName: item.connector?.name ?? connection.connectorName,
       connectorImageUrl: item.connector?.imageUrl ?? connection.connectorImageUrl,
       status: item.status ?? connection.status,
+      pluggyUpdatedAt: item.lastUpdatedAt ? new Date(item.lastUpdatedAt) : null,
     },
   });
 
@@ -197,6 +199,7 @@ async function runSyncConnection(connectionId: string): Promise<void> {
             merchantName: tx.merchantName,
             category: tx.category,
             categorySource: "pluggy",
+            pluggyBillId: tx.pluggyBillId,
             accountId: account.id,
           },
           update: {
@@ -204,9 +207,14 @@ async function runSyncConnection(connectionId: string): Promise<void> {
             amount: tx.amount,
             pluggyCategory: tx.category,
             merchantName: tx.merchantName,
+            pluggyBillId: tx.pluggyBillId,
           },
         });
       }
+    }
+
+    if (acc.type === "CREDIT") {
+      await persistDerivedCardBills(account.id);
     }
   }
 

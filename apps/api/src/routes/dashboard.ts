@@ -6,10 +6,7 @@ import type { FinancialTransaction } from "../services/finance/types.js";
 import { effectiveTransactionCategory } from "../services/transactionCategory.js";
 import { serializeAccount } from "../services/serializeAccount.js";
 import { buildBillCyclesForUser } from "../services/finance/billCycles.js";
-import { resolveNextDueDate } from "../services/finance/creditBill.js";
-import { pickLatestClosedBill } from "../services/finance/creditBillSync.js";
-import { getPluggyClient } from "../services/pluggy.js";
-import { isPluggyConfigured } from "../env.js";
+import { loadCardBillSummaries, toAccountBillFields } from "../services/finance/derivedCardBills.js";
 import {
   buildCurrentCycleSummary,
   buildCyclePeriodSummary,
@@ -37,11 +34,6 @@ import { buildDashboardCycleSummary } from "../services/finance/householdCycleSu
 import { loadCardsForUser } from "../services/finance/creditCardBills.js";
 
 const MIN_PAYDAY_CYCLES_FETCH = 12;
-
-/** Datas de fatura vêm à meia-noite UTC, que no Brasil ainda é o dia anterior. */
-function atNoonUtc(date: Date): Date {
-  return new Date(`${date.toISOString().slice(0, 10)}T12:00:00.000Z`);
-}
 
 export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
@@ -162,30 +154,13 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     let bankBalance = 0;
     let creditDebt = 0;
 
-    const pluggy = isPluggyConfigured() ? getPluggyClient() : null;
-    const closedBillCache = new Map<string, { amount: number; dueDate: Date } | null>();
-
-    async function loadClosedBill(pluggyAccountId: string) {
-      if (closedBillCache.has(pluggyAccountId)) {
-        return closedBillCache.get(pluggyAccountId) ?? null;
-      }
-      if (!pluggy) {
-        closedBillCache.set(pluggyAccountId, null);
-        return null;
-      }
-      try {
-        const bills = await pluggy.fetchCreditCardBills(pluggyAccountId);
-        const closed = pickLatestClosedBill(bills.results ?? []);
-        const value = closed
-          ? { amount: closed.totalAmount, dueDate: atNoonUtc(new Date(closed.dueDate)) }
-          : null;
-        closedBillCache.set(pluggyAccountId, value);
-        return value;
-      } catch {
-        closedBillCache.set(pluggyAccountId, null);
-        return null;
-      }
-    }
+    const cardBills = await loadCardBillSummaries(
+      people.flatMap((person) =>
+        person.connections.flatMap((connection) =>
+          connection.accounts.filter((acc) => acc.type === "CREDIT"),
+        ),
+      ),
+    );
 
     for (const person of people) {
       let personBalance = 0;
@@ -199,27 +174,14 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
             bankBalance += acc.balance;
           }
 
-          const openBillDueDate =
-            acc.type === "CREDIT"
-              ? resolveNextDueDate(acc.balanceDueDate ? atNoonUtc(acc.balanceDueDate) : null)
-              : null;
-          const openBillAmount =
-            acc.type === "CREDIT" && Math.abs(acc.balance) > 0
-              ? Math.abs(acc.balance)
-              : null;
-
-          const closedBill =
-            acc.type === "CREDIT" ? await loadClosedBill(acc.pluggyAccountId) : null;
+          const bill = toAccountBillFields(cardBills.get(acc.id));
 
           accounts.push({
             ...serializeAccount({
               ...acc,
-              closedBillAmount: closedBill?.amount ?? null,
-              closedBillDueDate: closedBill?.dueDate ?? null,
-              openBillAmount,
-              openBillDueDate,
-              nextBillAmount: openBillAmount,
-              nextBillDueDate: openBillDueDate,
+              ...bill,
+              nextBillAmount: bill.openBillAmount,
+              nextBillDueDate: bill.openBillDueDate,
             }),
             personName: person.name,
           });
