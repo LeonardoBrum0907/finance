@@ -242,6 +242,23 @@ export {
 } from "./billPaidDate";
 export { selectByBillCycle, type BillCyclePeriod } from "./billCycleTransactions";
 export {
+  intervalProgress,
+  summarizeIntervalFlow,
+  type IntervalFlow,
+  type IntervalProgress,
+} from "./intervalFlow";
+export {
+  formatIntervalRef,
+  parseIntervalRef,
+  previousIntervalKey,
+  resolveBillInterval,
+  resolveMonthInterval,
+  selectIntervalTransactions,
+  type IntervalKind,
+  type IntervalRef,
+  type ResolvedInterval,
+} from "./interval";
+export {
   DASHBOARD_WIDGET_IDS,
   DASHBOARD_WIDGETS,
   DASHBOARD_WIDGET_GROUPS,
@@ -672,6 +689,8 @@ export interface DashboardPeriodSummary {
   committedExpenses?: number;
   /** Saldo disponível: net − committedExpenses. */
   availableNet?: number;
+  /** Salário que ainda vai cair no ciclo (já somado em availableNet, não em income). */
+  projectedSalaryIncome?: number;
   periodMode?: PeriodMode;
   from?: string;
   to?: string;

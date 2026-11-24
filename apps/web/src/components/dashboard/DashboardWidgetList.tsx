@@ -185,6 +185,7 @@ export function DashboardWidgetList({
               onCategorySelect={showTransactions ? onCategorySelect : undefined}
               personId={personFilter}
               availableNet={details.period.availableNet}
+              projectedSalaryIncome={details.period.projectedSalaryIncome}
             />
           )}
           {widgets.insights && (

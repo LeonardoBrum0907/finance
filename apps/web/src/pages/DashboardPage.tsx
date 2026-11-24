@@ -35,9 +35,11 @@ function summaryUrl(personId: PersonFilter, cycleKey?: string): string {
   return qs ? `/api/dashboard/summary?${qs}` : "/api/dashboard/summary";
 }
 
-function detailsUrl(personId: PersonFilter, cycleKey: string): string {
+function detailsUrl(personId: PersonFilter, cycleKey: string, billKey: string | null): string {
   const params = new URLSearchParams({ months: "1", periodMode: "payday", cycleKey });
   if (personId !== "all") params.set("personId", personId);
+  // Com fatura escolhida, o Painel do Período segue o mesmo ciclo da fatura da lista.
+  if (billKey) params.set("interval", `bill:${billKey}`);
   return `/api/dashboard?${params}`;
 }
 
@@ -126,6 +128,8 @@ export function DashboardPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bill-cycles"] });
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      // Pagar a fatura muda o fim do ciclo, e o Painel do Período segue esse ciclo.
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },
   });
 
@@ -184,9 +188,10 @@ export function DashboardPage() {
   const selectedCycle = data?.navigableCycles.find((c) => c.cycleKey === activeCycleKey);
   const simulationEnabled = Boolean(selectedCycle?.isCurrent);
 
+  const detailsBillKey = selectedBill ? billKey : null;
   const details = useQuery({
-    queryKey: ["dashboard", personId, activeCycleKey],
-    queryFn: () => api.get<DashboardSummary>(detailsUrl(personId, activeCycleKey!)),
+    queryKey: ["dashboard", personId, activeCycleKey, detailsBillKey],
+    queryFn: () => api.get<DashboardSummary>(detailsUrl(personId, activeCycleKey!, detailsBillKey)),
     enabled: Boolean(data?.household && activeCycleKey) && needsDashboardDetails(dashboardWidgets),
   });
 
