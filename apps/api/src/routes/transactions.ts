@@ -6,9 +6,11 @@ import {
   groupCategoryForDashboard,
   isTransactionOutflow,
   sanitizeFineGrainedCategory,
-  selectByBillCycle,
+  parseIntervalRef,
   selectByCycleDate,
-  type BillCyclePeriod,
+  selectIntervalTransactions,
+  summarizeIntervalFlow,
+  type IntervalRef,
   CARD_CHARGE_LOOKBACK_DAYS,
   updateTransactionCategorySchema,
 } from "@finance/shared";
@@ -23,7 +25,7 @@ import {
 import { loadUserSettings, resolvePaydayCycle, resolvePeriodMode } from "../services/userSettings.js";
 import { toTransactionDtoFields } from "../services/transactionCategory.js";
 import { loadCardsForUser } from "../services/finance/creditCardBills.js";
-import { buildBillCyclesForUser } from "../services/finance/billCycles.js";
+import { resolveIntervalForUser, type IntervalContext } from "../services/finance/interval.js";
 import { upsertCategoryMapping } from "../services/categoryMapping.js";
 import { recategorizeUserTransactions } from "../services/categoryPipeline.js";
 import {
@@ -66,22 +68,14 @@ function categoryLabel(tx: Pick<TransactionDTO, "category" | "description">): st
   return tx.category ?? "Outros";
 }
 
+/** Mesma soma do painel (`summarizeIntervalFlow`): lista e painel não divergem. */
 function computeSummary(items: TransactionDTO[]): {
   income: number;
   expenses: number;
   net: number;
 } {
-  let income = 0;
-  let expenses = 0;
-  for (const tx of items) {
-    if (!countsTowardCashFlow(tx.amount, tx.accountType, tx.category, tx.description, tx.personName)) {
-      continue;
-    }
-    const abs = Math.abs(tx.amount);
-    if (isTransactionOutflow(tx.amount, tx.accountType)) expenses += abs;
-    else income += abs;
-  }
-  return { income, expenses, net: income - expenses };
+  const { income, expenses, net } = summarizeIntervalFlow(items);
+  return { income, expenses, net };
 }
 
 /**
@@ -100,26 +94,14 @@ async function selectTransactionsForCycle<
 type CycleSelection =
   | { kind: "none" }
   | { kind: "payday"; from: string; to: string }
-  | { kind: "bill"; cycle: BillCyclePeriod };
+  | { kind: "interval"; context: IntervalContext };
 
-/** Ciclo da fatura escolhido no painel: período do pagamento anterior até o desta fatura. */
-async function resolveBillCyclePeriod(
-  userId: string,
-  personId: string | undefined,
-  billCycleKey: string,
-): Promise<BillCyclePeriod | null> {
-  const result = await buildBillCyclesForUser(userId, personId);
-  const cycle = result?.cycles.find((c) => c.cycleKey === billCycleKey);
-  if (!cycle) return null;
-  return { cycleKey: cycle.cycleKey, periodFrom: cycle.periodFrom, periodTo: cycle.periodTo };
-}
-
-async function selectTransactionsForBillCycle<
-  T extends { date: Date; amount: number; accountId: string; billForecastMonth: string | null; account: { type: string | null } },
->(userId: string, personId: string | undefined, txs: T[], cycle: BillCyclePeriod) {
-  const cards = await loadCardsForUser(userId, personId, []);
-  const withType = txs.map((tx) => ({ ...tx, accountType: tx.account.type }));
-  return selectByBillCycle(withType, cards, cycle);
+/** `interval` (fonte única) ou, das telas antigas, `billCycle=AAAA-MM`. */
+function requestedInterval(query: { interval?: string; billCycle?: string }): IntervalRef | null {
+  const ref = parseIntervalRef(query.interval);
+  if (ref) return ref;
+  const billCycle = query.billCycle?.trim();
+  return billCycle ? parseIntervalRef(`bill:${billCycle}`) : null;
 }
 
 export async function transactionRoutes(app: FastifyInstance): Promise<void> {
@@ -141,6 +123,8 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
       cycleKey?: string;
       /** Mês da fatura (AAAA-MM): a lista segue o ciclo da fatura do painel. */
       billCycle?: string;
+      /** Intervalo único do app (`bill:AAAA-MM` ou `month:AAAA-MM`). */
+      interval?: string;
     };
 
     const months = parseDashboardMonths(query.months);
@@ -160,14 +144,12 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
     const { paydayDay, paydayCycleAnchor } = await resolvePaydayCycle(userId, personId);
     const periodMode = resolvePeriodMode(query.periodMode, settings, paydayDay);
 
-    const billCycleKey = query.billCycle?.trim() || undefined;
-    const billCycle = billCycleKey
-      ? await resolveBillCyclePeriod(userId, personId, billCycleKey)
-      : null;
+    const intervalRef = requestedInterval(query);
+    const interval = intervalRef ? await resolveIntervalForUser(userId, personId, intervalRef) : null;
 
     let range: { from?: string; to?: string };
-    if (billCycle) {
-      range = { from: billCycle.periodFrom, to: billCycle.periodTo };
+    if (interval) {
+      range = { from: interval.current.from, to: interval.current.to };
     } else if (periodMode === "payday" && paydayDay !== null) {
       const periods = resolvePeriodRanges(
         months,
@@ -182,8 +164,8 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
       range = monthKeysToDateRange(monthKeys);
     }
 
-    const selection: CycleSelection = billCycle
-      ? { kind: "bill", cycle: billCycle }
+    const selection: CycleSelection = interval
+      ? { kind: "interval", context: interval }
       : periodMode === "payday" && paydayDay !== null && range.from && range.to
         ? { kind: "payday", from: range.from, to: range.to }
         : { kind: "none" };
@@ -226,8 +208,12 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
     });
 
     const transactions =
-      selection.kind === "bill"
-        ? await selectTransactionsForBillCycle(userId, personId, fetched, selection.cycle)
+      selection.kind === "interval"
+        ? selectIntervalTransactions(
+            fetched.map((tx) => ({ ...tx, accountType: tx.account.type })),
+            selection.context.cards,
+            selection.context.current,
+          )
         : selection.kind === "payday"
           ? await selectTransactionsForCycle(userId, personId, fetched, selection.from, selection.to)
           : fetched.map((tx) => ({ ...tx, billDueDate: null }));

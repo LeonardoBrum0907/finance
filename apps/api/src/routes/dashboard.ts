@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { accountNetWorthContribution, getRecentPaydayCycles, getPaydayCycleRange, getPaydayCycleRangeByKey, paydayCyclesToDateRange, isInvestmentAccount, isPaydayDayConfigured, toBillPaymentDates } from "@finance/shared";
+import { accountNetWorthContribution, getRecentPaydayCycles, parseIntervalRef, getPaydayCycleRange, getPaydayCycleRangeByKey, paydayCyclesToDateRange, isInvestmentAccount, isPaydayDayConfigured, toBillPaymentDates } from "@finance/shared";
 import { prisma } from "../prisma.js";
 import { authenticate } from "../auth.js";
 import type { FinancialTransaction } from "../services/finance/types.js";
@@ -32,6 +32,8 @@ import { sumPendingManagedEntriesInRange } from "../services/finance/managedAcco
 import { buildDashboardCycleForecasts } from "../services/finance/cycleForecasts.js";
 import { buildDashboardCycleSummary } from "../services/finance/householdCycleSummary.js";
 import { loadCardsForUser } from "../services/finance/creditCardBills.js";
+import { resolveIntervalForUser } from "../services/finance/interval.js";
+import { buildIntervalDashboard } from "../services/finance/intervalDashboard.js";
 
 const MIN_PAYDAY_CYCLES_FETCH = 12;
 
@@ -62,6 +64,8 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       personId?: string;
       periodMode?: string;
       cycleKey?: string;
+      /** Intervalo único do app (`bill:AAAA-MM` ou `month:AAAA-MM`). */
+      interval?: string;
     };
     const months = parseDashboardMonths(query.months);
     const personId = query.personId?.trim() || undefined;
@@ -421,6 +425,15 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
           : undefined,
     });
 
+    // Com o intervalo único, período, comparação, categorias e insights seguem ele.
+    const intervalRef = parseIntervalRef(query.interval);
+    const intervalContext = intervalRef
+      ? await resolveIntervalForUser(userId, personId, intervalRef)
+      : null;
+    const intervalView = intervalContext
+      ? buildIntervalDashboard(financialTransactions, intervalContext, currencyCode)
+      : null;
+
     const { investmentBalance, investments } = await loadInvestmentData(
       userId,
       personId,
@@ -471,6 +484,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
       previousCategories,
       growthMetrics,
       insights,
+      ...intervalView,
     });
   });
 
