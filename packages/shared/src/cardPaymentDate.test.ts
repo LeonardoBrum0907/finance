@@ -1,6 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { cardChargeDueDateKey, toBillPaymentDates, type CardPaymentCalendar } from "./cardPaymentDate.js";
+import {
+  cardChargeDueDateKey,
+  selectByCycleDate,
+  toBillPaymentDates,
+  type CardPaymentCalendar,
+} from "./cardPaymentDate.js";
 import { getPaydayCycleKey } from "./payday.js";
 
 const card: CardPaymentCalendar = {
@@ -52,5 +57,36 @@ describe("toBillPaymentDates", () => {
     assert.equal(getPaydayCycleKey(25, "start", compra!.date), "2026-11-25");
     assert.equal(pix!.date.toISOString().slice(0, 10), "2026-11-10");
     assert.equal(estorno!.date.toISOString().slice(0, 10), "2026-11-10");
+  });
+});
+
+describe("selectByCycleDate", () => {
+  const tx = (id: string, date: string, amount: number, accountType: string) => ({
+    id,
+    date: new Date(`${date}T15:00:00.000Z`),
+    amount,
+    accountId: accountType === "CREDIT" ? "cartao" : "conta",
+    accountType,
+    billForecastMonth: null,
+  });
+  // Período do salário de 25/11 a 24/12; a fatura de novembro vence em 28/11.
+  const txs = [
+    tx("compra-out", "2026-10-25", 80, "CREDIT"),
+    tx("compra-nov", "2026-11-19", 50, "CREDIT"),
+    tx("compra-dez", "2026-11-23", 30, "CREDIT"),
+    tx("pix", "2026-11-26", -40, "CHECKING"),
+    tx("pix-antigo", "2026-11-20", -10, "CHECKING"),
+  ];
+
+  it("keeps card purchases whose bill is due in the period, with the purchase date", () => {
+    const ids = selectByCycleDate(txs, [card], "2026-11-25", "2026-12-24").map((t) => t.id);
+    assert.deepEqual(ids, ["compra-out", "compra-nov", "pix"]);
+  });
+
+  it("tells the bill due date of card purchases only", () => {
+    const [compra, , pix] = selectByCycleDate(txs, [card], "2026-11-25", "2026-12-24");
+    assert.equal(compra!.billDueDate, "2026-11-28");
+    assert.equal(compra!.date.toISOString(), "2026-10-25T15:00:00.000Z");
+    assert.equal(pix!.billDueDate, null);
   });
 });

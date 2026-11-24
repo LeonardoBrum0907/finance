@@ -82,6 +82,11 @@ function categoryLabel(category: string | null): string {
   return category ?? "Outros";
 }
 
+/** "2026-11-28" → "28/11". */
+function formatDayMonthKey(dateKey: string): string {
+  return `${dateKey.slice(8, 10)}/${dateKey.slice(5, 7)}`;
+}
+
 function formatDateShort(iso: string): string {
   const date = new Date(iso);
   const day = String(date.getDate()).padStart(2, "0");
@@ -418,7 +423,10 @@ export function RecentTransactions({
                     </td>
                     <td className="px-4 py-3.5">
                       <span className="block font-bold text-foreground">{tx.description}</span>
-                      <span className="text-[10px] text-muted-foreground">{tx.accountName}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {tx.accountName}
+                        {tx.billDueDate && ` · fatura que vence ${formatDayMonthKey(tx.billDueDate)}`}
+                      </span>
                       {tx.commitmentSummary && (
                         <span className="mt-1 inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
                           {tx.commitmentSummary.title} · {tx.commitmentSummary.sequence}/

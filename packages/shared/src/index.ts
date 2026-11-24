@@ -213,6 +213,8 @@ export {
   cardChargeDueDateKey,
   dateKeyToNoonUtc,
   toBillPaymentDates,
+  selectByCycleDate,
+  CARD_CHARGE_LOOKBACK_DAYS,
   type CardPaymentCalendar,
 } from "./cardPaymentDate";
 export {
@@ -632,6 +634,8 @@ export interface TransactionDTO {
   personId: string;
   personName: string;
   commitmentSummary?: TransactionCommitmentSummary | null;
+  /** Compra no cartão: vencimento da fatura em que ela é paga (é por ele que entra no ciclo). */
+  billDueDate?: string | null;
 }
 
 export const updateTransactionCategorySchema = z.object({
