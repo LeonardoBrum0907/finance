@@ -8,7 +8,13 @@ server {
     # API_UPSTREAM vem do ambiente (padrão api:3333 no Dockerfile); o nginx:alpine
     # troca só as variáveis definidas, então $host e afins ficam intactos.
     location /api/ {
-        proxy_pass http://${API_UPSTREAM};
+        # Resolve o nome da API pelo DNS do Docker a cada 10 s e só em IPv4: a
+        # API escuta em 0.0.0.0, e na rede do Coolify o nome também tem IPv6,
+        # que dava "connection refused" na primeira tentativa. Resolver em
+        # tempo de execução também acompanha o IP novo quando a API reinicia.
+        resolver 127.0.0.11 ipv6=off valid=10s;
+        set $api_upstream http://${API_UPSTREAM};
+        proxy_pass $api_upstream;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
