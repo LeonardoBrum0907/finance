@@ -99,10 +99,17 @@ describe("buildIntervalDashboard", () => {
   });
 
   it("salário que ainda vai cair entra só no card de salário e no disponível", () => {
-    const view = buildIntervalDashboard(txs, { ...billContext(), projectedSalary: 1000 }, "BRL");
-    assert.equal(view.period.income, 4774.92);
-    assert.equal(view.growthMetrics.incomeBreakdown!.salary, 5424.92);
-    assert.equal(view.period.availableNet, view.period.net + 1000);
+    const semSalario = txs.filter((t) => t.id !== "salario-nov");
+    const view = buildIntervalDashboard(semSalario, { ...billContext(), projectedSalary: 4424.92 }, "BRL");
+    assert.equal(view.period.income, 350);
+    assert.equal(view.growthMetrics.incomeBreakdown!.salary, 4424.92);
+    assert.equal(view.period.availableNet, view.period.net + 4424.92);
+  });
+
+  it("não prevê de novo o salário já lançado com data futura", () => {
+    const view = buildIntervalDashboard(txs, { ...billContext(), projectedSalary: 4424.92 }, "BRL");
+    assert.equal(view.growthMetrics.incomeBreakdown!.salary, 4424.92);
+    assert.equal(view.period.availableNet, undefined);
   });
 });
 

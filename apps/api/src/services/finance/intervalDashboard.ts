@@ -109,10 +109,13 @@ export function buildIntervalDashboard(
   context: IntervalContext,
   currencyCode: string,
 ): IntervalDashboard {
-  const { current, previous, cards, projectedSalary } = context;
+  const { current, previous, cards } = context;
   const currentTxs = selectIntervalTransactions(txs, cards, current);
   const previousTxs = previous ? selectIntervalTransactions(txs, cards, previous) : [];
   const flow = summarizeIntervalFlow(currentTxs);
+  // O ciclo da fatura prevê o salário que ainda não está no saldo da conta; o Itaú
+  // lança o salário com data futura, e aí ele já está nas transações do intervalo.
+  const projectedSalary = flow.salary > 0 ? 0 : context.projectedSalary;
   const previousFlow = previous ? summarizeIntervalFlow(previousTxs) : null;
   const period = toPeriod(current, flow, projectedSalary);
   const previousPeriod = previous ? toPeriod(previous, previousFlow!, 0) : { ...EMPTY_FLOW, months: 1 };
