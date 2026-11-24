@@ -117,6 +117,18 @@ export function DashboardPage() {
     },
   });
 
+  const billPaidMutation = useMutation({
+    mutationFn: ({ cycleKey, paid }: { cycleKey: string; paid: boolean }) => {
+      const qs = personId === "all" ? "" : `?personId=${personId}`;
+      const url = `/api/bill-cycles/${cycleKey}/paid${qs}`;
+      return paid ? api.post(url, {}) : api.delete(url);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["bill-cycles"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+    },
+  });
+
   const billCycles = useQuery({
     queryKey: ["bill-cycles", personId],
     queryFn: () =>
@@ -152,7 +164,9 @@ export function DashboardPage() {
     () => (billResult ? billResult.cycles.filter((c) => paydayKeyForDue(c.dueDate)) : []),
     [billResult, paydayKeyForDue],
   );
-  const billKey = selectedBillKey ?? billResult?.currentCycleKey ?? null;
+  // Abre no ciclo em andamento: o da primeira fatura ainda não paga.
+  const openBillKey = billResult ? (billResult.openCycleKey ?? billResult.currentCycleKey) : null;
+  const billKey = selectedBillKey ?? openBillKey;
   const selectedBill = painelBillCycles.find((c) => c.cycleKey === billKey);
 
   useEffect(() => {
@@ -313,10 +327,13 @@ export function DashboardPage() {
         {billResult && painelBillCycles.length > 0 && (
           <BillCycleCard
             cycles={painelBillCycles}
-            currentCycleKey={billResult.currentCycleKey}
+            currentCycleKey={openBillKey ?? billResult.currentCycleKey}
             currencyCode={data.currencyCode}
             selectedKey={selectedBillKey}
             onSelect={setSelectedBillKey}
+            onMarkPaid={(cycleKey) => billPaidMutation.mutate({ cycleKey, paid: true })}
+            onUnmarkPaid={(cycleKey) => billPaidMutation.mutate({ cycleKey, paid: false })}
+            markingPaid={billPaidMutation.isPending}
           />
         )}
         <DashboardWidgetList
@@ -329,6 +346,7 @@ export function DashboardPage() {
           personFilter={effectivePersonId}
           personId={personId}
           activeCycleKey={activeCycleKey}
+          billCycleKey={selectedBill ? billKey : null}
           periodSummary={periodSummaryForTransactions}
           transactionsRef={transactionsRef}
           simulationEnabled={simulationEnabled}
