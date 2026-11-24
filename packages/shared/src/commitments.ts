@@ -64,6 +64,16 @@ export interface TransactionDetailDTO {
   personName: string;
   commitment: PaymentCommitmentDTO | null;
   commitmentSummary: TransactionCommitmentSummary | null;
+  /** Conta fixa ativa com a mesma descrição; null mostra o botão "Tornar conta fixa". */
+  recurringBill: TransactionRecurringBillDTO | null;
+}
+
+/** Resumo da conta fixa ligada a uma transação. */
+export interface TransactionRecurringBillDTO {
+  id: string;
+  title: string;
+  expectedAmount: number;
+  dayOfMonth: number;
 }
 
 export const createCommitmentSchema = z.object({

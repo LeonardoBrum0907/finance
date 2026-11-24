@@ -5,6 +5,7 @@ import type {
   PaymentInstallmentDTO,
   TransactionCommitmentSummary,
   TransactionDetailDTO,
+  TransactionRecurringBillDTO,
 } from "@finance/shared";
 import {
   descriptionMatchesPersonName,
@@ -430,6 +431,7 @@ export function toTransactionDetailFields(
   tx: TransactionWithAccount,
   category: string | null,
   commitment: CommitmentWithInstallments | null,
+  recurringBill: TransactionRecurringBillDTO | null = null,
 ): TransactionDetailDTO {
   const commitmentDto = commitment ? serializeCommitment(commitment) : null;
   const commitmentSummary =
@@ -452,6 +454,7 @@ export function toTransactionDetailFields(
     personName: tx.account.connection.person.name,
     commitment: commitmentDto,
     commitmentSummary,
+    recurringBill,
   };
 }
 

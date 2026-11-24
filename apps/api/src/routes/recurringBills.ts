@@ -8,6 +8,11 @@ import {
   runRecurringBillPipeline,
   updateRecurringBill,
 } from "../services/finance/recurringBills.js";
+import {
+  createRecurringBillFromTransaction,
+  TransactionNotBillableError,
+  TransactionNotFoundForBillError,
+} from "../services/finance/recurringBillFromTransaction.js";
 
 export async function recurringBillRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
@@ -27,6 +32,19 @@ export async function recurringBillRoutes(app: FastifyInstance): Promise<void> {
     const personId = query.personId?.trim() || undefined;
     const result = await runRecurringBillPipeline(request.user!.sub, personId);
     return reply.send(result);
+  });
+
+  /** "Tornar conta fixa" no detalhe da transação. */
+  app.post("/api/recurring-bills/from-transaction/:transactionId", async (request, reply) => {
+    const { transactionId } = request.params as { transactionId: string };
+    try {
+      const bill = await createRecurringBillFromTransaction(request.user!.sub, transactionId);
+      return reply.status(201).send(bill);
+    } catch (err) {
+      if (err instanceof TransactionNotFoundForBillError) return reply.status(404).send({ error: err.message });
+      if (err instanceof TransactionNotBillableError) return reply.status(400).send({ error: err.message });
+      throw err;
+    }
   });
 
   app.patch("/api/recurring-bills/:id", async (request, reply) => {

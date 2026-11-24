@@ -31,6 +31,7 @@ import {
   loadCommitmentSummariesForTransactions,
   toTransactionDetailFields,
 } from "../services/finance/commitments.js";
+import { findRecurringBillForTransaction } from "../services/finance/recurringBillFromTransaction.js";
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
 
@@ -333,9 +334,10 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
 
     const dto = toTransactionDtoFields(transaction);
     const commitment = await loadCommitmentForTransaction(userId, id);
+    const recurringBill = await findRecurringBillForTransaction(userId, transaction);
 
     return reply.send(
-      toTransactionDetailFields(transaction, dto.category, commitment),
+      toTransactionDetailFields(transaction, dto.category, commitment, recurringBill),
     );
   });
 
