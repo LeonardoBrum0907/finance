@@ -1,0 +1,60 @@
+# Compose para o Coolify (VPS nova). Diferente do docker-compose.yml:
+# - sem portas no host: o Traefik do Coolify recebe o domínio no serviço `web`;
+# - sem banco: a API usa o Postgres do Coolify (recurso finance-db), então a
+#   app precisa de "Connect to Predefined Network" ligado;
+# - nomes com prefixo finance- porque, na rede compartilhada do Coolify, um
+#   serviço chamado só `api` poderia colidir com o de outro projeto.
+# As variáveis ${...} aparecem na tela Environment Variables do Coolify.
+services:
+  finance-api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      WEB_ORIGIN: ${WEB_ORIGIN:?WEB_ORIGIN is required}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
+      SYNC_INTERVAL_HOURS: ${SYNC_INTERVAL_HOURS:-6}
+      PLUGGY_CLIENT_ID: ${PLUGGY_CLIENT_ID:-}
+      PLUGGY_CLIENT_SECRET: ${PLUGGY_CLIENT_SECRET:-}
+      AI_PROVIDER: ${AI_PROVIDER:-openai}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_FALLBACK_PROVIDER: ${AI_FALLBACK_PROVIDER:-}
+      AI_FALLBACK_MODEL: ${AI_FALLBACK_MODEL:-}
+      AI_MONTHLY_TOKEN_BUDGET: ${AI_MONTHLY_TOKEN_BUDGET:-300000}
+      AI_MAX_STEPS: ${AI_MAX_STEPS:-6}
+      AI_MAX_TOOL_CALLS: ${AI_MAX_TOOL_CALLS:-6}
+      AI_REQUEST_TIMEOUT_MS: ${AI_REQUEST_TIMEOUT_MS:-90000}
+      AI_REGENERATE_COOLDOWN_MS: ${AI_REGENERATE_COOLDOWN_MS:-5000}
+      AI_PROMPT_CACHE_ENABLED: ${AI_PROMPT_CACHE_ENABLED:-true}
+      AI_PROMPT_CACHE_KEY_PREFIX: ${AI_PROMPT_CACHE_KEY_PREFIX:-finance}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
+      PORT: 3333
+      NODE_ENV: production
+    healthcheck:
+      # A imagem node:alpine traz o wget do busybox.
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3333/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  finance-web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    environment:
+      API_UPSTREAM: finance-api:3333
+    depends_on:
+      finance-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6

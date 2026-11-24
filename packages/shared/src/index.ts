@@ -1239,3 +1239,5 @@ export {
   parseSyncIntervalHours,
   type SyncDueInput,
 } from "./syncSchedule";
+
+export { parseAllowRegistration, type RegistrationStatusDTO } from "./registration";

@@ -1,7 +1,7 @@
 import { config } from "dotenv";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { parseSyncIntervalHours } from "@finance/shared";
+import { parseAllowRegistration, parseSyncIntervalHours } from "@finance/shared";
 
 // Garante que o .env da API seja carregado mesmo quando o processo
 // é iniciado a partir da raiz do monorepo (pnpm dev).
@@ -27,6 +27,8 @@ export const env = {
   port: Number(process.env.PORT ?? 3333),
   webOrigin: process.env.WEB_ORIGIN ?? "http://localhost:5173",
   nodeEnv: process.env.NODE_ENV ?? "development",
+  /** ALLOW_REGISTRATION=false fecha o cadastro de contas novas. */
+  allowRegistration: parseAllowRegistration(process.env.ALLOW_REGISTRATION),
   pluggy: {
     clientId: process.env.PLUGGY_CLIENT_ID ?? "",
     clientSecret: process.env.PLUGGY_CLIENT_SECRET ?? "",

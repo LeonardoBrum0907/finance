@@ -63,6 +63,7 @@ Veja `apps/api/.env.example`. Principais:
 | `DATABASE_URL` | Conexão Postgres |
 | `JWT_SECRET` | Segredo para assinar a sessão (use um valor aleatório longo) |
 | `WEB_ORIGIN` | Origem do frontend (CORS) |
+| `ALLOW_REGISTRATION` | `false` fecha o cadastro de contas novas (vazio ou `true` deixa aberto) |
 | `PLUGGY_CLIENT_ID` / `PLUGGY_CLIENT_SECRET` | Credenciais da Pluggy |
 | `AI_PROVIDER` | `openai`, `anthropic` ou `google` |
 | `AI_MODEL` | Opcional; usa um padrão por provider se vazio |
@@ -122,6 +123,16 @@ docker compose --profile with-db --profile full up -d --build
 > `NODE_ENV=development` no `.env`.
 
 Webhook Pluggy em produção: `https://SEU_DOMINIO/api/pluggy/webhook`.
+
+### 3) Coolify
+
+Use `docker-compose.coolify.yml` (build pack Docker Compose). Ele não publica
+portas nem sobe banco: o Postgres é um recurso separado do Coolify (com backup
+agendado), então ligue **Connect to Predefined Network** na aplicação para a
+API alcançar o banco. O domínio vai só no serviço `finance-web` (porta 80); o
+nginx dele repassa `/api` para `finance-api:3333` (variável `API_UPSTREAM`).
+Obrigatórias: `DATABASE_URL` (URL interna do banco), `JWT_SECRET` e
+`WEB_ORIGIN`. `ALLOW_REGISTRATION` vem `false` nesse arquivo.
 
 ## Estrutura
 
