@@ -68,6 +68,8 @@ interface Props {
   onMarkPaid?: (cycleKey: string) => void;
   onUnmarkPaid?: (cycleKey: string) => void;
   markingPaid?: boolean;
+  /** No painel quem navega é o seletor de intervalo do topo: o card só mostra a fatura. */
+  hideArrows?: boolean;
 }
 
 export function BillCycleCard({
@@ -80,6 +82,7 @@ export function BillCycleCard({
   onMarkPaid,
   onUnmarkPaid,
   markingPaid = false,
+  hideArrows = false,
 }: Props) {
   const [localKey, setLocalKey] = useState<string | null>(null);
   const selectedKey = controlledKey !== undefined ? controlledKey : localKey;
@@ -120,7 +123,7 @@ export function BillCycleCard({
           role="group"
           aria-label="Navegar entre faturas"
         >
-          <button
+          {!hideArrows && <button
             type="button"
             disabled={index <= 0}
             onClick={() => setSelectedKey(cycles[index - 1]!.cycleKey)}
@@ -128,14 +131,14 @@ export function BillCycleCard({
             aria-label="Fatura anterior"
           >
             <ChevronLeft className="h-4 w-4" />
-          </button>
+          </button>}
           <div className="min-w-[11rem] px-2 text-center">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               {statusLabel(cycle, cycle.cycleKey === currentCycleKey)}
             </p>
             <p className="text-sm font-medium text-foreground">{billCycleLabel(cycle.cycleKey)}</p>
           </div>
-          <button
+          {!hideArrows && <button
             type="button"
             disabled={index >= cycles.length - 1}
             onClick={() => setSelectedKey(cycles[index + 1]!.cycleKey)}
@@ -143,7 +146,7 @@ export function BillCycleCard({
             aria-label="Próxima fatura"
           >
             <ChevronRight className="h-4 w-4" />
-          </button>
+          </button>}
         </div>
       </div>
 

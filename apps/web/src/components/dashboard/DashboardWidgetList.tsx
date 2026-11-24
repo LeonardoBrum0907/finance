@@ -35,8 +35,8 @@ interface Props {
   personFilter?: string;
   personId: PersonFilter;
   activeCycleKey: string | null;
-  /** Fatura escolhida no card "Ciclo da fatura" (AAAA-MM). */
-  billCycleKey?: string | null;
+  /** Intervalo único do app (`bill:AAAA-MM` ou `month:AAAA-MM`), o mesmo do painel. */
+  intervalParam?: string | null;
   periodSummary?: DashboardPeriodSummary;
   transactionsRef: RefObject<HTMLElement | null>;
   simulationEnabled: boolean;
@@ -72,7 +72,7 @@ export function DashboardWidgetList({
   personFilter,
   personId,
   activeCycleKey,
-  billCycleKey,
+  intervalParam,
   periodSummary,
   transactionsRef,
   simulationEnabled,
@@ -111,6 +111,8 @@ export function DashboardWidgetList({
     .filter((tile) => !hideCycleTiles || tile === "netWorth");
   const showPerPerson = widgets["per-person"];
   const showTransactions = widgets["recent-transactions"];
+  // Mês mostra "vs mês anterior"; ciclo da fatura, "vs ciclo anterior".
+  const intervalPeriodMode = intervalParam?.startsWith("month:") ? "calendar" : "payday";
   const detailsCycle = details?.recentCycles?.find((c) => c.cycleKey === activeCycleKey);
 
   return (
@@ -161,7 +163,7 @@ export function DashboardWidgetList({
               currencyCode={details.currencyCode}
               period={details.period}
               previousPeriod={details.previousPeriod}
-              periodMode="payday"
+              periodMode={intervalPeriodMode}
               personId={personFilter}
             />
           )}
@@ -180,7 +182,7 @@ export function DashboardWidgetList({
               categories={details.categories}
               previousCategories={details.previousCategories}
               periodLabel={details.period.label}
-              periodMode="payday"
+              periodMode={intervalPeriodMode}
               hideIncomeBreakdown={widgets["cycle-progress"]}
               onCategorySelect={showTransactions ? onCategorySelect : undefined}
               personId={personFilter}
@@ -202,7 +204,7 @@ export function DashboardWidgetList({
           dashboardMonths={1}
           periodMode="payday"
           cycleKey={activeCycleKey ?? undefined}
-          billCycleKey={billCycleKey ?? undefined}
+          intervalParam={intervalParam ?? undefined}
           periodSummary={periodSummary}
           categorySelection={categorySelection}
           onClearCategorySelection={onClearCategorySelection}
