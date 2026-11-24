@@ -49,6 +49,15 @@ function monthCycleKey(dateKey: string): string {
   return dateKey.slice(0, 7);
 }
 
+/**
+ * Valor pago no mês: em assinatura de valor variável é o total das cobranças do mês
+ * (dois planos da Anthropic no mesmo mês contam juntos); nas outras, a cobrança.
+ */
+function occurrenceAmount(candidate: RecurringPatternCandidate, tx: { date: string; amount: number }): number {
+  const cycleKey = monthCycleKey(toDateKey(new Date(tx.date)));
+  return candidate.monthTotals?.[cycleKey] ?? Math.abs(tx.amount);
+}
+
 /** Uma ocorrência por mês: se duas cobranças caem no mesmo mês, fica a mais recente. */
 function lastTxPerCycle<T extends { date: string }>(txs: T[]): T[] {
   const byCycle = new Map<string, T>();
@@ -469,7 +478,7 @@ export async function detectRecurringBills(
             billId: existing.id,
             cycleKey,
             dueDate: new Date(tx.date),
-            amount: Math.abs(tx.amount),
+            amount: occurrenceAmount(candidate, tx),
             status: "paid",
             transactionId: tx.id,
             paidAt: new Date(tx.date),
@@ -478,7 +487,7 @@ export async function detectRecurringBills(
             transactionId: tx.id,
             status: "paid",
             paidAt: new Date(tx.date),
-            amount: Math.abs(tx.amount),
+            amount: occurrenceAmount(candidate, tx),
           },
         });
       }
@@ -506,7 +515,7 @@ export async function detectRecurringBills(
           create: lastTxPerCycle(candidate.transactions).map((tx) => ({
             cycleKey: monthCycleKey(toDateKey(new Date(tx.date))),
             dueDate: new Date(tx.date),
-            amount: Math.abs(tx.amount),
+            amount: occurrenceAmount(candidate, tx),
             status: "paid",
             transactionId: tx.id,
             paidAt: new Date(tx.date),

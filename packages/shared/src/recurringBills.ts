@@ -5,6 +5,7 @@ import {
   groupCategoryForDashboard,
   type DashboardCategoryGroup,
 } from "./categoryGroups.js";
+import { findMonthlyTotalChain } from "./variableRecurringBills.js";
 import {
   isCreditAccount,
   isCreditCardBillPayment,
@@ -102,6 +103,11 @@ export interface RecurringPatternCandidate {
   accountId: string;
   personId: string;
   transactions: RecurringPatternTransaction[];
+  /**
+   * Só em assinatura de valor variável: total de cada mês (AAAA-MM). A ocorrência do
+   * mês guarda esse total, e não o valor da última cobrança.
+   */
+  monthTotals?: Record<string, number>;
 }
 
 const DEFAULT_AMOUNT_TOLERANCE_RATIO = 0.15;
@@ -410,19 +416,26 @@ function isMonthlyInterval(days: number): boolean {
   return days >= MIN_INTERVAL_DAYS && days <= MAX_INTERVAL_DAYS;
 }
 
+/**
+ * Valor que mais se repete. No empate fica o cobrado por último, para o resultado não
+ * depender da ordem em que o banco devolveu as transações (antes a Anthropic sumia ou
+ * aparecia conforme a ordem).
+ */
 function dominantAmount(txs: RecurringPatternTransaction[]): number {
-  const counts = new Map<number, number>();
+  const stats = new Map<number, { count: number; lastDate: string }>();
   for (const tx of txs) {
     const amount = roundMoney(Math.abs(tx.amount));
-    counts.set(amount, (counts.get(amount) ?? 0) + 1);
+    const date = toDateKey(tx.date);
+    const current = stats.get(amount) ?? { count: 0, lastDate: "" };
+    stats.set(amount, { count: current.count + 1, lastDate: date > current.lastDate ? date : current.lastDate });
   }
   let bestAmount = roundMoney(Math.abs(txs[txs.length - 1]!.amount));
-  let bestCount = 0;
-  for (const [amount, count] of counts) {
-    if (count > bestCount) {
-      bestCount = count;
-      bestAmount = amount;
-    }
+  let best = { count: 0, lastDate: "" };
+  for (const [amount, stat] of stats) {
+    const wins = stat.count > best.count || (stat.count === best.count && stat.lastDate > best.lastDate);
+    if (!wins) continue;
+    best = stat;
+    bestAmount = amount;
   }
   return bestAmount;
 }
@@ -574,31 +587,59 @@ export function detectRecurringPatterns(
   const candidates: RecurringPatternCandidate[] = [];
 
   for (const { signature, txs } of groups.values()) {
-    const chain = findLongestMonthlyChain(txs);
-    if (chain.length < MIN_OCCURRENCES) continue;
-
-    const lastTx = chain[chain.length - 1]!;
-    const titleTx =
-      [...chain]
-        .reverse()
-        .find((tx) => normalizeBillSignature(tx.description, tx.merchantName) === signature) ??
-      lastTx;
-    const dayOfMonth = new Date(`${toDateKey(lastTx.date)}T12:00:00.000Z`).getUTCDate();
-
-    candidates.push({
-      matchSignature: signature,
-      title: deriveTitle(titleTx.description, titleTx.merchantName),
-      payeeName: extractPayeeFromDescription(titleTx.description),
-      category: titleTx.category ?? null,
-      expectedAmount: roundMoney(Math.abs(lastTx.amount)),
-      dayOfMonth,
-      accountId: lastTx.accountId,
-      personId: lastTx.personId ?? "",
-      transactions: chain,
-    });
+    const candidate = buildCandidate(signature, txs);
+    if (candidate) candidates.push(candidate);
   }
 
   return candidates;
+}
+
+/**
+ * Prefere a soma por mês quando ela cobre mais cobranças que a sequência de valor
+ * estável: é o caso de quem alterna entre planos do mesmo serviço.
+ */
+function buildCandidate(
+  signature: string,
+  txs: RecurringPatternTransaction[],
+): RecurringPatternCandidate | null {
+  const stableChain = findLongestMonthlyChain(txs);
+  const variable = findMonthlyTotalChain(txs);
+  if (variable && variable.transactions.length > stableChain.length) {
+    const months = Object.keys(variable.monthTotals).sort();
+    const lastTotal = variable.monthTotals[months[months.length - 1]!]!;
+    return {
+      ...candidateFromChain(signature, variable.transactions),
+      expectedAmount: lastTotal,
+      monthTotals: variable.monthTotals,
+    };
+  }
+  if (stableChain.length < MIN_OCCURRENCES) return null;
+  return candidateFromChain(signature, stableChain);
+}
+
+function candidateFromChain(
+  signature: string,
+  chain: RecurringPatternTransaction[],
+): RecurringPatternCandidate {
+  const lastTx = chain[chain.length - 1]!;
+  const titleTx =
+    [...chain]
+      .reverse()
+      .find((tx) => normalizeBillSignature(tx.description, tx.merchantName) === signature) ??
+    lastTx;
+  const dayOfMonth = new Date(`${toDateKey(lastTx.date)}T12:00:00.000Z`).getUTCDate();
+
+  return {
+    matchSignature: signature,
+    title: deriveTitle(titleTx.description, titleTx.merchantName),
+    payeeName: extractPayeeFromDescription(titleTx.description),
+    category: titleTx.category ?? null,
+    expectedAmount: roundMoney(Math.abs(lastTx.amount)),
+    dayOfMonth,
+    accountId: lastTx.accountId,
+    personId: lastTx.personId ?? "",
+    transactions: chain,
+  };
 }
 
 export interface RecurringBillForSimulation {
