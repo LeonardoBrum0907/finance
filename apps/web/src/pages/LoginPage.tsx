@@ -2,9 +2,11 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { ApiError } from "../lib/api";
+import { useRegistrationOpen } from "../lib/registration";
 
 export function LoginPage() {
   const { login } = useAuth();
+  const registrationOpen = useRegistrationOpen();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -68,12 +70,14 @@ export function LoginPage() {
           </button>
         </form>
 
-        <p className="mt-4 text-center text-sm text-muted-foreground-dark">
-          Não tem conta?{" "}
-          <Link to="/register" className="font-medium text-brand hover:underline">
-            Cadastre-se
-          </Link>
-        </p>
+        {registrationOpen && (
+          <p className="mt-4 text-center text-sm text-muted-foreground-dark">
+            Não tem conta?{" "}
+            <Link to="/register" className="font-medium text-brand hover:underline">
+              Cadastre-se
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );

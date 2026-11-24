@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { loginSchema, registerSchema } from "@finance/shared";
+import { loginSchema, registerSchema, type RegistrationStatusDTO } from "@finance/shared";
+import { env } from "../env.js";
 import { prisma } from "../prisma.js";
 import {
   authenticate,
@@ -11,7 +12,17 @@ import {
 } from "../auth.js";
 
 export async function authRoutes(app: FastifyInstance): Promise<void> {
+  app.get("/api/auth/registration", async (_request, reply) => {
+    const status: RegistrationStatusDTO = { open: env.allowRegistration };
+    return reply.send(status);
+  });
+
   app.post("/api/auth/register", async (request, reply) => {
+    if (!env.allowRegistration) {
+      return reply
+        .code(403)
+        .send({ error: "Cadastro fechado neste servidor (ALLOW_REGISTRATION=false)" });
+    }
     const parsed = registerSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.issues[0]?.message });
