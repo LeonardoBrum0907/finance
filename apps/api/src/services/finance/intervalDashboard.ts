@@ -47,11 +47,16 @@ function toPeriod(interval: ResolvedInterval, flow: IntervalFlow, projectedSalar
     net: flow.net,
     availableNet: projectedSalary > 0 ? flow.net + projectedSalary : undefined,
     projectedSalaryIncome: projectedSalary,
-    periodMode: "payday",
+    periodMode: periodModeFor(interval),
     from: interval.from,
     to: interval.to,
     label: interval.label,
   };
+}
+
+// O texto da tela ("vs ciclo anterior" ou "vs mês anterior") segue o tipo do intervalo.
+function periodModeFor(interval: ResolvedInterval): "payday" | "calendar" {
+  return interval.kind === "month" ? "calendar" : "payday";
 }
 
 function percentChange(current: number, previous: number): number | null {
@@ -93,7 +98,7 @@ function categoryBlocks(
     previousCategories,
     topExpense: getTopExpenses(currentTxs, {}, 1)[0],
     currencyCode,
-    periodMode: "payday",
+    periodMode: periods.period.periodMode,
   });
   return { categories, previousCategories, insights };
 }
