@@ -47,6 +47,7 @@ export {
   type PaymentInstallmentDTO,
   type PaymentCommitmentDTO,
   type TransactionDetailDTO,
+  type TransactionRecurringBillDTO,
   type CreateCommitmentInput,
   type UpdateCommitmentInput,
 } from "./commitments";
@@ -64,6 +65,7 @@ export {
   amountTolerance,
   countMissedRecurringBillingCycles,
   extractPayeeFromDescription,
+  cleanMerchantTitle,
   shouldDeactivateStaleRecurringBill,
   shouldDismissAutoDetectedBill,
   parseInstallmentMarker,

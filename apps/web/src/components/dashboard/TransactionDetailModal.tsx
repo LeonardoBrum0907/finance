@@ -6,6 +6,7 @@ import { FINE_GRAINED_CATEGORIES, isTransactionOutflow, toSignedDisplayAmount } 
 import { api } from "../../lib/api";
 import { formatCurrency } from "../../lib/format";
 import { Modal } from "../Modal";
+import { RecurringBillSection } from "./RecurringBillSection";
 
 interface Props {
   transactionId: string | null;
@@ -302,6 +303,8 @@ export function TransactionDetailModal({ transactionId, onClose }: Props) {
               </div>
             </div>
           ) : isOutflow ? (
+            <div className="space-y-6">
+            <RecurringBillSection tx={tx} />
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
                 <p className="text-sm font-semibold text-foreground">
@@ -419,6 +422,7 @@ export function TransactionDetailModal({ transactionId, onClose }: Props) {
                 {createCommitment.isPending ? "Salvando…" : "Registrar compromisso"}
               </button>
             </form>
+            </div>
           ) : null}
         </div>
       )}
