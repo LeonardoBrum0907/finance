@@ -6,6 +6,8 @@ import {
   groupCategoryForDashboard,
   isTransactionOutflow,
   sanitizeFineGrainedCategory,
+  selectByCycleDate,
+  CARD_CHARGE_LOOKBACK_DAYS,
   updateTransactionCategorySchema,
 } from "@finance/shared";
 import { prisma } from "../prisma.js";
@@ -18,6 +20,7 @@ import {
 } from "../services/finance/aggregates.js";
 import { loadUserSettings, resolvePaydayCycle, resolvePeriodMode } from "../services/userSettings.js";
 import { toTransactionDtoFields } from "../services/transactionCategory.js";
+import { loadCardsForUser } from "../services/finance/creditCardBills.js";
 import { upsertCategoryMapping } from "../services/categoryMapping.js";
 import { recategorizeUserTransactions } from "../services/categoryPipeline.js";
 import {
@@ -78,6 +81,19 @@ function computeSummary(items: TransactionDTO[]): {
   return { income, expenses, net: income - expenses };
 }
 
+/**
+ * Mesma regra do painel no modo ciclo: compra no cartão conta pelo vencimento da
+ * fatura. Sem isso a lista mostrava só o que tinha data de compra no período e
+ * não batia com os totais (24/11/2026: 2 parcelas contra R$ 3.955,58 de gastos).
+ */
+async function selectTransactionsForCycle<
+  T extends { date: Date; amount: number; accountId: string; billForecastMonth: string | null; account: { type: string | null } },
+>(userId: string, personId: string | undefined, txs: T[], from: string, to: string) {
+  const cards = await loadCardsForUser(userId, personId, []);
+  const withType = txs.map((tx) => ({ ...tx, accountType: tx.account.type }));
+  return selectByCycleDate(withType, cards, from, to);
+}
+
 export async function transactionRoutes(app: FastifyInstance): Promise<void> {
   app.addHook("preHandler", authenticate);
 
@@ -129,10 +145,13 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
       range = monthKeysToDateRange(monthKeys);
     }
 
+    const byBillDue = periodMode === "payday" && paydayDay !== null && !!range.from && !!range.to;
     const dateFrom = range.from ? new Date(`${range.from}T00:00:00.000Z`) : new Date(0);
+    // No ciclo, a compra no cartão entra pelo vencimento da fatura: busca compras de antes do período.
+    if (byBillDue) dateFrom.setUTCDate(dateFrom.getUTCDate() - CARD_CHARGE_LOOKBACK_DAYS);
     const dateTo = range.to ? new Date(`${range.to}T23:59:59.999Z`) : new Date();
 
-    const transactions = await prisma.transaction.findMany({
+    const fetched = await prisma.transaction.findMany({
       where: {
         date: { gte: dateFrom, lte: dateTo },
         account: {
@@ -164,7 +183,14 @@ export async function transactionRoutes(app: FastifyInstance): Promise<void> {
       orderBy: { date: "desc" },
     });
 
-    const allDtos: TransactionDTO[] = transactions.map((tx) => toTransactionDtoFields(tx));
+    const transactions = byBillDue
+      ? await selectTransactionsForCycle(request.user!.sub, personId, fetched, range.from!, range.to!)
+      : fetched.map((tx) => ({ ...tx, billDueDate: null }));
+
+    const allDtos: TransactionDTO[] = transactions.map((tx) => ({
+      ...toTransactionDtoFields(tx),
+      billDueDate: tx.billDueDate,
+    }));
 
     const summaryMap = await loadCommitmentSummariesForTransactions(
       request.user!.sub,
