@@ -249,7 +249,9 @@ export {
 } from "./intervalFlow";
 export {
   formatIntervalRef,
+  nextIntervalKey,
   parseIntervalRef,
+  pickInterval,
   previousIntervalKey,
   resolveBillInterval,
   resolveMonthInterval,

@@ -49,11 +49,20 @@ export function formatIntervalRef(ref: IntervalRef): string {
   return `${ref.kind}:${ref.key}`;
 }
 
+function shiftMonthKey(key: string, delta: number): string {
+  const [y, m] = key.split("-").map(Number);
+  const index = y! * 12 + (m! - 1) + delta;
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
+}
+
 /** Mês anterior ao da chave. @example previousIntervalKey("2026-01") // "2025-12" */
 export function previousIntervalKey(key: string): string {
-  const [y, m] = key.split("-").map(Number);
-  const index = y! * 12 + (m! - 1) - 1;
-  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
+  return shiftMonthKey(key, -1);
+}
+
+/** Mês seguinte ao da chave. @example nextIntervalKey("2026-12") // "2027-01" */
+export function nextIntervalKey(key: string): string {
+  return shiftMonthKey(key, 1);
 }
 
 /** Mês do calendário inteiro. @example resolveMonthInterval("2026-02").to // "2026-02-28" */
@@ -113,4 +122,22 @@ export function selectIntervalTransactions<
       return date >= interval.from && date <= interval.to;
     })
     .map((tx) => ({ ...tx, billDueDate: null }));
+}
+
+/**
+ * Intervalo que a tela usa: a escolha da pessoa quando ela vale aqui, senão o padrão
+ * do tipo escolhido (ou do mês, quando não há ciclo da fatura). `defaults` traz a
+ * chave padrão de cada tipo; null quando o tipo não existe (sem cartão, sem fatura).
+ *
+ * @example pickInterval(null, { bill: "2026-11", month: "2026-11" }, () => true) // { kind: "bill", key: "2026-11" }
+ */
+export function pickInterval(
+  chosen: { kind: IntervalKind; key: string } | null,
+  defaults: Record<IntervalKind, string | null>,
+  isValid: (ref: IntervalRef) => boolean,
+): IntervalRef | null {
+  if (chosen?.key && defaults[chosen.kind] && isValid(chosen)) return { kind: chosen.kind, key: chosen.key };
+  const kind: IntervalKind = defaults[chosen?.kind ?? "bill"] ? (chosen?.kind ?? "bill") : "month";
+  const key = defaults[kind];
+  return key ? { kind, key } : null;
 }
