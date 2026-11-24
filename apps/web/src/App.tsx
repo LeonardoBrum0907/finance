@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./lib/auth";
 import { Layout } from "./components/Layout";
+import { IntervalProvider } from "./lib/interval";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -35,6 +36,7 @@ export default function App() {
   }
 
   return (
+    <IntervalProvider>
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<DashboardPage />} />
@@ -49,5 +51,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>
+    </IntervalProvider>
   );
 }

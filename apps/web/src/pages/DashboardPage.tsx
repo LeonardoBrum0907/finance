@@ -26,6 +26,8 @@ import { DashboardSkeleton } from "../components/dashboard/DashboardSkeleton";
 import { DashboardWidgetList } from "../components/dashboard/DashboardWidgetList";
 import { PersonSelector, type PersonFilter } from "../components/dashboard/PersonSelector";
 import { useAssistant } from "../lib/assistantContext";
+import { IntervalSelector } from "../components/dashboard/IntervalSelector";
+import { useDashboardInterval } from "../hooks/useDashboardInterval";
 
 function summaryUrl(personId: PersonFilter, cycleKey?: string): string {
   const params = new URLSearchParams();
@@ -35,11 +37,11 @@ function summaryUrl(personId: PersonFilter, cycleKey?: string): string {
   return qs ? `/api/dashboard/summary?${qs}` : "/api/dashboard/summary";
 }
 
-function detailsUrl(personId: PersonFilter, cycleKey: string, billKey: string | null): string {
+function detailsUrl(personId: PersonFilter, cycleKey: string, interval: string | null): string {
   const params = new URLSearchParams({ months: "1", periodMode: "payday", cycleKey });
   if (personId !== "all") params.set("personId", personId);
-  // Com fatura escolhida, o Painel do Período segue o mesmo ciclo da fatura da lista.
-  if (billKey) params.set("interval", `bill:${billKey}`);
+  // O Painel do Período segue o intervalo único (o mesmo da lista).
+  if (interval) params.set("interval", interval);
   return `/api/dashboard?${params}`;
 }
 
@@ -54,7 +56,6 @@ export function DashboardPage() {
   const queryClient = useQueryClient();
   const [personId, setPersonId] = useState<PersonFilter>("all");
   const [selectedCycleKey, setSelectedCycleKey] = useState<string | null>(null);
-  const [selectedBillKey, setSelectedBillKey] = useState<string | null>(null);
   const [simulateModalOpen, setSimulateModalOpen] = useState(false);
   const [categorySelection, setCategorySelection] = useState<CategoryChartSelection | null>(null);
   const transactionsRef = useRef<HTMLElement>(null);
@@ -153,7 +154,6 @@ export function DashboardPage() {
 
   useEffect(() => {
     setSelectedCycleKey(null);
-    setSelectedBillKey(null);
   }, [personId]);
 
   // O painel segue o ciclo da fatura: cada fatura mostra o ciclo de salário em que ela vence.
@@ -170,7 +170,9 @@ export function DashboardPage() {
   );
   // Abre no ciclo em andamento: o da primeira fatura ainda não paga.
   const openBillKey = billResult ? (billResult.openCycleKey ?? billResult.currentCycleKey) : null;
-  const billKey = selectedBillKey ?? openBillKey;
+  // Fonte única do intervalo: fatura e mês usam a mesma chave AAAA-MM (mês do vencimento).
+  const interval = useDashboardInterval(painelBillCycles, openBillKey);
+  const billKey = interval.current?.key ?? null;
   const selectedBill = painelBillCycles.find((c) => c.cycleKey === billKey);
 
   useEffect(() => {
@@ -188,10 +190,9 @@ export function DashboardPage() {
   const selectedCycle = data?.navigableCycles.find((c) => c.cycleKey === activeCycleKey);
   const simulationEnabled = Boolean(selectedCycle?.isCurrent);
 
-  const detailsBillKey = selectedBill ? billKey : null;
   const details = useQuery({
-    queryKey: ["dashboard", personId, activeCycleKey, detailsBillKey],
-    queryFn: () => api.get<DashboardSummary>(detailsUrl(personId, activeCycleKey!, detailsBillKey)),
+    queryKey: ["dashboard", personId, activeCycleKey, interval.param],
+    queryFn: () => api.get<DashboardSummary>(detailsUrl(personId, activeCycleKey!, interval.param)),
     enabled: Boolean(data?.household && activeCycleKey) && needsDashboardDetails(dashboardWidgets),
   });
 
@@ -265,7 +266,19 @@ export function DashboardPage() {
           </p>
         </div>
         {data && data.accounts.length > 0 && (
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
+            {interval.current && (
+              <IntervalSelector
+                kind={interval.current.kind}
+                label={interval.label}
+                rangeLabel={interval.rangeLabel}
+                billAvailable={interval.billAvailable}
+                canGoBack={interval.canGoBack}
+                canGoForward={interval.canGoForward}
+                onKindChange={interval.onKindChange}
+                onStep={interval.onStep}
+              />
+            )}
             <PersonSelector
               value={personId}
               people={people.data ?? []}
@@ -329,13 +342,14 @@ export function DashboardPage() {
         </div>
       ) : (
         <>
-        {billResult && painelBillCycles.length > 0 && (
+        {billResult && selectedBill && (
           <BillCycleCard
             cycles={painelBillCycles}
             currentCycleKey={openBillKey ?? billResult.currentCycleKey}
             currencyCode={data.currencyCode}
-            selectedKey={selectedBillKey}
-            onSelect={setSelectedBillKey}
+            selectedKey={selectedBill.cycleKey}
+            onSelect={interval.onSelectKey}
+            hideArrows
             onMarkPaid={(cycleKey) => billPaidMutation.mutate({ cycleKey, paid: true })}
             onUnmarkPaid={(cycleKey) => billPaidMutation.mutate({ cycleKey, paid: false })}
             markingPaid={billPaidMutation.isPending}
@@ -351,7 +365,7 @@ export function DashboardPage() {
           personFilter={effectivePersonId}
           personId={personId}
           activeCycleKey={activeCycleKey}
-          billCycleKey={selectedBill ? billKey : null}
+          intervalParam={interval.param}
           periodSummary={periodSummaryForTransactions}
           transactionsRef={transactionsRef}
           simulationEnabled={simulationEnabled}

@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   formatIntervalRef,
   parseIntervalRef,
+  nextIntervalKey,
+  pickInterval,
   previousIntervalKey,
   resolveBillInterval,
   resolveMonthInterval,
@@ -62,6 +64,7 @@ describe("resolução do intervalo", () => {
   it("mês anterior atravessa o ano", () => {
     assert.equal(previousIntervalKey("2026-01"), "2025-12");
     assert.equal(previousIntervalKey("2026-11"), "2026-10");
+    assert.equal(nextIntervalKey("2026-12"), "2027-01");
   });
 });
 
@@ -84,5 +87,36 @@ describe("selectIntervalTransactions", () => {
   it("no mês, a compra entra pela data da compra", () => {
     const ids = selectIntervalTransactions(txs, [card], resolveMonthInterval("2026-11")).map((t) => t.id);
     assert.deepEqual(ids, ["salario", "compra-nov-23"]);
+  });
+});
+
+describe("pickInterval", () => {
+  const defaults = { bill: "2026-11", month: "2026-11" };
+  const always = () => true;
+
+  it("sem escolha, abre no ciclo da fatura", () => {
+    assert.deepEqual(pickInterval(null, defaults, always), { kind: "bill", key: "2026-11" });
+  });
+
+  it("mantém a escolha válida", () => {
+    assert.deepEqual(pickInterval({ kind: "month", key: "2026-09" }, defaults, always), { kind: "month", key: "2026-09" });
+  });
+
+  it("escolha sem mês usa o padrão do tipo", () => {
+    assert.deepEqual(pickInterval({ kind: "month", key: "" }, { ...defaults, month: "2026-12" }, always), {
+      kind: "month",
+      key: "2026-12",
+    });
+  });
+
+  it("fatura que não existe volta para a fatura padrão", () => {
+    assert.deepEqual(pickInterval({ kind: "bill", key: "2020-01" }, defaults, () => false), { kind: "bill", key: "2026-11" });
+  });
+
+  it("sem cartão, cai no mês", () => {
+    assert.deepEqual(pickInterval({ kind: "bill", key: "2026-11" }, { bill: null, month: "2026-11" }, always), {
+      kind: "month",
+      key: "2026-11",
+    });
   });
 });

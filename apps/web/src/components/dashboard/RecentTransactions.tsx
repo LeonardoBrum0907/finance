@@ -44,8 +44,8 @@ interface Props {
   dashboardMonths: DashboardMonths;
   periodMode?: PeriodMode;
   cycleKey?: string;
-  /** Mês da fatura (AAAA-MM): a lista segue o ciclo da fatura escolhido no painel. */
-  billCycleKey?: string;
+  /** Intervalo único do painel (`bill:AAAA-MM` ou `month:AAAA-MM`): a lista segue ele. */
+  intervalParam?: string;
   /** Resumo alinhado ao ciclo (modo payday); usado no rodapé sem filtros ativos. */
   periodSummary?: DashboardPeriodSummary;
   categorySelection?: CategoryChartSelection | null;
@@ -121,7 +121,7 @@ function buildTransactionsUrl(
   categorySelection: CategoryChartSelection | null | undefined,
   periodMode?: PeriodMode,
   cycleKey?: string,
-  billCycleKey?: string,
+  intervalParam?: string,
 ): string {
   const params = new URLSearchParams({
     months: String(periodMonths),
@@ -135,7 +135,7 @@ function buildTransactionsUrl(
     params.set("periodMode", "payday");
     if (cycleKey) params.set("cycleKey", cycleKey);
   }
-  if (billCycleKey) params.set("billCycle", billCycleKey);
+  if (intervalParam) params.set("interval", intervalParam);
 
   if (categorySelection?.kind === "merged") {
     params.set("categoryGroups", categorySelection.groups.join(","));
@@ -155,7 +155,7 @@ export function RecentTransactions({
   dashboardMonths,
   periodMode = "calendar",
   cycleKey,
-  billCycleKey,
+  intervalParam,
   periodSummary,
   categorySelection = null,
   onClearCategorySelection,
@@ -199,12 +199,12 @@ export function RecentTransactions({
 
   useEffect(() => {
     setPage(1);
-  }, [periodMonths, personId, debouncedSearch, categoryFilter, typeFilter, pageSize, categorySelection, periodMode, cycleKey, billCycleKey]);
+  }, [periodMonths, personId, debouncedSearch, categoryFilter, typeFilter, pageSize, categorySelection, periodMode, cycleKey, intervalParam]);
 
   const showPersonColumn = personId === "all";
   const syncedWithDashboard = periodMonths === dashboardMonths;
-  // Trocou o período na lista: sai do ciclo da fatura e volta para os meses escolhidos.
-  const activeBillCycle = syncedWithDashboard ? billCycleKey : undefined;
+  // Trocou o período na lista: sai do intervalo do painel e volta para os meses escolhidos.
+  const activeInterval = syncedWithDashboard ? intervalParam : undefined;
   const hidePeriodSelector = periodMode === "payday" && cycleKey != null && syncedWithDashboard;
   const hasChartCategoryFilter = categorySelection != null;
 
@@ -236,7 +236,7 @@ export function RecentTransactions({
       categorySelection,
       periodMode,
       cycleKey,
-      activeBillCycle,
+      activeInterval,
     ],
     queryFn: () =>
       api.get<TransactionsListResponse>(
@@ -251,7 +251,7 @@ export function RecentTransactions({
           categorySelection,
           periodMode,
           cycleKey,
-          activeBillCycle,
+          activeInterval,
         ),
       ),
   });
@@ -265,7 +265,7 @@ export function RecentTransactions({
 
   // No ciclo da fatura, o rodapé soma a própria lista (o resumo do painel é do ciclo de salário).
   const useCyclePeriodSummary = Boolean(
-    !activeBillCycle &&
+    !activeInterval &&
       periodSummary &&
       periodMode === "payday" &&
       syncedWithDashboard &&
@@ -313,8 +313,10 @@ export function RecentTransactions({
               {syncedWithDashboard && (
                 <span className="ml-1.5 text-slate-300">
                   ·{" "}
-                  {activeBillCycle
-                    ? "Mesmo ciclo da fatura do painel"
+                  {activeInterval
+                    ? activeInterval.startsWith("month:")
+                      ? "Mesmo mês do painel"
+                      : "Mesmo ciclo da fatura do painel"
                     : cycleKey
                       ? "Mesmo ciclo do painel"
                       : "Mesmo período do painel"}
