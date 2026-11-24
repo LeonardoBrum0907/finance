@@ -5,11 +5,13 @@ import {
   isInvestmentAccount,
   isTransactionOutflow,
   managedAccountToSimulatedPurchase,
+  resolveExpectedSalary,
   toLocalDateKey,
   todayDateKeyInTimeZone,
   type BillCycleCardItem,
   type BillCycleScheduledItem,
   type BillCyclesResult,
+  type SalaryEntry,
 } from "@finance/shared";
 import { prisma } from "../../prisma.js";
 import { resolvePaydayCycle } from "../userSettings.js";
@@ -20,32 +22,17 @@ import type { FinancialTransaction } from "./types.js";
 
 const HISTORY_MONTHS = 6;
 const SALARY_CATEGORY = "Salário";
-/** Salários lançados em até 4 dias um do outro contam como o mesmo pagamento. */
-const SALARY_GROUP_DAYS = 4;
 
-function daysBetween(a: string, b: string): number {
-  return Math.abs(
-    Math.round((Date.parse(`${b}T12:00:00.000Z`) - Date.parse(`${a}T12:00:00.000Z`)) / 86_400_000),
-  );
-}
-
-/** Último salário recebido (somando lançamentos do mesmo pagamento) e as datas recebidas. */
-function resolveSalary(txs: FinancialTransaction[]): { amount: number; dates: string[] } {
-  const salaries = txs
+/** Entradas na conta com categoria Salário (inclusive as já lançadas com data futura). */
+function salaryEntries(txs: FinancialTransaction[]): SalaryEntry[] {
+  return txs
     .filter(
       (tx) =>
         !isCreditAccount(tx.accountType) &&
         !isTransactionOutflow(tx.amount, tx.accountType) &&
         tx.category === SALARY_CATEGORY,
     )
-    .map((tx) => ({ date: toLocalDateKey(tx.date), amount: Math.abs(tx.amount) }))
-    .sort((a, b) => b.date.localeCompare(a.date));
-  if (salaries.length === 0) return { amount: 0, dates: [] };
-  const latest = salaries[0]!.date;
-  const amount = salaries
-    .filter((s) => daysBetween(s.date, latest) <= SALARY_GROUP_DAYS)
-    .reduce((sum, s) => sum + s.amount, 0);
-  return { amount: Math.round(amount * 100) / 100, dates: salaries.map((s) => s.date) };
+    .map((tx) => ({ date: toLocalDateKey(tx.date), amount: Math.abs(tx.amount) }));
 }
 
 export async function buildBillCyclesForUser(
@@ -153,14 +140,14 @@ export async function buildBillCyclesForUser(
     }
   }
 
-  const salary = resolveSalary(txs);
+  const salary = resolveExpectedSalary(salaryEntries(txs), today);
 
   return buildBillCycles({
     today,
     bankBalance: Math.round(bankBalance * 100) / 100,
     paydayDay,
     expectedSalary: salary.amount,
-    salaryReceivedDates: salary.dates,
+    salaryReceivedDates: salary.receivedDates,
     cards,
     checkingPayments: txs
       .filter((tx) => !isCreditAccount(tx.accountType))
