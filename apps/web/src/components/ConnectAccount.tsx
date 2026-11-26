@@ -118,7 +118,7 @@ export function ConnectAccount({ people }: Props) {
   if (people.length === 0) {
     return (
       <div className="rounded-lg border border-app-border bg-app-surface p-4 text-sm text-muted-foreground-dark">
-        Cadastre uma pessoa na aba <strong>Pessoas</strong> antes de conectar uma conta.
+        Cadastre uma pessoa acima antes de conectar uma conta.
       </div>
     );
   }

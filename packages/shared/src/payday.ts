@@ -4,6 +4,7 @@ import {
   dashboardWidgetsPatchSchema,
   type DashboardWidgetsState,
 } from "./dashboardWidgets";
+import { appModulesPatchSchema, type AppModulesState } from "./appModules";
 import { countsTowardCashFlow, isTransactionOutflow } from "./transactions";
 
 
@@ -49,6 +50,7 @@ export const updateSettingsSchema = z.object({
   includeInvestmentsInNetWorth: z.boolean().optional(),
   theme: appThemeSchema.optional(),
   dashboardWidgets: dashboardWidgetsPatchSchema.optional(),
+  modules: appModulesPatchSchema.optional(),
 });
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
 
@@ -59,6 +61,7 @@ export interface UserSettingsDTO {
   includeInvestmentsInNetWorth: boolean;
   theme: AppTheme;
   dashboardWidgets: DashboardWidgetsState;
+  modules: AppModulesState;
 }
 
 

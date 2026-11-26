@@ -58,7 +58,7 @@ export function DashboardWidgetsSettings() {
         Painel
       </p>
       <p className="mb-4 text-xs text-muted-foreground">
-        Escolha quais blocos aparecem no painel. A seleção é salva na sua conta.
+        Escolha quais blocos aparecem no Início. A seleção é salva na sua conta.
       </p>
       <div className="space-y-5">
         {DASHBOARD_WIDGET_GROUPS.map((group) => (

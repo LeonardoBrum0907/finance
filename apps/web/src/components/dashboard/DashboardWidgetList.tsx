@@ -97,8 +97,8 @@ export function DashboardWidgetList({
         <p className="text-sm font-medium text-foreground/90">Nenhum bloco ativo no painel</p>
         <p className="mt-1 text-sm text-muted-foreground-dark">
           Ative os blocos que você quer ver em{" "}
-          <a href="/configuracoes" className="font-medium text-brand underline">
-            Configurações
+          <a href="/configuracoes?aba=inicio" className="font-medium text-brand underline">
+            Ajustes
           </a>
           .
         </p>

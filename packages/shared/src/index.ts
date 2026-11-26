@@ -275,6 +275,19 @@ export {
   type DashboardWidgetsState,
 } from "./dashboardWidgets";
 export {
+  APP_MODULE_IDS,
+  APP_MODULES,
+  appModulesPatchSchema,
+  isAppModuleId,
+  mergeAppModulesPatch,
+  parseStoredAppModules,
+  resolveAppModules,
+  type AppModuleDefinition,
+  type AppModuleId,
+  type AppModulesPatch,
+  type AppModulesState,
+} from "./appModules";
+export {
   PERIOD_MODES,
   periodModeSchema,
   PAYDAY_CYCLE_ANCHORS,

@@ -5,6 +5,7 @@ import {
   parseAppTheme,
   parsePaydayCycleAnchor,
   parsePeriodMode,
+  resolveAppModules,
   resolveDashboardWidgets,
 } from "@finance/shared";
 import { prisma } from "../prisma.js";
@@ -24,6 +25,7 @@ export async function loadUserSettings(userId: string): Promise<UserSettingsDTO>
         includeInvestmentsInNetWorth: true,
         theme: true,
         dashboardWidgets: true,
+        modules: true,
       },
     }),
     prisma.person.findMany({
@@ -45,6 +47,7 @@ export async function loadUserSettings(userId: string): Promise<UserSettingsDTO>
     includeInvestmentsInNetWorth: user.includeInvestmentsInNetWorth,
     theme: parseAppTheme(user.theme),
     dashboardWidgets: resolveDashboardWidgets(user.dashboardWidgets),
+    modules: resolveAppModules(user.modules),
   };
 }
 

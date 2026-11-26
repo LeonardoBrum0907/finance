@@ -84,7 +84,7 @@ export function InvestmentDataNotice({
             </p>
           ) : (
             <p className="mt-1 text-muted-foreground-dark">
-              Sincronize em <strong>Contas</strong> para atualizar. Posições
+              Sincronize em <strong>Ajustes</strong> para atualizar. Posições
               resgatadas ou com saldo zerado não entram na carteira.
             </p>
           )}

@@ -1,33 +1,28 @@
 import { NavLink } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import {
-   Calculator,
-   Landmark,
+   CalendarCheck,
    LayoutDashboard,
    LineChart,
    LogOut,
    MessageSquare,
-   PieChart,
    Settings,
-   TrendingUp,
-   Users,
 } from "lucide-react";
+import type { AppModuleId } from "@finance/shared";
 import { useAuth } from "../lib/auth";
+import { useAppModules } from "../lib/modules";
 
 type NavItem =
-   | { label: string; icon: LucideIcon; to: string; end?: boolean }
+   | { label: string; icon: LucideIcon; to: string; end?: boolean; module?: AppModuleId }
    | { label: string; icon: LucideIcon; comingSoon: true };
 
+/** Núcleo sempre visível; itens com `module` só aparecem com o módulo ligado em Ajustes. */
 const navItems: NavItem[] = [
-   { label: "Painel", icon: LayoutDashboard, to: "/", end: true },
-   { label: "Investimentos", icon: LineChart, to: "/investimentos" },
-   { label: "Assistente", icon: MessageSquare, to: "/chat" },
-   { label: "Orçamentos", icon: PieChart, to: "/orcamentos" },
-   { label: "Compromissos", icon: Calculator, to: "/simulador" },
-   { label: "Objetivos e Planos", icon: TrendingUp, to: "/objetivos" },
-   { label: "Pessoas", icon: Users, to: "/pessoas" },
-   { label: "Contas", icon: Landmark, to: "/contas" },
-   { label: "Configurações", icon: Settings, to: "/configuracoes" },
+   { label: "Início", icon: LayoutDashboard, to: "/", end: true },
+   { label: "Compromissos", icon: CalendarCheck, to: "/compromissos" },
+   { label: "Investimentos", icon: LineChart, to: "/investimentos", module: "investments" },
+   { label: "Assistente", icon: MessageSquare, to: "/chat", module: "assistant" },
+   { label: "Ajustes", icon: Settings, to: "/configuracoes" },
 ];
 
 function NavItemLink({ item }: { item: Extract<NavItem, { to: string }> }) {
@@ -73,6 +68,10 @@ function NavItemPlaceholder({ item }: { item: Extract<NavItem, { comingSoon: tru
 
 export function Sidebar() {
    const { user, logout } = useAuth();
+   const { modules } = useAppModules();
+   const visibleItems = navItems.filter(
+      (item) => "comingSoon" in item || !item.module || modules[item.module],
+   );
    const initials = user?.name
       ?.split(" ")
       .map((part) => part[0])
@@ -117,7 +116,7 @@ export function Sidebar() {
 
          <nav className="mt-8 min-h-0 flex-1 overflow-y-auto">
             <div className="flex flex-col gap-1.5 pr-1">
-               {navItems.map((item) =>
+               {visibleItems.map((item) =>
                   "comingSoon" in item ? (
                      <NavItemPlaceholder key={item.label} item={item} />
                   ) : (
@@ -136,9 +135,6 @@ export function Sidebar() {
                   </div>
                   <div className="min-w-0 flex-1">
                      <p className="truncate text-sm font-semibold text-white">{user.name}</p>
-                     <p className="truncate font-mono text-[10px] font-medium uppercase tracking-wide text-accent">
-                        Conta Pro
-                     </p>
                      <p className="truncate text-[10px] text-muted-foreground-light">{user.email}</p>
                   </div>
                </div>

@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import {
   updateSettingsSchema,
   isPaydayDayConfigured,
+  mergeAppModulesPatch,
   mergeDashboardWidgetPatch,
 } from "@finance/shared";
 import { prisma } from "../prisma.js";
@@ -29,11 +30,12 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       includeInvestmentsInNetWorth,
       theme,
       dashboardWidgets,
+      modules,
     } = parsed.data;
 
     const currentUser = await prisma.user.findUnique({
       where: { id: userId },
-      select: { paydayDay: true, dashboardWidgets: true },
+      select: { paydayDay: true, dashboardWidgets: true, modules: true },
     });
 
     if (defaultPeriodMode === "payday") {
@@ -67,6 +69,9 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
                 dashboardWidgets,
               ),
             }
+          : {}),
+        ...(modules !== undefined
+          ? { modules: mergeAppModulesPatch(currentUser?.modules, modules) }
           : {}),
       },
     });

@@ -281,7 +281,7 @@ export function DashboardPage() {
             <>
               Configure o dia de recebimento desta pessoa em{" "}
               <a href="/configuracoes" className="font-medium underline">
-                Configurações
+                Ajustes
               </a>{" "}
               para ver o painel por ciclo.
             </>
@@ -290,7 +290,7 @@ export function DashboardPage() {
               Na visão de todas as pessoas, o ciclo só funciona quando todos têm o mesmo dia de
               pagamento. Selecione uma pessoa ou ajuste em{" "}
               <a href="/configuracoes" className="font-medium underline">
-                Configurações
+                Ajustes
               </a>
               .
             </>
@@ -298,7 +298,7 @@ export function DashboardPage() {
             <>
               Configure o dia de recebimento em{" "}
               <a href="/configuracoes" className="font-medium underline">
-                Configurações
+                Ajustes
               </a>{" "}
               para ver o painel por ciclo.
             </>
@@ -318,7 +318,7 @@ export function DashboardPage() {
             Nenhuma conta conectada ainda
           </p>
           <p className="mt-1 text-sm text-muted-foreground-dark">
-            Cadastre em <strong>Pessoas</strong> e conecte em <strong>Contas</strong>.
+            Cadastre a família e conecte os bancos em <strong>Ajustes</strong>.
           </p>
         </div>
       ) : !data.household ? (

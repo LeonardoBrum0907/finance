@@ -69,7 +69,7 @@ export function SimulationImpactPanel({ impact, cycle, onAddAnother }: Props) {
             </button>
           )}
           <Link
-            to="/simulador"
+            to="/compromissos"
             className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100"
           >
             <ExternalLink className="h-3.5 w-3.5" />
