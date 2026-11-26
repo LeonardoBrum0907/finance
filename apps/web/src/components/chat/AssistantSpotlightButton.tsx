@@ -1,5 +1,6 @@
 import { Sparkles } from "lucide-react";
 import { useAssistant } from "../../lib/assistantContext";
+import { useAppModules } from "../../lib/modules";
 
 interface Props {
   label?: string;
@@ -21,6 +22,8 @@ export function AssistantSpotlightButton({
   className = "",
 }: Props) {
   const { openAssistant } = useAssistant();
+  const { modules } = useAppModules();
+  if (!modules.assistant) return null;
 
   return (
     <button

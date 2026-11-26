@@ -1,17 +1,23 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import type { ReactNode } from "react";
+import type { AppModuleId } from "@finance/shared";
 import { useAuth } from "./lib/auth";
+import { useAppModules } from "./lib/modules";
 import { Layout } from "./components/Layout";
 import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { DashboardPage } from "./pages/DashboardPage";
-import { AccountsPage } from "./pages/AccountsPage";
-import { PeoplePage } from "./pages/PeoplePage";
-import { BudgetsPage } from "./pages/BudgetsPage";
-import { GoalsPage } from "./pages/GoalsPage";
 import { InvestmentsPage } from "./pages/InvestmentsPage";
 import { ChatPage } from "./pages/ChatPage";
 import { SimulatorPage } from "./pages/SimulatorPage";
 import { SettingsPage } from "./pages/SettingsPage";
+
+/** Página de módulo opcional: com o módulo desligado, volta para o Início. */
+function ModuleRoute({ module, children }: { module: AppModuleId; children: ReactNode }) {
+  const { modules, ready } = useAppModules();
+  if (!ready) return null;
+  return modules[module] ? <>{children}</> : <Navigate to="/" replace />;
+}
 
 export default function App() {
   const { user, loading } = useAuth();
@@ -38,14 +44,28 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<DashboardPage />} />
-        <Route path="/investimentos" element={<InvestmentsPage />} />
-        <Route path="/contas" element={<AccountsPage />} />
-        <Route path="/pessoas" element={<PeoplePage />} />
-        <Route path="/orcamentos" element={<BudgetsPage />} />
-        <Route path="/simulador" element={<SimulatorPage />} />
-        <Route path="/objetivos" element={<GoalsPage />} />
-        <Route path="/chat" element={<ChatPage />} />
+        <Route path="/compromissos" element={<SimulatorPage />} />
         <Route path="/configuracoes" element={<SettingsPage />} />
+        <Route
+          path="/investimentos"
+          element={
+            <ModuleRoute module="investments">
+              <InvestmentsPage />
+            </ModuleRoute>
+          }
+        />
+        <Route
+          path="/chat"
+          element={
+            <ModuleRoute module="assistant">
+              <ChatPage />
+            </ModuleRoute>
+          }
+        />
+        {/* Endereços antigos. */}
+        <Route path="/simulador" element={<Navigate to="/compromissos" replace />} />
+        <Route path="/pessoas" element={<Navigate to="/configuracoes" replace />} />
+        <Route path="/contas" element={<Navigate to="/configuracoes" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

@@ -17,6 +17,8 @@ model User {
   includeInvestmentsInNetWorth Boolean  @default(true)
   theme                        String   @default("default")
   dashboardWidgets             Json?
+  /// Módulos opcionais ligados (investimentos, assistente).
+  modules                      Json?
   aiTokensUsedThisMonth        Int      @default(0)
   aiUsagePeriod                String?
   createdAt          DateTime @default(now())
