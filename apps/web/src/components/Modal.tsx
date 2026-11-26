@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
 const defaultPanelClassName =
   "relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-app-border bg-app-surface p-6 shadow-2xl";
@@ -16,6 +16,18 @@ export function Modal({
   panelClassName = defaultPanelClassName,
   disableBackdropClose = false,
 }: ModalProps) {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (disableBackdropClose) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCloseRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [disableBackdropClose]);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs"
