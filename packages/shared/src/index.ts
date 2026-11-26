@@ -2,7 +2,6 @@ import { z } from "zod";
 import type { CycleForecastBlock } from "./cycleForecast";
 import type { HouseholdCycleSummary, NavigableCycle } from "./householdCycleSummary";
 import type { TransactionCommitmentSummary } from "./commitments";
-import type { DashboardCategoryGroup } from "./categoryGroups";
 import type { InvestmentAllocationPoint } from "./investments";
 import type { PeriodMode, PaydayCycleAnchor } from "./payday";
 import { paydayCycleAnchorSchema } from "./payday";
@@ -154,7 +153,6 @@ export {
   createSimulationScenarioSchema,
   updateSimulationScenarioSchema,
   completeSimulationSchema,
-  convertScenarioToGoalSchema,
   payloadToSimulationInput,
   simulatedPurchaseInputToPayload,
   payloadToSimulatedPurchase,
@@ -173,7 +171,6 @@ export {
   type CreateSimulationScenarioInput,
   type UpdateSimulationScenarioInput,
   type CompleteSimulationInput,
-  type ConvertScenarioToGoalInput,
   type SimulationScenarioDTO,
   type TransactionMatchCandidate,
   type TransactionMatchesResponse,
@@ -461,11 +458,6 @@ export const regenerateChatSchema = z.object({
 });
 export type RegenerateChatInput = z.infer<typeof regenerateChatSchema>;
 
-export const updateBudgetLimitSchema = z.object({
-  limit: z.number().positive("Informe um limite maior que zero"),
-});
-export type UpdateBudgetLimitInput = z.infer<typeof updateBudgetLimitSchema>;
-
 const dashboardCategoryGroupSchema = z.enum([
   "Alimentação",
   "Transporte",
@@ -480,124 +472,6 @@ const dashboardCategoryGroupSchema = z.enum([
   "Tarifas e impostos",
   "Outros",
 ]);
-
-export const createBudgetSchema = z.object({
-  name: z.string().min(1, "Informe o nome do orçamento").max(80, "Nome muito longo"),
-  limit: z.number().positive("Informe um limite maior que zero"),
-  categories: z
-    .array(dashboardCategoryGroupSchema)
-    .min(1, "Selecione ao menos uma categoria"),
-});
-export type CreateBudgetInput = z.infer<typeof createBudgetSchema>;
-
-export const updateBudgetSchema = z.object({
-  name: z.string().min(1, "Informe o nome do orçamento").max(80, "Nome muito longo").optional(),
-  limit: z.number().positive("Informe um limite maior que zero").optional(),
-  categories: z
-    .array(dashboardCategoryGroupSchema)
-    .min(1, "Selecione ao menos uma categoria")
-    .optional(),
-});
-export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>;
-
-export type GoalType =
-  | "savings"
-  | "purchase"
-  | "debt_payoff"
-  | "emergency_fund"
-  | "custom";
-
-export type GoalStatus = "active" | "completed" | "paused" | "archived";
-
-export type GoalContributionSource = "manual" | "ai" | "auto";
-
-export type GoalTrackingMode = "manual" | "linked";
-
-export type PlanStatus = "active" | "paused" | "completed" | "archived";
-
-export type ChatActionProposalType =
-  | "create_goal"
-  | "update_goal"
-  | "create_plan"
-  | "add_contribution";
-
-export type ChatActionProposalStatus = "pending" | "confirmed" | "discarded";
-
-const goalTypeSchema = z.enum([
-  "savings",
-  "purchase",
-  "debt_payoff",
-  "emergency_fund",
-  "custom",
-]);
-
-const goalStatusSchema = z.enum(["active", "completed", "paused", "archived"]);
-
-const planStatusSchema = z.enum(["active", "paused", "completed", "archived"]);
-
-export const createGoalSchema = z.object({
-  name: z.string().min(1, "Informe o nome do objetivo").max(80, "Nome muito longo"),
-  description: z.string().max(500, "Descrição muito longa").optional(),
-  type: goalTypeSchema,
-  icon: z.string().max(40).optional(),
-  targetAmount: z.number().positive("Informe um valor alvo maior que zero"),
-  targetDate: z.string().optional(),
-  linkedAccountId: z.string().optional(),
-});
-export type CreateGoalInput = z.infer<typeof createGoalSchema>;
-
-export const updateGoalSchema = z.object({
-  name: z.string().min(1, "Informe o nome do objetivo").max(80, "Nome muito longo").optional(),
-  description: z.string().max(500, "Descrição muito longa").optional().nullable(),
-  type: goalTypeSchema.optional(),
-  icon: z.string().max(40).optional().nullable(),
-  targetAmount: z.number().positive("Informe um valor alvo maior que zero").optional(),
-  targetDate: z.string().optional().nullable(),
-  status: goalStatusSchema.optional(),
-  linkedAccountId: z.string().optional().nullable(),
-});
-export type UpdateGoalInput = z.infer<typeof updateGoalSchema>;
-
-export const addContributionSchema = z.object({
-  amount: z.number().positive("Informe um valor maior que zero"),
-  date: z.string().optional(),
-  note: z.string().max(200, "Nota muito longa").optional(),
-});
-export type AddContributionInput = z.infer<typeof addContributionSchema>;
-
-export const goalSourceInputSchema = z.object({
-  sourceType: z.enum(["account", "investment"]),
-  accountId: z.string().optional(),
-  investmentId: z.string().optional(),
-  allocationPercent: z.number().min(0.01, "Informe uma alocação maior que zero").max(100, "Alocação máxima é 100%"),
-});
-
-export const updateGoalSourcesSchema = z.object({
-  sources: z.array(goalSourceInputSchema).min(1, "Selecione ao menos uma fonte"),
-});
-export type UpdateGoalSourcesInput = z.infer<typeof updateGoalSourcesSchema>;
-
-const planGoalMemberSchema = z.object({
-  goalId: z.string().min(1, "Informe o objetivo"),
-  monthlyAllocation: z.number().min(0, "Alocação não pode ser negativa"),
-});
-
-export const createPlanSchema = z.object({
-  name: z.string().min(1, "Informe o nome do plano").max(80, "Nome muito longo"),
-  description: z.string().max(500, "Descrição muito longa").optional(),
-  monthlyContribution: z.number().min(0, "Aporte mensal não pode ser negativo"),
-  goals: z.array(planGoalMemberSchema).min(1, "Selecione ao menos um objetivo"),
-});
-export type CreatePlanInput = z.infer<typeof createPlanSchema>;
-
-export const updatePlanSchema = z.object({
-  name: z.string().min(1, "Informe o nome do plano").max(80, "Nome muito longo").optional(),
-  description: z.string().max(500, "Descrição muito longa").optional().nullable(),
-  monthlyContribution: z.number().min(0, "Aporte mensal não pode ser negativo").optional(),
-  status: planStatusSchema.optional(),
-  goals: z.array(planGoalMemberSchema).min(1, "Selecione ao menos um objetivo").optional(),
-});
-export type UpdatePlanInput = z.infer<typeof updatePlanSchema>;
 
 export interface AuthUser {
   id: string;
@@ -864,107 +738,7 @@ export interface ChatThreadDTO {
   updatedAt: string;
 }
 
-export interface GoalContributionDTO {
-  id: string;
-  goalId: string;
-  amount: number;
-  date: string;
-  source: GoalContributionSource;
-  note: string | null;
-  createdAt: string;
-}
-
-export interface GoalSourceDTO {
-  id: string;
-  sourceType: "account" | "investment";
-  accountId: string | null;
-  investmentId: string | null;
-  name: string;
-  sourceLabel: string;
-  balance: number;
-  allocationPercent: number;
-  allocatedAmount: number;
-  isStale: boolean;
-}
-
-export interface AvailableGoalSourceDTO {
-  sourceType: "account" | "investment";
-  accountId: string | null;
-  investmentId: string | null;
-  name: string;
-  sourceLabel: string;
-  balance: number;
-  usedPercent: number;
-  availablePercent: number;
-  isCredit: boolean;
-  isStale?: boolean;
-}
-
-export interface GoalDTO {
-  id: string;
-  name: string;
-  description: string | null;
-  type: GoalType;
-  icon: string | null;
-  targetAmount: number;
-  currentAmount: number;
-  computedAmount: number;
-  targetDate: string | null;
-  status: GoalStatus;
-  trackingMode: GoalTrackingMode;
-  linkedAccountId: string | null;
-  sources: GoalSourceDTO[];
-  progress: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PlanGoalDTO {
-  id: string;
-  goalId: string;
-  goalName: string;
-  monthlyAllocation: number;
-  currentAmount: number;
-  targetAmount: number;
-}
-
-export interface PlanDTO {
-  id: string;
-  name: string;
-  description: string | null;
-  monthlyContribution: number;
-  status: PlanStatus;
-  goals: PlanGoalDTO[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface GoalsSummaryDTO {
-  currencyCode: string;
-  monthlySurplus: number;
-  /** Aporte mensal efetivo dos planos ativos (ou sobra média quando não há plano). */
-  monthlyContribution: number;
-  totalCurrent: number;
-  totalTarget: number;
-  goals: GoalDTO[];
-  plans: PlanDTO[];
-  hasAccounts: boolean;
-  surplusPeriodMode: PeriodMode;
-  surplusLabel: string;
-  availableSources?: AvailableGoalSourceDTO[];
-}
-
-export interface ChatActionProposalDTO {
-  id: string;
-  type: ChatActionProposalType;
-  payload: Record<string, unknown>;
-  status: ChatActionProposalStatus;
-  createdAt: string;
-  resolvedAt: string | null;
-  impactSummary?: string;
-}
-
-export type ChatSuggestionIntent = "goal" | "plan" | "analyze" | "what_if";
+export type ChatSuggestionIntent = "analyze" | "what_if";
 
 export interface ChatSuggestionDTO {
   label: string;
@@ -1023,7 +797,6 @@ export interface ChatContextSummaryDTO {
   balance?: string;
   monthlyExpenses?: string;
   monthlyNet?: string;
-  activeGoalsCount?: number;
   hasAccounts: boolean;
 }
 
@@ -1074,24 +847,8 @@ export interface ChatMessageDTO {
   role: "user" | "assistant";
   content: string;
   createdAt: string;
-  proposal?: ChatActionProposalDTO;
   metadata?: ChatMessageMetadata;
 }
-
-export type BudgetStatus = "safe" | "warning" | "critical";
-
-export interface BudgetItem {
-  id: string;
-  name: string;
-  categories: DashboardCategoryGroup[];
-  spent: number;
-  limit: number;
-  ratio: number;
-  status: BudgetStatus;
-}
-
-/** @deprecated Use BudgetItem */
-export type BudgetCategoryItem = BudgetItem & { group?: DashboardCategoryGroup };
 
 export interface InvestmentPositionDTO {
   id: string;
@@ -1150,24 +907,6 @@ export interface InvestmentsSummaryDTO {
   lastSyncedAt: string | null;
   investmentSource: string | null;
   perPerson?: { personId: string; personName: string; totalBalance: number }[];
-}
-
-export interface BudgetsSummary {
-  month: string;
-  currencyCode: string;
-  totalSpent: number;
-  totalLimit: number;
-  overallRatio: number;
-  potentialSavings: number;
-  budgets: BudgetItem[];
-  availableCategories: DashboardCategoryGroup[];
-  hasAccounts: boolean;
-  periodMode: PeriodMode;
-  periodFrom: string;
-  periodTo: string;
-  periodLabel: string;
-  cycleDayIndex: number | null;
-  cycleTotalDays: number | null;
 }
 
 export const SIMULATION_TYPES = [
@@ -1242,19 +981,6 @@ export interface SimulationMonthlyPoint {
   scenarioSurplus: number;
 }
 
-export interface SimulationGoalImpactDTO {
-  monthsDelayed: number | null;
-  affectedGoals: { id: string; name: string; monthsDelayed: number }[];
-}
-
-export interface SimulationBudgetImpactDTO {
-  category: string;
-  spent: number;
-  limit: number;
-  ratioAfter: number;
-  statusAfter: BudgetStatus;
-}
-
 export interface SimulationCreditImpactDTO {
   accountId: string;
   accountName: string;
@@ -1282,8 +1008,6 @@ export interface SimulationResultDTO {
     monthlyNeeded: number | null;
     installmentAmount: number | null;
   };
-  goalImpact: SimulationGoalImpactDTO;
-  budgetImpact: SimulationBudgetImpactDTO | null;
   creditImpact: SimulationCreditImpactDTO | null;
   warnings: string[];
 }

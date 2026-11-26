@@ -4,7 +4,6 @@ import { Copy, Check } from "lucide-react";
 import type { ChatContextSummaryDTO, ChatSuggestionDTO, PersonDTO } from "@finance/shared";
 import { api } from "../../lib/api";
 import { MarkdownMessage } from "../MarkdownMessage";
-import { ProposalCard } from "./ProposalCard";
 import { ChatStatusBar } from "./ChatStatusBar";
 import { ChatQuotaBar } from "./ChatQuotaBar";
 import { FollowUpChips } from "./FollowUpChips";
@@ -111,7 +110,6 @@ export function ChatConversation({
     regenerate,
     clearConversation,
     stop,
-    refetchMessages,
   } = useChatStream({
     threadId: activeThreadId,
     personId: selectedPersonId,
@@ -294,13 +292,6 @@ export function ChatConversation({
                       <RichMessageRenderer
                         blocks={m.metadata.blocks}
                         onActionPrompt={(msg) => sendMessage(msg)}
-                      />
-                    )}
-                    {m.proposal && (
-                      <ProposalCard
-                        proposal={m.proposal}
-                        threadId={activeThreadId}
-                        onResolved={refetchMessages}
                       />
                     )}
                     {m.content && (

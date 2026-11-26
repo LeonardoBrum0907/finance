@@ -107,27 +107,6 @@ export async function buildChatAlerts(userId: string): Promise<ChatAlertDTO[]> {
     });
   }
 
-  const budgets = await prisma.budgetGroup.findMany({
-    where: { userId },
-    include: { members: true },
-  });
-  for (const budget of budgets) {
-    const budgetCategories = budget.members.map((m) => m.categoryGroup);
-    const spent = categories
-      .filter((c) => budgetCategories.includes(c.category))
-      .reduce((s, c) => s + c.total, 0);
-    const ratio = budget.limit > 0 ? spent / budget.limit : 0;
-    if (ratio >= 0.9) {
-      alerts.push({
-        id: `budget-${budget.id}`,
-        message: `Orçamento "${budget.name}" em ${Math.round(ratio * 100)}% do limite.`,
-        severity: ratio >= 1 ? "warning" : "info",
-        suggestionMessage: `Meu orçamento "${budget.name}" está quase estourando. O que fazer?`,
-        contextKey: `alert:budget-${budget.id}`,
-      });
-    }
-  }
-
   const syncDates = people.flatMap((p) =>
     p.connections
       .map((c) => c.lastSyncedAt)

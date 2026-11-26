@@ -4,12 +4,6 @@ const TOOL_LABELS: Record<string, string> = {
   getTransactions: "Consultando transações",
   getSpendingByCategory: "Analisando gastos por categoria",
   getBalanceSummary: "Verificando saldos",
-  getGoalsAndPlans: "Carregando objetivos e planos",
-  simulateWhatIf: "Simulando cenário",
-  proposeCreateGoal: "Preparando proposta de objetivo",
-  proposeUpdateGoal: "Preparando proposta de edição",
-  proposeAddContribution: "Preparando proposta de aporte",
-  proposeCreatePlan: "Preparando proposta de plano",
 };
 
 export function extractToolActivityFromSteps(
@@ -98,38 +92,6 @@ export function extractBlocksFromSteps(
           label: "Saldo consolidado",
           value: String(record.formattedTotalBalance),
         });
-      }
-
-      if (record.projectedMonthlySurplus != null || record.canAfford != null) {
-        const sim = record as {
-          formattedPurchaseAmount?: string;
-          formattedProjectedSurplus?: string;
-          canAfford?: boolean;
-          monthsToGoalDelay?: number | null;
-          warning?: string;
-        };
-        if (sim.formattedPurchaseAmount) {
-          blocks.push({
-            type: "metric",
-            label: "Valor simulado",
-            value: sim.formattedPurchaseAmount,
-            delta: sim.canAfford ? "Cabe no orçamento" : "Pode comprometer metas",
-          });
-        }
-        if (sim.formattedProjectedSurplus) {
-          blocks.push({
-            type: "metric",
-            label: "Sobra projetada",
-            value: sim.formattedProjectedSurplus,
-          });
-        }
-        if (sim.warning) {
-          blocks.push({
-            type: "action_prompt",
-            message: sim.warning,
-            intent: "what_if",
-          });
-        }
       }
     }
   }

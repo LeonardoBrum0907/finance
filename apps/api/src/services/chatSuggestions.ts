@@ -7,7 +7,6 @@ import {
   toLocalMonthKey,
 } from "./finance/aggregates.js";
 import { flattenTransactions, loadUserFinancialData } from "./finance/queries.js";
-import { loadGoalsSummaryForUser } from "./finance/goalsContext.js";
 
 export async function buildChatSuggestions(
   userId: string,
@@ -49,51 +48,15 @@ export async function buildChatSuggestions(
   const monthRange = { from: `${currentMonth}-01`, to: `${currentMonth}-31` };
   const monthly = getMonthlySummary(txs);
   const categories = getSpendingByCategory(txs, monthRange);
-  const goalsSummary = await loadGoalsSummaryForUser(userId);
-  const activeGoals = goalsSummary.goals.filter((g) => g.status === "active");
-  const activePlans = goalsSummary.plans.filter((p) => p.status === "active");
 
   const suggestions: ChatSuggestionDTO[] = [];
 
-  if (monthly.net > 0) {
-    suggestions.push({
-      label: `Plano com sobra de ${formatCurrency(monthly.net)}`,
-      message: `Tenho ${formatCurrency(monthly.net)} de sobra este mês — ajude a criar um plano de poupança`,
-      intent: "plan",
-    });
-  } else if (monthly.net < 0) {
+  if (monthly.net < 0) {
     suggestions.push({
       label: "Como melhorar a sobra?",
       message: "Meu saldo está negativo este mês. Onde posso cortar gastos?",
       intent: "analyze",
     });
-  }
-
-  if (activeGoals.length === 0) {
-    suggestions.push({
-      label: "Criar primeiro objetivo",
-      message: "Quero criar meu primeiro objetivo financeiro. Me ajude a definir uma meta realista.",
-      intent: "goal",
-    });
-  } else if (activePlans.length === 0) {
-    const topGoal = activeGoals[0]!;
-    suggestions.push({
-      label: `Plano para "${topGoal.name}"`,
-      message: `Monte um plano de poupança para o objetivo "${topGoal.name}"`,
-      intent: "plan",
-    });
-  } else {
-    const behind = activeGoals.find((g) => {
-      if (!g.targetDate || g.progress >= 100) return false;
-      return new Date(g.targetDate) < new Date();
-    });
-    if (behind) {
-      suggestions.push({
-        label: `Recuperar "${behind.name}"`,
-        message: `O objetivo "${behind.name}" está atrasado. O que posso fazer para voltar ao trilho?`,
-        intent: "goal",
-      });
-    }
   }
 
   if (categories.length > 0) {
@@ -107,7 +70,7 @@ export async function buildChatSuggestions(
 
   suggestions.push({
     label: "Simular uma compra",
-    message: "Quero simular uma compra — quanto posso gastar sem comprometer minhas metas?",
+    message: "Quero simular uma compra — quanto posso gastar sem apertar a fatura?",
     intent: "what_if",
   });
 
@@ -143,14 +106,10 @@ export async function buildChatContextSummary(
     total += accounts.reduce((sum, a) => sum + a.balance, 0);
   }
 
-  const goalsSummary = await loadGoalsSummaryForUser(userId);
-  const activeGoalsCount = goalsSummary.goals.filter((g) => g.status === "active").length;
-
   return {
     hasAccounts: true,
     balance: formatCurrency(total),
     monthlyExpenses: formatCurrency(monthly.expenses),
     monthlyNet: formatCurrency(monthly.net),
-    activeGoalsCount,
   };
 }

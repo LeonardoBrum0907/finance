@@ -13,7 +13,6 @@ model User {
   email              String   @unique
   passwordHash       String
   paydayDay                    Int?
-  defaultPeriodMode            String   @default("calendar")
   includeInvestmentsInNetWorth Boolean  @default(true)
   theme                        String   @default("default")
   dashboardWidgets             Json?
@@ -27,10 +26,6 @@ model User {
   people              Person[]
   chatMessages        ChatMessage[]
   chatThreads         ChatThread[]
-  budgets             BudgetGroup[]
-  goals               Goal[]
-  plans               Plan[]
-  chatActionProposals ChatActionProposal[]
   categoryMappings    CategoryMapping[]
   paymentCommitments  PaymentCommitment[]
   simulationScenarios SimulationScenario[]
@@ -103,7 +98,6 @@ model Account {
 
   connection      BankConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   transactions    Transaction[]
-  goalSources     GoalSource[]
   recurringBills  RecurringBill[]
   managedAccounts ManagedAccount[]
   creditBills     CreditCardBill[]
@@ -293,7 +287,6 @@ model ManagedAccount {
   matchSignature           String?
   anchorTransactionId      String?   @unique
   bankAccountId            String?
-  linkedGoalId             String?   @unique
   linkedTransactionId      String?
   simulationPayload        Json?
   lastVerdict              String?
@@ -312,7 +305,6 @@ model ManagedAccount {
   person            Person?               @relation(fields: [personId], references: [id], onDelete: SetNull)
   bankAccount       Account?              @relation(fields: [bankAccountId], references: [id], onDelete: SetNull)
   anchorTransaction Transaction?          @relation("ManagedAccountAnchor", fields: [anchorTransactionId], references: [id], onDelete: SetNull)
-  linkedGoal        Goal?                   @relation("ManagedAccountConvertedGoal", fields: [linkedGoalId], references: [id], onDelete: SetNull)
   entries           ManagedAccountEntry[]
 
   @@index([userId])
@@ -391,7 +383,6 @@ model Investment {
 
   connection   BankConnection          @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   transactions InvestmentTransaction[]
-  goalSources  GoalSource[]
 
   @@index([connectionId])
   @@index([status])
@@ -428,7 +419,6 @@ model ChatThread {
 
   user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages  ChatMessage[]
-  proposals ChatActionProposal[]
 
   @@unique([userId, contextKey])
   @@index([userId])
@@ -445,132 +435,9 @@ model ChatMessage {
 
   user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   thread   ChatThread          @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  proposal ChatActionProposal?
 
   @@index([userId])
   @@index([threadId])
-}
-
-model BudgetGroup {
-  id        String   @id @default(cuid())
-  userId    String
-  name      String
-  limit     Float
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  user    User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  members BudgetGroupMember[]
-
-  @@unique([userId, name])
-  @@index([userId])
-}
-
-model BudgetGroupMember {
-  id            String @id @default(cuid())
-  budgetGroupId String
-  userId        String
-  categoryGroup String
-
-  budgetGroup BudgetGroup @relation(fields: [budgetGroupId], references: [id], onDelete: Cascade)
-
-  @@unique([budgetGroupId, categoryGroup])
-  @@unique([userId, categoryGroup])
-  @@index([budgetGroupId])
-}
-
-model Goal {
-  id                String    @id @default(cuid())
-  userId            String
-  name              String
-  description       String?
-  type              String
-  icon              String?
-  targetAmount      Float
-  currentAmount     Float     @default(0)
-  targetDate        DateTime?
-  status            String    @default("active")
-  trackingMode      String    @default("manual")
-  lastSyncedBalance  Float?
-  linkedAccountId    String?
-  sourceSimulationId String?   @unique
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-
-  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  contributions    GoalContribution[]
-  planGoals        PlanGoal[]
-  sources          GoalSource[]
-  sourceSimulation SimulationScenario? @relation("GoalFromSimulation", fields: [sourceSimulationId], references: [id], onDelete: SetNull)
-  convertedFrom    SimulationScenario? @relation("ConvertedToGoal")
-  managedAccount   ManagedAccount?     @relation("ManagedAccountConvertedGoal")
-
-  @@index([userId])
-}
-
-model GoalSource {
-  id                String   @id @default(cuid())
-  goalId            String
-  sourceType        String
-  accountId         String?
-  investmentId      String?
-  allocationPercent Float
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  goal       Goal        @relation(fields: [goalId], references: [id], onDelete: Cascade)
-  account    Account?    @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  investment Investment? @relation(fields: [investmentId], references: [id], onDelete: Cascade)
-
-  @@unique([goalId, accountId])
-  @@unique([goalId, investmentId])
-  @@index([goalId])
-  @@index([accountId])
-  @@index([investmentId])
-}
-
-model GoalContribution {
-  id        String   @id @default(cuid())
-  goalId    String
-  amount    Float
-  date      DateTime
-  source    String
-  note      String?
-  createdAt DateTime @default(now())
-
-  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
-
-  @@index([goalId])
-}
-
-model Plan {
-  id                  String   @id @default(cuid())
-  userId              String
-  name                String
-  description         String?
-  monthlyContribution Float    @default(0)
-  status              String   @default("active")
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-
-  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  members PlanGoal[]
-
-  @@index([userId])
-}
-
-model PlanGoal {
-  id                String @id @default(cuid())
-  planId            String
-  goalId            String
-  monthlyAllocation Float  @default(0)
-
-  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
-  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
-
-  @@unique([planId, goalId])
-  @@index([planId])
-  @@index([goalId])
 }
 
 model SimulationScenario {
@@ -585,7 +452,6 @@ model SimulationScenario {
   priority             Int       @default(0)
   linkedTransactionId  String?
   linkedInvestmentTxId String?
-  linkedGoalId         String?   @unique
   linkedCommitmentId   String?
   lastVerdict          String?
   lastImpactSnapshot   Json?
@@ -596,29 +462,9 @@ model SimulationScenario {
   user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   person            Person?                @relation(fields: [personId], references: [id], onDelete: SetNull)
   linkedTransaction Transaction?           @relation(fields: [linkedTransactionId], references: [id], onDelete: SetNull)
-  linkedGoal        Goal?                  @relation("ConvertedToGoal", fields: [linkedGoalId], references: [id], onDelete: SetNull)
-  goalOrigin        Goal?                  @relation("GoalFromSimulation")
 
   @@index([userId])
   @@index([userId, status])
   @@index([personId])
 }
 
-model ChatActionProposal {
-  id         String    @id @default(cuid())
-  userId     String
-  threadId   String
-  messageId  String?   @unique
-  type       String
-  payload    Json
-  status     String    @default("pending")
-  createdAt  DateTime  @default(now())
-  resolvedAt DateTime?
-
-  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  thread  ChatThread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  message ChatMessage? @relation(fields: [messageId], references: [id], onDelete: SetNull)
-
-  @@index([userId])
-  @@index([threadId])
-}

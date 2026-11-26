@@ -4,7 +4,6 @@ import {
   isPaydayDayConfigured,
   parseAppTheme,
   parsePaydayCycleAnchor,
-  parsePeriodMode,
   resolveAppModules,
   resolveDashboardWidgets,
 } from "@finance/shared";
@@ -21,7 +20,6 @@ export async function loadUserSettings(userId: string): Promise<UserSettingsDTO>
       where: { id: userId },
       select: {
         paydayDay: true,
-        defaultPeriodMode: true,
         includeInvestmentsInNetWorth: true,
         theme: true,
         dashboardWidgets: true,
@@ -35,14 +33,12 @@ export async function loadUserSettings(userId: string): Promise<UserSettingsDTO>
   ]);
 
   const paydayDay = user.paydayDay;
-  const defaultPeriodMode = parsePeriodMode(user.defaultPeriodMode);
   const paydayConfigured =
     isPaydayDayConfigured(paydayDay) ||
     people.some((p) => isPaydayDayConfigured(p.paydayDay));
 
   return {
     paydayDay,
-    defaultPeriodMode,
     paydayConfigured,
     includeInvestmentsInNetWorth: user.includeInvestmentsInNetWorth,
     theme: parseAppTheme(user.theme),
@@ -123,10 +119,5 @@ export function resolvePeriodMode(
   }
   if (requested === "payday") return "payday";
   if (requested === "calendar") return "calendar";
-  if (settings.defaultPeriodMode === "payday" && paydayConfigured) {
-    return "payday";
-  }
-  return settings.defaultPeriodMode === "payday" && !paydayConfigured
-    ? "calendar"
-    : settings.defaultPeriodMode;
+  return "calendar";
 }

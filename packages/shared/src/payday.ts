@@ -46,7 +46,6 @@ export function parseAppTheme(value: unknown): AppTheme {
 
 export const updateSettingsSchema = z.object({
   paydayDay: z.number().int().min(1).max(31).nullable().optional(),
-  defaultPeriodMode: periodModeSchema.optional(),
   includeInvestmentsInNetWorth: z.boolean().optional(),
   theme: appThemeSchema.optional(),
   dashboardWidgets: dashboardWidgetsPatchSchema.optional(),
@@ -56,7 +55,6 @@ export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
 
 export interface UserSettingsDTO {
   paydayDay: number | null;
-  defaultPeriodMode: PeriodMode;
   paydayConfigured: boolean;
   includeInvestmentsInNetWorth: boolean;
   theme: AppTheme;

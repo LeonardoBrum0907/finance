@@ -27,8 +27,6 @@ import { combineAbortSignals, recordAiUsage } from "./aiUsage.js";
 import { InvalidPersonError } from "./finance/queries.js";
 import { createFinanceTools } from "./finance/tools.js";
 import { touchThread } from "./chatThread.js";
-import { extractProposalFromSteps } from "./chatProposal.js";
-import { buildGoalsContextBlock } from "./finance/goalsContext.js";
 import {
   buildHouseholdArena,
   buildHouseholdComparisonContext,
@@ -99,7 +97,6 @@ export async function runChatStream({
     Number.isFinite(aiEnv.maxToolCalls) && aiEnv.maxToolCalls > 0 ? aiEnv.maxToolCalls : 6;
 
   let context: string;
-  let goalsContext: string;
   let syncAt: string | null = null;
   try {
     const data = await loadUserFinancialData(userId, { personId });
@@ -112,10 +109,7 @@ export async function runChatStream({
       syncAt = latest.lastSyncedAt ?? null;
     }
 
-    [context, goalsContext] = await Promise.all([
-      buildFinancialContext(userId, { personId }),
-      buildGoalsContextBlock(userId, threadId),
-    ]);
+    context = await buildFinancialContext(userId, { personId });
   } catch (err) {
     if (err instanceof InvalidPersonError) {
       reply.code(400).send({ error: "Pessoa não encontrada" });
@@ -137,7 +131,7 @@ export async function runChatStream({
     }
   }
 
-  const dynamicContext = `# Dados financeiros do usuário\n${context}${arenaBlock}${contextBlock}\n\n# ${goalsContext}`;
+  const dynamicContext = `# Dados financeiros do usuário\n${context}${arenaBlock}${contextBlock}`;
   const systemPrompt = buildSystemPrompt(SYSTEM_PROMPT, dynamicContext);
   const chatCacheKey = isPromptCacheEnabled() ? getCacheKey("chat", SYSTEM_PROMPT) : undefined;
   const messages: CoreMessage[] = historyRows.map((m) => ({
@@ -298,7 +292,7 @@ export async function runChatStream({
       metadata.followUps = buildFollowUpSuggestions(lastUser.content, assistantText);
     }
 
-    const message = await prisma.chatMessage.create({
+    await prisma.chatMessage.create({
       data: {
         userId,
         threadId,
@@ -307,27 +301,6 @@ export async function runChatStream({
         metadata: metadata as object,
       } as Parameters<typeof prisma.chatMessage.create>[0]["data"],
     });
-
-    if (successResponse) {
-      try {
-        const steps = await streamResult!.steps;
-        const extracted = extractProposalFromSteps(steps);
-        if (extracted) {
-          await prisma.chatActionProposal.create({
-            data: {
-              userId,
-              threadId,
-              messageId: message.id,
-              type: extracted.type,
-              payload: extracted.payload as object,
-              status: "pending",
-            },
-          });
-        }
-      } catch (proposalErr) {
-        log.warn({ err: proposalErr }, "Falha ao persistir proposta da IA");
-      }
-    }
 
     await touchThread(threadId);
   }

@@ -75,8 +75,6 @@ export interface ManagedAccountDTO {
   bankAccountId: string | null;
   bankAccountName: string | null;
   anchorTransactionId: string | null;
-  linkedGoalId: string | null;
-  linkedGoalName: string | null;
   linkedTransactionId: string | null;
   simulationPayload: SimulationPayload | null;
   lastVerdict: string | null;
@@ -324,8 +322,6 @@ export function managedAccountToScenarioDTO(
     priority: account.priority,
     linkedTransactionId: account.linkedTransactionId,
     linkedInvestmentTxId: null,
-    linkedGoalId: account.linkedGoalId,
-    linkedGoalName: account.linkedGoalName,
     lastVerdict: account.lastVerdict,
     completedAt: account.completedAt,
     createdAt: account.createdAt,

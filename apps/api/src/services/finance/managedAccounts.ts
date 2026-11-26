@@ -20,14 +20,12 @@ import { prisma } from "../../prisma.js";
 type ManagedAccountWithRelations = ManagedAccount & {
   person: { name: string } | null;
   bankAccount: { name: string } | null;
-  linkedGoal: { name: string } | null;
   entries: ManagedAccountEntry[];
 };
 
 const accountInclude = {
   person: { select: { name: true } },
   bankAccount: { select: { name: true } },
-  linkedGoal: { select: { name: true } },
   entries: true,
 } as const;
 
@@ -71,8 +69,6 @@ function serializeManagedAccount(row: ManagedAccountWithRelations): ManagedAccou
     bankAccountId: row.bankAccountId,
     bankAccountName: row.bankAccount?.name ?? null,
     anchorTransactionId: row.anchorTransactionId,
-    linkedGoalId: row.linkedGoalId,
-    linkedGoalName: row.linkedGoal?.name ?? null,
     linkedTransactionId: row.linkedTransactionId,
     simulationPayload: (row.simulationPayload as SimulationPayload | null) ?? null,
     lastVerdict: row.lastVerdict,
@@ -298,7 +294,6 @@ export async function syncFromSimulationScenario(scenarioId: string): Promise<vo
     totalAmount: payload.type === "installments" ? payload.amount : null,
     totalInstallments: payload.installments ?? payload.totalInstallments ?? null,
     dayOfMonth: null,
-    linkedGoalId: scenario.linkedGoalId,
     linkedTransactionId: scenario.linkedTransactionId,
     simulationPayload: payload as Prisma.InputJsonValue,
     lastVerdict: scenario.lastVerdict,
