@@ -6,7 +6,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
-  FlaskConical,
   Home,
   Layers,
   Search,
@@ -17,11 +16,9 @@ import {
 } from "lucide-react";
 import type {
   CategoryChartSelection,
-  CreditAccountSnapshot,
   DashboardMonths,
   DashboardPeriodSummary,
   PeriodMode,
-  SimulatedPurchaseInput,
   TransactionTypeFilter,
   TransactionsListResponse,
 } from "@finance/shared";
@@ -36,7 +33,6 @@ import { CYCLE_COPY, formatCycleBalance, formatPlainAmount } from "../../lib/cyc
 import { cardLargeClass, fadeUp } from "./motion";
 import { PeriodSelector } from "./PeriodSelector";
 import type { PersonFilter } from "./PersonSelector";
-import { SimulatePurchaseModal } from "./SimulatePurchaseModal";
 import { TransactionDetailModal } from "./TransactionDetailModal";
 
 interface Props {
@@ -51,14 +47,6 @@ interface Props {
   categorySelection?: CategoryChartSelection | null;
   onClearCategorySelection?: () => void;
   sectionRef?: RefObject<HTMLElement | null>;
-  simulationEnabled?: boolean;
-  onSaveSimulations?: (inputs: SimulatedPurchaseInput[]) => Promise<void>;
-  savingSimulation?: boolean;
-  simulateModalOpen?: boolean;
-  onSimulateModalOpenChange?: (open: boolean) => void;
-  creditAccounts?: CreditAccountSnapshot[];
-  bankBalance?: number;
-  currentCycle?: { from: string; to: string; cycleKey: string };
 }
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50] as const;
@@ -160,14 +148,6 @@ export function RecentTransactions({
   categorySelection = null,
   onClearCategorySelection,
   sectionRef,
-  simulationEnabled = false,
-  onSaveSimulations,
-  savingSimulation = false,
-  simulateModalOpen: simulateModalOpenProp,
-  onSimulateModalOpenChange,
-  creditAccounts = [],
-  bankBalance,
-  currentCycle,
 }: Props) {
   const [periodMonths, setPeriodMonths] = useState<DashboardMonths>(dashboardMonths);
   const [page, setPage] = useState(1);
@@ -177,9 +157,6 @@ export function RecentTransactions({
   const [typeFilter, setTypeFilter] = useState<TransactionTypeFilter>("all");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [detailTxId, setDetailTxId] = useState<string | null>(null);
-  const [simulateModalOpenLocal, setSimulateModalOpenLocal] = useState(false);
-  const simulateModalOpen = simulateModalOpenProp ?? simulateModalOpenLocal;
-  const setSimulateModalOpen = onSimulateModalOpenChange ?? setSimulateModalOpenLocal;
 
   const queryClient = useQueryClient();
 
@@ -306,7 +283,7 @@ export function RecentTransactions({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="font-display text-base font-semibold text-foreground">
-              Transações Recentes
+              Movimentações
             </h2>
             <p className="text-[11px] text-muted-foreground">
               Histórico de saídas de débito e créditos recebidos
@@ -314,7 +291,7 @@ export function RecentTransactions({
                 <span className="ml-1.5 text-slate-300">
                   ·{" "}
                   {activeBillCycle
-                    ? "Mesmo ciclo da fatura do painel"
+                    ? "Ciclo da fatura escolhida"
                     : cycleKey
                       ? "Mesmo ciclo do painel"
                       : "Mesmo período do painel"}
@@ -340,16 +317,6 @@ export function RecentTransactions({
           </div>
           {!hidePeriodSelector && (
             <PeriodSelector value={periodMonths} onChange={setPeriodMonths} showModeToggle={false} />
-          )}
-          {simulationEnabled && onSaveSimulations && (
-            <button
-              type="button"
-              onClick={() => setSimulateModalOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-semibold text-amber-900 transition hover:bg-amber-100"
-            >
-              <FlaskConical className="h-3.5 w-3.5" />
-              Simular compra
-            </button>
           )}
         </div>
 
@@ -615,19 +582,6 @@ export function RecentTransactions({
         transactionId={detailTxId}
         onClose={() => setDetailTxId(null)}
       />
-
-      {simulationEnabled && onSaveSimulations && currentCycle && (
-        <SimulatePurchaseModal
-          open={simulateModalOpen}
-          currencyCode={currencyCode}
-          creditAccounts={creditAccounts}
-          bankBalance={bankBalance}
-          currentCycle={currentCycle}
-          onClose={() => setSimulateModalOpen(false)}
-          onSave={onSaveSimulations}
-          saving={savingSimulation}
-        />
-      )}
     </section>
   );
 }

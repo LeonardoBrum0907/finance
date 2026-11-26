@@ -1,17 +1,11 @@
 import { z } from "zod";
+import type { AppModuleId, AppModulesState } from "./appModules";
 
 export const DASHBOARD_WIDGET_IDS = [
   "net-worth",
-  "still-mine",
-  "cycle-savings",
   "per-person",
-  "simulation-impact",
-  "cycle-progress",
-  "period-comparison",
-  "investments",
-  "spending-evolution",
-  "insights",
   "credit-cards",
+  "investments",
   "recent-transactions",
 ] as const;
 
@@ -19,117 +13,74 @@ export type DashboardWidgetId = (typeof DASHBOARD_WIDGET_IDS)[number];
 
 export type DashboardWidgetsState = Record<DashboardWidgetId, boolean>;
 
-export type DashboardWidgetGroup = "main" | "extras";
-
-export const DASHBOARD_WIDGET_GROUPS: readonly {
-  id: DashboardWidgetGroup;
-  title: string;
-}[] = [
-  { id: "main", title: "Visão principal" },
-  { id: "extras", title: "Mais informações" },
-];
-
 export interface DashboardWidgetDefinition {
   id: DashboardWidgetId;
   title: string;
   description: string;
   defaultEnabled: boolean;
-  group: DashboardWidgetGroup;
+  /** Só aparece com este módulo ligado em Ajustes > Módulos. */
+  module?: AppModuleId;
   /** Depende de `/api/dashboard`, buscado só quando algum bloco assim está ligado. */
   needsDetails?: boolean;
 }
 
+/**
+ * Blocos opcionais do Início. O card do ciclo da fatura ("ainda posso gastar")
+ * aparece sempre e não entra aqui.
+ */
 export const DASHBOARD_WIDGETS: readonly DashboardWidgetDefinition[] = [
   {
     id: "net-worth",
     title: "Patrimônio líquido",
     description: "Caixa, menos dívida de cartão, mais investimentos.",
     defaultEnabled: true,
-    group: "main",
-  },
-  {
-    id: "still-mine",
-    title: "Ainda é meu neste período",
-    description: "O que sobra depois das contas e faturas do ciclo, e o alerta quando fica negativo.",
-    defaultEnabled: true,
-    group: "main",
-  },
-  {
-    id: "cycle-savings",
-    title: "Sobra do ciclo",
-    description: "Renda do ciclo menos os gastos do ciclo.",
-    defaultEnabled: true,
-    group: "main",
   },
   {
     id: "per-person",
     title: "Resumo por pessoa",
-    description: "Patrimônio, o que ainda é seu e a sobra de cada pessoa da casa.",
+    description: "Patrimônio de cada pessoa da família.",
     defaultEnabled: true,
-    group: "main",
-  },
-  {
-    id: "simulation-impact",
-    title: "Impacto das simulações",
-    description: "Compras simuladas ativas e quanto pesam nos próximos ciclos.",
-    defaultEnabled: false,
-    group: "extras",
-  },
-  {
-    id: "cycle-progress",
-    title: "Progresso do ciclo",
-    description: "Dias passados, o que já entrou e saiu, e a previsão de fechamento.",
-    defaultEnabled: false,
-    group: "extras",
-    needsDetails: true,
-  },
-  {
-    id: "period-comparison",
-    title: "Comparativo do período",
-    description: "Renda, gastos e saldo comparados ao período anterior.",
-    defaultEnabled: false,
-    group: "extras",
-    needsDetails: true,
-  },
-  {
-    id: "investments",
-    title: "Investimentos",
-    description: "Saldo da carteira e rendimento.",
-    defaultEnabled: false,
-    group: "extras",
-    needsDetails: true,
-  },
-  {
-    id: "spending-evolution",
-    title: "Evolução e categorias",
-    description: "Gráfico de renda e gastos e o total por categoria.",
-    defaultEnabled: false,
-    group: "extras",
-    needsDetails: true,
-  },
-  {
-    id: "insights",
-    title: "Insights",
-    description: "Observações automáticas sobre o período.",
-    defaultEnabled: false,
-    group: "extras",
-    needsDetails: true,
   },
   {
     id: "credit-cards",
     title: "Cartões de crédito",
     description: "Limite usado, fatura e vencimento de cada cartão.",
     defaultEnabled: false,
-    group: "extras",
+  },
+  {
+    id: "investments",
+    title: "Investimentos",
+    description: "Saldo da carteira e rendimento.",
+    defaultEnabled: false,
+    module: "investments",
+    needsDetails: true,
   },
   {
     id: "recent-transactions",
-    title: "Movimentações recentes",
-    description: "Extrato do ciclo atual, categorias e simulação de compras.",
+    title: "Movimentações do ciclo",
+    description: "Extrato do ciclo da fatura escolhida.",
     defaultEnabled: true,
-    group: "main",
   },
 ] as const;
+
+/** Blocos que o usuário pode ver agora: os de módulos desligados ficam de fora. */
+export function availableDashboardWidgets(
+  modules: AppModulesState,
+): readonly DashboardWidgetDefinition[] {
+  return DASHBOARD_WIDGETS.filter((widget) => !widget.module || modules[widget.module]);
+}
+
+/** Estado salvo, com os blocos de módulos desligados forçados para desligado. */
+export function effectiveDashboardWidgets(
+  state: DashboardWidgetsState,
+  modules: AppModulesState,
+): DashboardWidgetsState {
+  const next = { ...state };
+  for (const widget of DASHBOARD_WIDGETS) {
+    if (widget.module && !modules[widget.module]) next[widget.id] = false;
+  }
+  return next;
+}
 
 export const DASHBOARD_WIDGET_ID_SET = new Set<string>(DASHBOARD_WIDGET_IDS);
 
@@ -153,12 +104,7 @@ function defaultDashboardWidgets(): DashboardWidgetsState {
 
 /** Bloco único antigo; quem já o desligou continua sem ver as partes dele. */
 const LEGACY_HOUSEHOLD_SUMMARY_ID = "household-summary";
-const LEGACY_HOUSEHOLD_SUMMARY_PARTS: readonly DashboardWidgetId[] = [
-  "net-worth",
-  "still-mine",
-  "cycle-savings",
-  "per-person",
-];
+const LEGACY_HOUSEHOLD_SUMMARY_PARTS: readonly DashboardWidgetId[] = ["net-worth", "per-person"];
 
 /** Extrai só pares id→boolean conhecidos; ignora ids e valores inválidos. */
 export function parseStoredDashboardWidgets(stored: unknown): Partial<DashboardWidgetsState> {

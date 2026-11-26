@@ -9,6 +9,8 @@ import {
   mergeDashboardWidgetPatch,
   parseStoredDashboardWidgets,
   resolveDashboardWidgets,
+  effectiveDashboardWidgets,
+  availableDashboardWidgets,
   type DashboardWidgetsState,
 } from "./dashboardWidgets.js";
 
@@ -39,8 +41,6 @@ describe("resolveDashboardWidgets", () => {
   it("expands the legacy household-summary into its parts", () => {
     const resolved = resolveDashboardWidgets({ "household-summary": false });
     assert.equal(resolved["net-worth"], false);
-    assert.equal(resolved["still-mine"], false);
-    assert.equal(resolved["cycle-savings"], false);
     assert.equal(resolved["per-person"], false);
     assert.equal(resolved["recent-transactions"], true);
   });
@@ -48,9 +48,9 @@ describe("resolveDashboardWidgets", () => {
   it("lets an explicit part win over the legacy household-summary", () => {
     const resolved = resolveDashboardWidgets({
       "household-summary": false,
-      "still-mine": true,
+      "per-person": true,
     });
-    assert.equal(resolved["still-mine"], true);
+    assert.equal(resolved["per-person"], true);
     assert.equal(resolved["net-worth"], false);
   });
 });
@@ -80,13 +80,11 @@ describe("mergeDashboardWidgetPatch", () => {
   it("replaces the legacy id with its parts when saving", () => {
     const merged = mergeDashboardWidgetPatch(
       { "household-summary": false },
-      { "still-mine": true },
+      { "per-person": true },
     );
     assert.deepEqual(merged, {
       "net-worth": false,
-      "still-mine": true,
-      "cycle-savings": false,
-      "per-person": false,
+      "per-person": true,
     });
   });
 });
@@ -115,7 +113,7 @@ describe("needsDashboardDetails", () => {
   });
 
   it("asks for it when a detail widget is on", () => {
-    assert.equal(needsDashboardDetails(resolveDashboardWidgets({ insights: true })), true);
+    assert.equal(needsDashboardDetails(resolveDashboardWidgets({ investments: true })), true);
   });
 });
 
@@ -126,5 +124,22 @@ describe("hasAnyEnabledDashboardWidget", () => {
     ) as DashboardWidgetsState;
     assert.equal(hasAnyEnabledDashboardWidget(allOff), false);
     assert.equal(hasAnyEnabledDashboardWidget(resolveDashboardWidgets(null)), true);
+  });
+});
+
+describe("blocos de módulos", () => {
+  it("esconde Investimentos com o módulo desligado, mesmo se o bloco estiver ligado", () => {
+    const state = resolveDashboardWidgets({ investments: true });
+    const off = effectiveDashboardWidgets(state, { investments: false, assistant: false });
+    assert.equal(off.investments, false);
+    assert.equal(needsDashboardDetails(off), false);
+    const on = effectiveDashboardWidgets(state, { investments: true, assistant: false });
+    assert.equal(on.investments, true);
+  });
+
+  it("só lista nos Ajustes os blocos de módulos ligados", () => {
+    const ids = availableDashboardWidgets({ investments: false, assistant: false }).map((w) => w.id);
+    assert.equal(ids.includes("investments"), false);
+    assert.equal(ids.includes("recent-transactions"), true);
   });
 });
