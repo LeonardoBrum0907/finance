@@ -15,14 +15,13 @@ import {
   managedAccountToCommitmentDTO,
   managedAccountToRecurringBillDTO,
   managedAccountToScenarioDTO,
-  recurringBillStatusLabel,
   todayDateKeyInTimeZone,
 } from "@finance/shared";
 import { formatCurrency } from "../../lib/format";
 import { useConfirm } from "../../lib/confirm";
 import { cardClass } from "../dashboard/motion";
 import { RecurringBillEditModal } from "./RecurringBillEditModal";
-import { InfoTip } from "../InfoTip";
+import { CalcValue, type Calculation } from "../calc/Calculation";
 import { Switch } from "../Switch";
 import { PlannedCard } from "./PlannedCard";
 import type { PlannedCard as PlannedCardOption } from "./PlannedPurchaseModal";
@@ -68,9 +67,8 @@ function SectionHeader({
 }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <h2 className="flex items-center gap-1.5 font-display text-base font-semibold text-foreground">
+      <h2 className="font-display text-base font-semibold text-foreground" title={hint}>
         {title}
-        {hint && <InfoTip>{hint}</InfoTip>}
       </h2>
       {action}
     </div>
@@ -267,6 +265,24 @@ export function AccountsSection({
   );
 }
 
+/** Parcelas do parcelamento, pagas e a pagar, somando o total. */
+function installmentsCalc(account: ManagedAccountDTO, total: number): Calculation {
+  const count = account.totalInstallments ?? account.entries.length;
+  const entries = [...account.entries].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0));
+  return {
+    title: "Total do parcelamento",
+    lines: entries.map((entry, index) => ({
+      label: `Parcela ${entry.sequence ?? index + 1}/${count}`,
+      amount: entry.amount,
+      op: index === 0 ? undefined : "+",
+      detail: `${new Date(entry.dueDate).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} · ${
+        entry.status === "paid" ? "paga" : entry.status === "skipped" ? "ignorada" : "a pagar"
+      }`,
+    })),
+    result: total,
+  };
+}
+
 function closedStatusLabel(status: ManagedAccountDTO["status"]): string {
   switch (status) {
     case "completed":
@@ -347,9 +363,11 @@ function RecurringBillAccountCard({
     <article className={`${cardClass} p-4 ${account.status === "active" ? "" : "opacity-70"}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 font-display text-sm font-semibold text-foreground">
-            <span className="truncate">{account.title}</span>
-            <InfoTip>{[recurringBillStatusLabel(account.status as "active" | "inactive" | "dismissed"), account.category, account.personName, account.bankAccountName].filter(Boolean).join(" · ")}</InfoTip>
+          <p
+            className="truncate font-display text-sm font-semibold text-foreground"
+            title={[account.category, account.personName, account.bankAccountName].filter(Boolean).join(" · ")}
+          >
+            {account.title}
           </p>
           <p className="mt-2 font-display text-lg font-bold text-foreground">
             {formatCurrency(account.expectedAmount, currencyCode)}
@@ -437,12 +455,16 @@ function CommitmentAccountCard({
     <article className={`${cardClass} p-4`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-1.5 font-display text-sm font-semibold text-foreground">
-            <span className="truncate">{account.title}</span>
-            <InfoTip>{[account.payeeName, account.personName, `Total ${formatCurrency(commitment.totalAmount, currencyCode)} em ${totalInstallments} parcelas`].filter(Boolean).join(" · ")}</InfoTip>
+          <p
+            className="truncate font-display text-sm font-semibold text-foreground"
+            title={[account.payeeName, account.personName].filter(Boolean).join(" · ")}
+          >
+            {account.title}
           </p>
           <p className="mt-2 font-display text-lg font-bold text-foreground">
-            {formatCurrency(account.expectedAmount, currencyCode)}
+            <CalcValue calc={installmentsCalc(account, commitment.totalAmount)} currencyCode={currencyCode}>
+              {formatCurrency(account.expectedAmount, currencyCode)}
+            </CalcValue>
             <span className="ml-1 text-xs font-normal text-muted-foreground">/ parcela</span>
           </p>
           {account.status === "active" && nextPending && (

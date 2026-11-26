@@ -1,9 +1,13 @@
 import { CheckCircle2, Pencil, Trash2 } from "lucide-react";
 import type { SimulationScenarioDTO } from "@finance/shared";
-import { resolveSimulatedPaymentMethod, scenarioTypeLabel } from "@finance/shared";
+import {
+  payloadToSimulatedPurchase,
+  resolveSimulatedPaymentMethod,
+  scenarioTypeLabel,
+} from "@finance/shared";
 import { formatCurrency, formatShortDateKey } from "../../lib/format";
 import { cardClass } from "../dashboard/motion";
-import { InfoTip } from "../InfoTip";
+import { CalcValue, type Calculation } from "../calc/Calculation";
 import { Switch } from "../Switch";
 import type { PlannedCard as CardOption } from "./PlannedPurchaseModal";
 
@@ -31,6 +35,27 @@ function describePayment(scenario: SimulationScenarioDTO, cards: CardOption[], c
   return `${card} · ${count}x de ${formatCurrency(payload.amount / count, currencyCode)}`;
 }
 
+/** Cada saída da compra (uma no Pix ou à vista, uma por parcela no parcelado). */
+function plannedCalc(scenario: SimulationScenarioDTO): Calculation {
+  const purchase = payloadToSimulatedPurchase(scenario.id, scenario.payload);
+  const installments = purchase?.installments ?? [];
+  const many = installments.length > 1;
+  return {
+    title: "Total da compra",
+    lines: installments.map((inst, index) => ({
+      label: many ? `Parcela ${index + 1}/${installments.length}` : "Pagamento",
+      amount: inst.amount,
+      op: index === 0 ? undefined : "+",
+      detail: formatShortDateKey(inst.dueDate.slice(0, 10)),
+    })),
+    result: purchase?.totalAmount ?? scenario.payload.amount,
+    note:
+      scenario.status === "active"
+        ? "Ligada: já entra no ciclo da fatura."
+        : "Desligada: não pesa no ciclo.",
+  };
+}
+
 /** Compra planejada: ligada, entra no ciclo da fatura; desligada, fica guardada sem pesar. */
 export function PlannedCard({ scenario, cards, currencyCode, busy, onToggle, onEdit, onBought, onDelete }: Props) {
   const active = scenario.status === "active";
@@ -38,17 +63,12 @@ export function PlannedCard({ scenario, cards, currencyCode, busy, onToggle, onE
     <article className={`${cardClass} p-4 ${active ? "" : "opacity-70"}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="flex items-center gap-1.5 font-display text-sm font-semibold text-foreground">
-            <span className="truncate">{scenario.name}</span>
-            <InfoTip>
-              {scenario.payload.purchaseDate && `Compra em ${formatShortDateKey(scenario.payload.purchaseDate)}. `}
-              {active ? "Ligada: já entra no ciclo da fatura." : "Desligada: não pesa no ciclo."}
-              {scenario.personName ? ` ${scenario.personName}.` : ""}
-            </InfoTip>
-          </p>
+          <p className="truncate font-display text-sm font-semibold text-foreground">{scenario.name}</p>
           <p className="mt-1 text-xs text-muted-foreground">{describePayment(scenario, cards, currencyCode)}</p>
           <p className="mt-2 font-display text-lg font-bold text-foreground">
-            {formatCurrency(scenario.payload.amount, currencyCode)}
+            <CalcValue calc={plannedCalc(scenario)} currencyCode={currencyCode}>
+              {formatCurrency(scenario.payload.amount, currencyCode)}
+            </CalcValue>
           </p>
         </div>
         <Switch
