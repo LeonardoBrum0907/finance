@@ -208,7 +208,7 @@ function resolveDetailedPaymentMethod(payload: SimulationPayload): DetailedPayme
   return "pix";
 }
 
-function resolveSimulatedPaymentMethod(payload: SimulationPayload): SimulatedPaymentMethod {
+export function resolveSimulatedPaymentMethod(payload: SimulationPayload): SimulatedPaymentMethod {
   const detail = resolveDetailedPaymentMethod(payload);
   if (detail === "cash" || detail === "debit" || detail === "pix") return detail === "debit" ? "debit" : "pix";
   if (detail === "credit" || detail === "credit_single") return "credit_single";

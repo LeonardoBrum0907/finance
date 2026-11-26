@@ -9,7 +9,7 @@ import { RegisterPage } from "./pages/RegisterPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { InvestmentsPage } from "./pages/InvestmentsPage";
 import { ChatPage } from "./pages/ChatPage";
-import { SimulatorPage } from "./pages/SimulatorPage";
+import { CommitmentsPage } from "./pages/CommitmentsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 
 /** Página de módulo opcional: com o módulo desligado, volta para o Início. */
@@ -44,7 +44,7 @@ export default function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route path="/" element={<DashboardPage />} />
-        <Route path="/compromissos" element={<SimulatorPage />} />
+        <Route path="/compromissos" element={<CommitmentsPage />} />
         <Route path="/configuracoes" element={<SettingsPage />} />
         <Route
           path="/investimentos"

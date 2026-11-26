@@ -11,6 +11,7 @@ import {
   toneTextClass,
 } from "../../lib/cycleLabels";
 import { formatShortDateKey } from "../../lib/format";
+import { CalcValue, type CalcLine, type Calculation } from "../calc/Calculation";
 import { cardClass } from "./motion";
 
 export type FinanceMetrics = Pick<
@@ -56,6 +57,8 @@ interface MetricTile {
   value: string;
   status?: string;
   hint?: string;
+  /** Conta que chega no valor; clicar no valor abre ela. */
+  calc?: Calculation;
   extra?: string;
   tone: "positive" | "negative" | "neutral" | "brand";
   icon: LucideIcon;
@@ -80,17 +83,23 @@ function tileTextClass(tone: MetricTile["tone"]): string {
   return toneTextClass(tone);
 }
 
-function netWorthHint(metrics: FinanceMetrics, currencyCode: string): string {
-  const parts = [
-    `Caixa ${formatPlainAmount(metrics.bankBalance, currencyCode)}`,
-    `Cartão −${formatPlainAmount(metrics.creditDebt, currencyCode)}`,
+function netWorthCalc(metrics: FinanceMetrics): Calculation {
+  const lines: CalcLine[] = [
+    { label: "Saldo em conta", amount: metrics.bankBalance },
+    { label: "Dívida do cartão", amount: metrics.creditDebt, op: "-" },
   ];
   if (metrics.investmentsIncluded) {
-    parts.push(`Invest. ${formatPlainAmount(metrics.investmentBalance, currencyCode)}`);
-  } else if (metrics.investmentBalance !== 0) {
-    parts.push(`Invest. fora (${formatPlainAmount(metrics.investmentBalance, currencyCode)})`);
+    lines.push({ label: "Investimentos", amount: metrics.investmentBalance, op: "+" });
   }
-  return parts.join(" · ");
+  return {
+    title: CYCLE_COPY.netWorth,
+    lines,
+    result: metrics.netWorth,
+    note:
+      !metrics.investmentsIncluded && metrics.investmentBalance !== 0
+        ? "Investimentos ficam fora do patrimônio (ajuste em Investimentos)."
+        : undefined,
+  };
 }
 
 function stillMineHint(metrics: FinanceMetrics): string {
@@ -141,7 +150,7 @@ export function FinanceSummaryCard({
       key: "netWorth",
       label: CYCLE_COPY.netWorth,
       value: formatPlainAmount(metrics.netWorth, currencyCode),
-      hint: netWorthHint(metrics, currencyCode),
+      calc: netWorthCalc(metrics),
       tone: toneForValue(metrics.netWorth),
       icon: Landmark,
     },
@@ -202,7 +211,13 @@ export function FinanceSummaryCard({
                 </p>
               )}
               <p className={`font-display text-xl font-bold tabular-nums ${tileTextClass(tile.tone)}`}>
-                {tile.value}
+                {tile.calc ? (
+                  <CalcValue calc={tile.calc} currencyCode={currencyCode}>
+                    {tile.value}
+                  </CalcValue>
+                ) : (
+                  tile.value
+                )}
               </p>
               {tile.key === "stillMine" && closingDelta != null && closingDelta !== 0 && (
                 <p className={`mt-1 text-xs font-medium ${closingDelta > 0 ? "text-positive" : "text-negative"}`}>

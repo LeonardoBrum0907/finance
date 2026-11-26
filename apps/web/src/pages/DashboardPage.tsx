@@ -16,7 +16,7 @@ import {
 } from "@finance/shared";
 import { api } from "../lib/api";
 import { useAppModules } from "../lib/modules";
-import { BillCycleCard } from "../components/simulator/BillCycleCard";
+import { BillCycleCard } from "../components/commitments/BillCycleCard";
 import { DashboardSkeleton } from "../components/dashboard/DashboardSkeleton";
 import { DashboardWidgetList } from "../components/dashboard/DashboardWidgetList";
 import { PersonSelector, type PersonFilter } from "../components/dashboard/PersonSelector";

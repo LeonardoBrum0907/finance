@@ -13,6 +13,7 @@ import type {
 } from "./recurringBills.js";
 import type { PaymentCommitmentDTO, CommitmentStatus, InstallmentStatus } from "./commitments.js";
 import { todayDateKeyInTimeZone } from "./simulation.js";
+import type { BillCycleCardItem, BillCycleScheduledItem } from "./billCycle.js";
 
 export const MANAGED_ACCOUNT_KINDS = [
   "fixed_recurring",
@@ -220,6 +221,54 @@ export function managedAccountToSimulatedPurchase(
     installments,
     createdAt: new Date().toISOString(),
   };
+}
+
+/**
+ * Saídas futuras de uma conta gerenciada, separadas entre o que sai do caixa e o que cai
+ * na fatura do cartão. Contas fixas e parcelamentos usam o cartão em que são cobrados;
+ * o planejado (simulação) usa a forma de pagamento escolhida nele.
+ */
+export function scheduleManagedAccountForBillCycles(
+  account: ManagedAccountForSimulation,
+  options: { today: string; cardAccountIds: readonly string[] },
+): { cash: BillCycleScheduledItem[]; card: BillCycleCardItem[] } {
+  const cash: BillCycleScheduledItem[] = [];
+  const card: BillCycleCardItem[] = [];
+  const purchase = managedAccountToSimulatedPurchase(account);
+  if (!purchase) return { cash, card };
+
+  const defaultCard = options.cardAccountIds[0] ?? null;
+  const knownCard = (id: string | null | undefined) =>
+    id && options.cardAccountIds.includes(id) ? id : defaultCard;
+
+  let cardAccountId: string | null = null;
+  if (account.kind === "simulation") {
+    if (purchase.paymentMethod === "credit_single" || purchase.paymentMethod === "credit_installments") {
+      cardAccountId = knownCard(purchase.creditAccountId);
+    }
+  } else if (account.paidByCard) {
+    cardAccountId = knownCard(account.cardAccountId);
+  }
+
+  for (const inst of purchase.installments) {
+    const date = inst.dueDate.slice(0, 10);
+    if (cardAccountId) {
+      card.push({
+        id: inst.id,
+        title: purchase.title,
+        date,
+        amount: inst.amount,
+        cardAccountId,
+        // Parcelas do cartão já guardam o vencimento da fatura.
+        billMonth: account.kind === "installment_plan" ? date.slice(0, 7) : null,
+      });
+      continue;
+    }
+    // Uma compra planejada para hoje ainda não aconteceu; conta fixa de hoje já pode ter saído.
+    const upcoming = account.kind === "simulation" ? date >= options.today : date > options.today;
+    if (upcoming) cash.push({ id: inst.id, title: purchase.title, date, amount: inst.amount });
+  }
+  return { cash, card };
 }
 
 export function managedAccountsToSimulatedPurchases(
