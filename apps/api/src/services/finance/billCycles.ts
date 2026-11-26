@@ -4,7 +4,7 @@ import {
   isCreditAccount,
   isInvestmentAccount,
   isTransactionOutflow,
-  managedAccountToSimulatedPurchase,
+  scheduleManagedAccountForBillCycles,
   resolveExpectedSalary,
   toLocalDateKey,
   todayDateKeyInTimeZone,
@@ -125,30 +125,13 @@ export async function buildBillCyclesForUser(
     scheduledCash.push({ id: tx.id, title: tx.description, date, amount: Math.abs(tx.amount) });
   }
 
-  // Contas fixas, parcelamentos e simulações ativas.
+  // Contas fixas, parcelamentos e compras planejadas ativas.
   const managed = await loadActiveManagedAccountsForImpact(userId, personId);
+  const cardAccountIds = cards.map((card) => card.accountId);
   for (const account of managed) {
-    const purchase = managedAccountToSimulatedPurchase(account);
-    if (!purchase) continue;
-    const cardAccountId = account.paidByCard
-      ? (account.cardAccountId ?? cards[0]!.accountId)
-      : null;
-    for (const inst of purchase.installments) {
-      const date = inst.dueDate.slice(0, 10);
-      if (cardAccountId) {
-        scheduledCard.push({
-          id: inst.id,
-          title: purchase.title,
-          date,
-          amount: inst.amount,
-          cardAccountId,
-          // Parcelas do cartão já guardam o vencimento da fatura.
-          billMonth: account.kind === "installment_plan" ? date.slice(0, 7) : null,
-        });
-      } else if (date > today) {
-        scheduledCash.push({ id: inst.id, title: purchase.title, date, amount: inst.amount });
-      }
-    }
+    const items = scheduleManagedAccountForBillCycles(account, { today, cardAccountIds });
+    scheduledCash.push(...items.cash);
+    scheduledCard.push(...items.card);
   }
 
   const salary = resolveExpectedSalary(salaryEntries(txs), today);

@@ -162,7 +162,7 @@ export function BillCycleCard({
             {closingDelta != null && closingDelta !== 0 && (
               <p className={`mt-1 text-xs font-medium ${closingDelta > 0 ? "text-positive" : "text-negative"}`}>
                 {closingDelta > 0 ? "+" : ""}
-                {fmt(closingDelta)} ao desligar conta
+                {fmt(closingDelta)} com a última mudança
               </p>
             )}
             <p className="mt-1 text-[11px] text-muted-foreground">
