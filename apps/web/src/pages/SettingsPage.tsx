@@ -27,7 +27,7 @@ export function SettingsPage() {
         Ajustes
       </h1>
 
-      <div role="tablist" className="flex gap-1 border-b border-app-border">
+      <div role="tablist" className="-mx-4 flex gap-1 overflow-x-auto border-b border-app-border px-4 sm:mx-0 sm:px-0">
         {TABS.map((item) => (
           <button
             key={item.id}
@@ -35,7 +35,7 @@ export function SettingsPage() {
             role="tab"
             aria-selected={tab === item.id}
             onClick={() => setParams(item.id === "familia" ? {} : { aba: item.id }, { replace: true })}
-            className={`-mb-px border-b-2 px-4 py-2 text-sm font-medium transition ${
+            className={`-mb-px shrink-0 whitespace-nowrap border-b-2 px-3 py-2 text-sm sm:px-4 font-medium transition ${
               tab === item.id
                 ? "border-brand text-brand"
                 : "border-transparent text-muted-foreground hover:text-foreground"

@@ -42,7 +42,7 @@ export function RecurringBillEditModal({
     <Modal
       onClose={onClose}
       disableBackdropClose={saving}
-      panelClassName="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-3xl border border-app-border bg-app-surface p-6 shadow-2xl"
+      panelClassName="relative max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-3xl border border-app-border bg-app-surface p-5 shadow-2xl sm:p-6"
     >
       <button
         type="button"

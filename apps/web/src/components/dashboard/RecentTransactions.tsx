@@ -30,7 +30,7 @@ import {
 import { api } from "../../lib/api";
 import { formatCurrency } from "../../lib/format";
 import { CYCLE_COPY, formatCycleBalance, formatPlainAmount } from "../../lib/cycleLabels";
-import { cardLargeClass, fadeUp } from "./motion";
+import { cardLargeFlushClass, fadeUp } from "./motion";
 import { PeriodSelector } from "./PeriodSelector";
 import type { PersonFilter } from "./PersonSelector";
 import { TransactionDetailModal } from "./TransactionDetailModal";
@@ -277,9 +277,9 @@ export function RecentTransactions({
         variants={fadeUp}
         initial="hidden"
         animate="visible"
-        className={`${cardLargeClass} overflow-hidden p-0`}
+        className={`${cardLargeFlushClass} overflow-hidden`}
       >
-      <div className="flex flex-col gap-4 border-b border-app-border/60 p-6">
+      <div className="flex flex-col gap-4 border-b border-app-border/60 p-4 sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="font-display text-base font-semibold text-foreground">
@@ -362,7 +362,7 @@ export function RecentTransactions({
       </div>
 
       {query.isLoading ? (
-        <div className="space-y-3 p-6" aria-busy>
+        <div className="space-y-3 p-4 sm:p-6" aria-busy>
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="h-12 animate-pulse rounded-lg bg-slate-100" />
           ))}
@@ -376,7 +376,44 @@ export function RecentTransactions({
           Nenhuma transação encontrada com os filtros selecionados.
         </p>
       ) : (
-        <div className="overflow-x-auto">
+        <>
+        <ul className="divide-y divide-slate-100 md:hidden">
+          {items.map((tx) => {
+            const isOutflow = isTransactionOutflow(tx.amount, tx.accountType);
+            return (
+              <li key={tx.id}>
+                <button
+                  type="button"
+                  onClick={() => setDetailTxId(tx.id)}
+                  className="flex w-full items-start gap-3 px-4 py-3 text-left active:bg-app-bg/70"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-foreground">
+                      {tx.description}
+                    </span>
+                    <span className="block truncate text-[11px] text-muted-foreground">
+                      {formatDateShort(tx.date).replace(" / ", "/")} · {categoryLabel(tx.category)}
+                      {showPersonColumn && tx.personName ? ` · ${tx.personName}` : ""}
+                    </span>
+                    {tx.commitmentSummary && (
+                      <span className="mt-1 inline-flex max-w-full truncate rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
+                        {tx.commitmentSummary.sequence}/{tx.commitmentSummary.totalInstallments}
+                      </span>
+                    )}
+                  </span>
+                  <span
+                    className={`shrink-0 whitespace-nowrap text-sm font-bold ${
+                      isOutflow ? "text-foreground" : "text-positive"
+                    }`}
+                  >
+                    {formatCurrency(toSignedDisplayAmount(tx.amount, tx.accountType), tx.currencyCode)}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="hidden overflow-x-auto md:block">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="bg-app-bg/50 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
@@ -482,9 +519,10 @@ export function RecentTransactions({
             </tbody>
           </table>
         </div>
+        </>
       )}
 
-      <div className="flex flex-col gap-4 border-t border-app-border/60 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 border-t border-app-border/60 px-4 py-4 sm:flex-row sm:px-6 sm:items-center sm:justify-between">
         {footerSummary && (
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
             <span>

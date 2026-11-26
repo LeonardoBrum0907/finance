@@ -10,16 +10,20 @@ export const fadeUp: Variants = {
 };
 
 export const cardClass =
-  "rounded-card border border-app-border/60 bg-app-surface p-6 shadow-card";
+  "rounded-card border border-app-border/60 bg-app-surface p-4 shadow-card sm:p-6";
 
 export const cardHighlightClass =
-  "rounded-card border border-positive/20 bg-positive/5 p-6";
+  "rounded-card border border-positive/20 bg-positive/5 p-4 sm:p-6";
 
 export const cardLargeClass =
-  "rounded-card-lg border border-app-border/60 bg-app-surface p-6 shadow-card";
+  "rounded-card-lg border border-app-border/60 bg-app-surface p-4 shadow-card sm:p-6";
 
 export const creditCardDarkClass =
   "rounded-card border border-sidebar-active bg-sidebar p-5 text-slate-100";
 
 export const creditCardEcoClass =
   "rounded-card border border-positive/35 bg-positive/20 p-5 text-foreground";
+
+/** Cartão grande sem padding (listas que vão de borda a borda). */
+export const cardLargeFlushClass =
+  "rounded-card-lg border border-app-border/60 bg-app-surface shadow-card";

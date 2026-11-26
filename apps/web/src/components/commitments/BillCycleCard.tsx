@@ -206,7 +206,7 @@ export function BillCycleCard({
           />
         </div>
         <div
-          className="inline-flex items-center gap-1 rounded-lg border border-app-border bg-app-bg p-1"
+          className="flex w-full items-center justify-between gap-1 rounded-lg border border-app-border bg-app-bg p-1 sm:inline-flex sm:w-auto"
           role="group"
           aria-label="Navegar entre faturas"
         >
@@ -214,12 +214,12 @@ export function BillCycleCard({
             type="button"
             disabled={index <= 0}
             onClick={() => setSelectedKey(cycles[index - 1]!.cycleKey)}
-            className="rounded-md p-1.5 text-muted-foreground-dark transition hover:bg-app-surface hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+            className="rounded-md p-2.5 text-muted-foreground-dark sm:p-1.5 transition hover:bg-app-surface hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
             aria-label="Fatura anterior"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <div className="min-w-[11rem] px-2 text-center">
+          <div className="min-w-0 px-2 text-center sm:min-w-[11rem]">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               {statusLabel(cycle, cycle.cycleKey === currentCycleKey)}
             </p>
@@ -229,7 +229,7 @@ export function BillCycleCard({
             type="button"
             disabled={index >= cycles.length - 1}
             onClick={() => setSelectedKey(cycles[index + 1]!.cycleKey)}
-            className="rounded-md p-1.5 text-muted-foreground-dark transition hover:bg-app-surface hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+            className="rounded-md p-2.5 text-muted-foreground-dark sm:p-1.5 transition hover:bg-app-surface hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
             aria-label="Próxima fatura"
           >
             <ChevronRight className="h-4 w-4" />
