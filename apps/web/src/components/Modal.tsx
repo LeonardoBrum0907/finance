@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
 const defaultPanelClassName =
-  "relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-3xl border border-app-border bg-app-surface p-6 shadow-2xl";
+  "relative max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-3xl border border-app-border bg-app-surface p-5 shadow-2xl sm:p-6";
 
 interface ModalProps {
   onClose: () => void;
@@ -30,7 +30,7 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 backdrop-blur-xs"
       onClick={() => {
         if (!disableBackdropClose) onClose();
       }}

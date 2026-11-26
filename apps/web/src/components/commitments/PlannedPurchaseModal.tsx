@@ -132,14 +132,14 @@ export function PlannedPurchaseModal({ open, cards, editing, saving, error, onCl
 
         <div>
           <p className="mb-1 text-xs font-medium text-muted-foreground">Como vai pagar</p>
-          <div className="inline-flex flex-wrap rounded-lg border border-app-border bg-app-bg p-0.5">
+          <div className="grid grid-cols-3 rounded-lg border border-app-border bg-app-bg p-0.5">
             {METHODS.map((option) => (
               <button
                 key={option.id}
                 type="button"
                 onClick={() => setMethod(option.id)}
                 disabled={option.id !== "pix" && cards.length === 0}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition disabled:opacity-40 ${
+                className={`rounded-md px-1.5 py-2 text-xs font-medium leading-tight transition disabled:opacity-40 sm:px-3 ${
                   method === option.id
                     ? "bg-app-surface text-brand shadow-sm"
                     : "text-muted-foreground hover:text-foreground"

@@ -12,12 +12,12 @@ import type { AppModuleId } from "@finance/shared";
 import { useAuth } from "../lib/auth";
 import { useAppModules } from "../lib/modules";
 
-type NavItem =
+export type NavItem =
    | { label: string; icon: LucideIcon; to: string; end?: boolean; module?: AppModuleId }
    | { label: string; icon: LucideIcon; comingSoon: true };
 
 /** Núcleo sempre visível; itens com `module` só aparecem com o módulo ligado em Ajustes. */
-const navItems: NavItem[] = [
+export const navItems: NavItem[] = [
    { label: "Início", icon: LayoutDashboard, to: "/", end: true },
    { label: "Compromissos", icon: CalendarCheck, to: "/compromissos" },
    { label: "Investimentos", icon: LineChart, to: "/investimentos", module: "investments" },
@@ -80,7 +80,7 @@ export function Sidebar() {
       .toUpperCase();
 
    return (
-      <aside className="fixed inset-y-0 left-0 z-40 flex h-screen w-64 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar p-6 text-slate-300">
+      <aside className="fixed inset-y-0 left-0 z-40 hidden h-screen md:flex w-64 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar p-6 text-slate-300">
          <div className="flex shrink-0 items-center gap-3 px-2">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-accent/20 bg-accent/10 shadow-lg shadow-accent/5">
                <svg

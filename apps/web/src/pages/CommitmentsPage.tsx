@@ -224,7 +224,7 @@ export function CommitmentsPage() {
   const busyPlannedId = togglePlanned.isPending ? (togglePlanned.variables?.id ?? null) : null;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
           Compromissos

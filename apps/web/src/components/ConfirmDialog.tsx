@@ -40,7 +40,7 @@ export function ConfirmDialog({
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"
         aria-describedby="confirm-dialog-message"
-        className="w-full max-w-sm rounded-3xl border border-app-border bg-app-surface p-6 shadow-2xl"
+        className="w-full max-w-sm rounded-3xl border border-app-border bg-app-surface p-5 shadow-2xl sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-start gap-3">

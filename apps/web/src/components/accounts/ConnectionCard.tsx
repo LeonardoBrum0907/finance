@@ -112,8 +112,8 @@ export function ConnectionCard({
 }: Props) {
   return (
     <div className="rounded-md border border-app-border/60 bg-app-bg p-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+        <div className="flex min-w-0 items-center gap-2">
           {connection.connectorImageUrl && (
             <img
               src={connection.connectorImageUrl}
@@ -121,17 +121,17 @@ export function ConnectionCard({
               className="h-6 w-6 rounded"
             />
           )}
-          <span className="text-sm font-medium text-foreground/90">
+          <span className="min-w-0 truncate text-sm font-medium text-foreground/90">
             {connection.connectorName ?? "Instituição"}
           </span>
-          <span className="text-xs text-muted-foreground-dark">{connection.status}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">{connection.status}</span>
         </div>
-        <div className="flex gap-3 text-xs">
+        <div className="flex gap-4 text-xs">
           <button
             type="button"
             onClick={() => onSync(connection.id)}
             disabled={syncing}
-            className="text-brand hover:underline disabled:opacity-60"
+            className="py-1 text-brand hover:underline disabled:opacity-60"
           >
             {syncing ? "Sincronizando..." : "Sincronizar"}
           </button>
@@ -139,7 +139,7 @@ export function ConnectionCard({
             type="button"
             onClick={() => onDisconnect(connection.id)}
             disabled={disconnecting}
-            className="text-danger hover:underline disabled:opacity-60"
+            className="py-1 text-danger hover:underline disabled:opacity-60"
           >
             Desconectar
           </button>
@@ -156,7 +156,7 @@ export function ConnectionCard({
               </>
             ) : (
               <div className="flex justify-between gap-3">
-                <span>{acc.name}</span>
+                <span className="min-w-0 truncate">{acc.name}</span>
                 <span className="shrink-0">{formatCurrency(acc.balance, acc.currencyCode)}</span>
               </div>
             )}

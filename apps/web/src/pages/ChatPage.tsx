@@ -40,7 +40,7 @@ export function ChatPage() {
   }, [threads.data, threads.isLoading, activeThreadId, createThread.isPending, createThread]);
 
   return (
-    <div className="flex h-[calc(100vh-3rem)] flex-col overflow-hidden md:flex-row md:gap-4 lg:h-[calc(100vh-4rem)]">
+    <div className="flex h-[calc(100dvh-9rem-env(safe-area-inset-bottom))] flex-col overflow-hidden md:h-[calc(100vh-3rem)] md:flex-row md:gap-4 lg:h-[calc(100vh-4rem)]">
       <ChatSidebar
         activeThreadId={activeThreadId}
         onSelectThread={setActiveThreadId}

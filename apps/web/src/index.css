@@ -136,3 +136,12 @@ body {
     box-shadow: var(--shadow-card);
   }
 }
+
+/* iOS dá zoom ao focar campos com fonte < 16px; no celular os campos usam 16px. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

@@ -1,4 +1,4 @@
-import { cardClass, cardLargeClass } from "./motion";
+import { cardClass, cardLargeClass, cardLargeFlushClass } from "./motion";
 
 function SkeletonBar({ className }: { className?: string }) {
   return (
@@ -54,8 +54,8 @@ export function DashboardSkeleton() {
         </div>
       </div>
 
-      <div className={`${cardLargeClass} overflow-hidden p-0`}>
-        <div className="border-b border-app-border/60 p-6">
+      <div className={`${cardLargeFlushClass} overflow-hidden`}>
+        <div className="border-b border-app-border/60 p-4 sm:p-6">
           <SkeletonBar className="h-5 w-44" />
           <SkeletonBar className="mt-2 h-4 w-64" />
         </div>
