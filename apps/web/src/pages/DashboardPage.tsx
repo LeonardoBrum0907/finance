@@ -1,26 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
-  AggregateSimulationImpactDTO,
   BillCyclesResult,
-  CategoryChartSelection,
-  CreateSimulationScenarioInput,
   DashboardCycleSummaryResponse,
   DashboardSummary,
   PersonDTO,
-  SimulatedPurchaseInput,
   UserSettingsDTO,
 } from "@finance/shared";
 import {
-  hasAnyEnabledDashboardWidget,
-  isCreditAccount,
+  effectiveDashboardWidgets,
   isPaydayDayConfigured,
   needsDashboardDetails,
   parsePaydayCycleAnchor,
   resolveDashboardWidgets,
-  simulatedPurchaseInputToPayload,
 } from "@finance/shared";
 import { api } from "../lib/api";
+import { useAppModules } from "../lib/modules";
 import { BillCycleCard } from "../components/simulator/BillCycleCard";
 import { DashboardSkeleton } from "../components/dashboard/DashboardSkeleton";
 import { DashboardWidgetList } from "../components/dashboard/DashboardWidgetList";
@@ -43,21 +38,13 @@ function detailsUrl(personId: PersonFilter, cycleKey: string, billKey: string | 
   return `/api/dashboard?${params}`;
 }
 
-function impactUrl(personId: PersonFilter): string {
-  return personId === "all"
-    ? "/api/simulations/impact"
-    : `/api/simulations/impact?personId=${personId}`;
-}
-
 export function DashboardPage() {
   const { setDashboardPersonFilter } = useAssistant();
   const queryClient = useQueryClient();
   const [personId, setPersonId] = useState<PersonFilter>("all");
   const [selectedCycleKey, setSelectedCycleKey] = useState<string | null>(null);
   const [selectedBillKey, setSelectedBillKey] = useState<string | null>(null);
-  const [simulateModalOpen, setSimulateModalOpen] = useState(false);
-  const [categorySelection, setCategorySelection] = useState<CategoryChartSelection | null>(null);
-  const transactionsRef = useRef<HTMLElement>(null);
+  const { modules } = useAppModules();
 
   const settings = useQuery({
     queryKey: ["settings"],
@@ -96,29 +83,6 @@ export function DashboardPage() {
     queryFn: () => api.get<DashboardCycleSummaryResponse>(summaryUrl(personId, cycleKeyForApi)),
   });
 
-  const saveSimulations = useMutation({
-    mutationFn: async (inputs: SimulatedPurchaseInput[]) => {
-      const effectivePersonId = personId === "all" ? undefined : personId;
-      for (const input of inputs) {
-        const payload = simulatedPurchaseInputToPayload(input, effectivePersonId);
-        const body: CreateSimulationScenarioInput = {
-          name: input.title,
-          type: payload.type,
-          status: "active",
-          payload,
-          personId: effectivePersonId,
-        };
-        await api.post("/api/simulations", body);
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["simulations-impact"] });
-      queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["bill-cycles"] });
-    },
-  });
-
   const billPaidMutation = useMutation({
     mutationFn: ({ cycleKey, paid }: { cycleKey: string; paid: boolean }) => {
       const qs = personId === "all" ? "" : `?personId=${personId}`;
@@ -142,8 +106,10 @@ export function DashboardPage() {
   });
 
   const data = summary.data;
-  const dashboardWidgets = resolveDashboardWidgets(settings.data?.dashboardWidgets);
-  const anyWidgetEnabled = hasAnyEnabledDashboardWidget(dashboardWidgets);
+  const dashboardWidgets = effectiveDashboardWidgets(
+    resolveDashboardWidgets(settings.data?.dashboardWidgets),
+    modules,
+  );
 
   useEffect(() => {
     if (data?.selectedCycleKey && !selectedCycleKey) {
@@ -185,8 +151,6 @@ export function DashboardPage() {
 
   const effectivePersonId = personId === "all" ? undefined : personId;
   const activeCycleKey = data?.selectedCycleKey ?? selectedCycleKey;
-  const selectedCycle = data?.navigableCycles.find((c) => c.cycleKey === activeCycleKey);
-  const simulationEnabled = Boolean(selectedCycle?.isCurrent);
 
   const detailsBillKey = selectedBill ? billKey : null;
   const details = useQuery({
@@ -195,74 +159,13 @@ export function DashboardPage() {
     enabled: Boolean(data?.household && activeCycleKey) && needsDashboardDetails(dashboardWidgets),
   });
 
-  const simulationImpact = useQuery({
-    queryKey: ["simulations-impact", personId],
-    queryFn: () => api.get<AggregateSimulationImpactDTO>(impactUrl(personId)),
-    enabled: simulationEnabled && dashboardWidgets["simulation-impact"],
-  });
-
-  useEffect(() => {
-    setCategorySelection(null);
-  }, [personId, activeCycleKey]);
-
-  const handleCategorySelect = useCallback((selection: CategoryChartSelection) => {
-    setCategorySelection(selection);
-    requestAnimationFrame(() => {
-      transactionsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }, []);
-
-  const handleClearCategorySelection = useCallback(() => {
-    setCategorySelection(null);
-  }, []);
-
-  const creditAccountsForSimulation = useMemo(() => {
-    if (!data) return [];
-    return data.accounts
-      .filter((acc) => isCreditAccount(acc.type))
-      .map((acc) => ({
-        id: acc.id,
-        name: acc.name,
-        balanceCloseDate: acc.balanceCloseDate,
-        balanceDueDate: acc.balanceDueDate,
-        openBillAmount: acc.openBillAmount ?? acc.nextBillAmount,
-        closedBillAmount: acc.closedBillAmount,
-        creditLimit: acc.creditLimit,
-        availableCreditLimit: acc.availableCreditLimit,
-      }));
-  }, [data]);
-
-  const handleSaveSimulations = useCallback(
-    async (inputs: SimulatedPurchaseInput[]) => {
-      await saveSimulations.mutateAsync(inputs);
-    },
-    [saveSimulations],
-  );
-
-  const periodSummaryForTransactions = data?.household
-    ? {
-        months: 1 as const,
-        income: data.household.realizedNet > 0 ? data.household.realizedNet : 0,
-        expenses: data.household.realizedNet < 0 ? Math.abs(data.household.realizedNet) : 0,
-        net: data.household.realizedNet,
-        availableNet: data.household.closingBalance,
-        from: data.household.from,
-        to: data.household.to,
-        label: selectedCycle?.label,
-        periodMode: "payday" as const,
-      }
-    : undefined;
-
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-            Painel
+            Início
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground-dark">
-            Patrimônio, o que ainda é seu neste período e quanto sobrou no ciclo.
-          </p>
         </div>
         {data && data.accounts.length > 0 && (
           <div className="flex flex-wrap items-center gap-3">
@@ -342,33 +245,16 @@ export function DashboardPage() {
           />
         )}
         <DashboardWidgetList
-          hideCycleTiles={!!billResult && painelBillCycles.length > 0}
           widgets={dashboardWidgets}
-          anyWidgetEnabled={anyWidgetEnabled}
           household={data.household}
           currencyCode={data.currencyCode}
-          householdPaydayAligned={data.householdPaydayAligned}
           personFilter={effectivePersonId}
           personId={personId}
           activeCycleKey={activeCycleKey}
           billCycleKey={selectedBill ? billKey : null}
-          periodSummary={periodSummaryForTransactions}
-          transactionsRef={transactionsRef}
-          simulationEnabled={simulationEnabled}
-          simulateModalOpen={simulateModalOpen}
-          onSimulateModalOpenChange={setSimulateModalOpen}
-          onSaveSimulations={handleSaveSimulations}
-          savingSimulation={saveSimulations.isPending}
-          creditAccounts={creditAccountsForSimulation}
-          selectedCycle={selectedCycle}
           accounts={data.accounts}
           details={details.data}
           detailsFailed={details.isError}
-          simulationImpact={simulationImpact.data}
-          categorySelection={categorySelection}
-          onCategorySelect={handleCategorySelect}
-          onClearCategorySelection={handleClearCategorySelection}
-          onSelectCycle={setSelectedCycleKey}
         />
         </>
       )}
