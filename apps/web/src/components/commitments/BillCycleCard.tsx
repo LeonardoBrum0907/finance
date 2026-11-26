@@ -12,6 +12,7 @@ import type { BillCycleSummary } from "@finance/shared";
 import { formatPlainAmount, toneBorderClass, toneTextClass } from "../../lib/cycleLabels";
 import { formatShortDateKey } from "../../lib/format";
 import { cardClass } from "../dashboard/motion";
+import { InfoTip } from "../InfoTip";
 
 const MONTHS = [
   "janeiro",
@@ -96,18 +97,22 @@ export function BillCycleCard({
   const firstUnpaidKey = cycles.find((c) => c.money)?.cycleKey;
   const fmt = (value: number) => formatPlainAmount(value, currencyCode);
   const canSpend = cycle.status === "open" || cycle.status === "future";
-  const leftoverLabel = canSpend ? "Ainda posso gastar no cartão" : "Sobra depois de pagar";
+  const leftoverLabel = canSpend ? "Ainda posso gastar" : "Sobra depois de pagar";
 
   return (
     <section className={cardClass}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="font-display text-sm font-semibold text-foreground">Ciclo da fatura</h2>
+          <h2 className="flex items-center gap-1.5 font-display text-sm font-semibold text-foreground">
+            Ciclo da fatura
+            <InfoTip>
+              Compras de {formatShortDateKey(cycle.purchaseFrom)} a {formatShortDateKey(cycle.purchaseTo)}.{" "}
+              {cyclePeriodLabel(cycle)}.
+            </InfoTip>
+          </h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Compras de {formatShortDateKey(cycle.purchaseFrom)} a{" "}
-            {formatShortDateKey(cycle.purchaseTo)} · vence em {formatShortDateKey(cycle.dueDate)}
+            Vence em {formatShortDateKey(cycle.dueDate)}
           </p>
-          <p className="mt-0.5 text-xs text-muted-foreground">{cyclePeriodLabel(cycle)}</p>
           <BillPaidButton
             cycle={cycle}
             onMarkPaid={onMarkPaid}
@@ -151,8 +156,12 @@ export function BillCycleCard({
         {money && (
           <div className={`rounded-xl border px-4 py-3 ${toneBorderClass(tone(money.leftover))}`}>
             <div className="flex items-start justify-between gap-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 {leftoverLabel}
+                <InfoTip>
+                  Dinheiro para a fatura {fmt(money.available)} − fatura prevista {fmt(cycle.billTotal)}.
+                  {canSpend && ` É o que cabe em compras novas até o fechamento (${formatShortDateKey(cycle.purchaseTo)}).`}
+                </InfoTip>
               </p>
               <PiggyBank className={`h-3.5 w-3.5 ${toneTextClass(tone(money.leftover))}`} />
             </div>
@@ -165,81 +174,70 @@ export function BillCycleCard({
                 {fmt(closingDelta)} com a última mudança
               </p>
             )}
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Dinheiro para a fatura {fmt(money.available)} − fatura prevista {fmt(cycle.billTotal)}
-            </p>
-            {canSpend && (
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                É o que cabe em compras novas até o fechamento ({formatShortDateKey(cycle.purchaseTo)}).
-              </p>
-            )}
           </div>
         )}
 
         {money && (
           <div className={`rounded-xl border px-4 py-3 ${toneBorderClass("neutral")}`}>
             <div className="flex items-start justify-between gap-2">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Dinheiro para pagar a fatura
+              <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Dinheiro para pagar
+                <InfoTip>
+                  <span className="block">
+                    {cycle.cycleKey === firstUnpaidKey ? "Saldo em conta hoje" : "Sobra da fatura anterior"}:{" "}
+                    {fmt(money.startingBalance)}
+                  </span>
+                  {money.salary > 0 && (
+                    <span className="block">
+                      + Salário {money.salaryDate ? `de ${formatShortDateKey(money.salaryDate)}` : ""}:{" "}
+                      {fmt(money.salary)}
+                    </span>
+                  )}
+                  {money.cashItems.map((item) => (
+                    <span key={item.id} className="block">
+                      − {item.title} ({formatShortDateKey(item.date)}): {fmt(item.amount)}
+                    </span>
+                  ))}
+                  <span className="mt-1 block">Pix e débito feitos até o vencimento saem deste valor.</span>
+                </InfoTip>
               </p>
               <Wallet className="h-3.5 w-3.5 text-muted-foreground" />
             </div>
             <p className="font-display text-xl font-bold tabular-nums text-foreground">
               {fmt(money.available)}
             </p>
-            <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
-              <li>
-                {cycle.cycleKey === firstUnpaidKey ? "Saldo em conta hoje" : "Sobra da fatura anterior"}
-                : {fmt(money.startingBalance)}
-              </li>
-              {money.salary > 0 && (
-                <li>
-                  + Salário {money.salaryDate ? `de ${formatShortDateKey(money.salaryDate)}` : ""}:{" "}
-                  {fmt(money.salary)}
-                </li>
-              )}
-              {money.cashItems.map((item) => (
-                <li key={item.id}>
-                  − {item.title} ({formatShortDateKey(item.date)}): {fmt(item.amount)}
-                </li>
-              ))}
-            </ul>
             {money.salaryAfterDue && (
               <p className="mt-1 text-xs font-medium text-negative">
-                O salário de {formatShortDateKey(money.salaryAfterDue)} cai depois do vencimento e não
-                ajuda a pagar esta fatura.
+                Salário de {formatShortDateKey(money.salaryAfterDue)} cai depois do vencimento.
               </p>
             )}
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Pix e débito feitos até o vencimento saem deste valor.
-            </p>
           </div>
         )}
 
         <div className={`rounded-xl border px-4 py-3 ${toneBorderClass("neutral")}`}>
           <div className="flex items-start justify-between gap-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               {cycle.status === "paid" ? "Fatura" : "Fatura prevista"}
+              <InfoTip>
+                {cycle.bills.map((bill) => (
+                  <span key={bill.accountId} className="block">
+                    {bill.accountName}: {fmt(bill.amount)}
+                    {bill.expected > 0 && ` (${fmt(bill.charged)} lançados + ${fmt(bill.expected)} previstos)`}
+                    {cycle.status !== "paid" && bill.estimated && bill.expected === 0 && " · estimada"}
+                  </span>
+                ))}
+                {cycle.expectedCardItems.length > 0 && (
+                  <span className="mt-1 block">
+                    Previstos: {cycle.expectedCardItems.map((item) => item.title).join(", ")}
+                  </span>
+                )}
+              </InfoTip>
             </p>
             <CreditCard className="h-3.5 w-3.5 text-muted-foreground" />
           </div>
           <p className="font-display text-xl font-bold tabular-nums text-foreground">
             {fmt(cycle.billTotal)}
           </p>
-          <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
-            {cycle.bills.map((bill) => (
-              <li key={bill.accountId}>
-                {bill.accountName}: {fmt(bill.amount)}
-                {bill.expected > 0 && ` (${fmt(bill.charged)} lançados + ${fmt(bill.expected)} previstos)`}
-                {cycle.status !== "paid" && bill.estimated && bill.expected === 0 && " · estimada"}
-              </li>
-            ))}
-          </ul>
-          {cycle.expectedCardItems.length > 0 && (
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Previstos: {cycle.expectedCardItems.map((item) => item.title).join(", ")}
-            </p>
-          )}
         </div>
       </div>
     </section>

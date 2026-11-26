@@ -3,6 +3,8 @@ import type { SimulationScenarioDTO } from "@finance/shared";
 import { resolveSimulatedPaymentMethod, scenarioTypeLabel } from "@finance/shared";
 import { formatCurrency, formatShortDateKey } from "../../lib/format";
 import { cardClass } from "../dashboard/motion";
+import { InfoTip } from "../InfoTip";
+import { Switch } from "../Switch";
 import type { PlannedCard as CardOption } from "./PlannedPurchaseModal";
 
 interface Props {
@@ -22,12 +24,11 @@ function describePayment(scenario: SimulationScenarioDTO, cards: CardOption[], c
     return scenarioTypeLabel(payload.type);
   }
   const method = resolveSimulatedPaymentMethod(payload);
-  const when = payload.purchaseDate ? ` em ${formatShortDateKey(payload.purchaseDate)}` : "";
-  if (method === "pix" || method === "debit") return `Pix ou débito${when}`;
+  if (method === "pix" || method === "debit") return "Pix ou débito";
   const card = cards.find((c) => c.id === payload.creditAccountId)?.name ?? "Cartão";
-  if (method === "credit_single") return `${card} à vista${when}`;
+  if (method === "credit_single") return `${card} · à vista`;
   const count = payload.totalInstallments ?? payload.installments ?? 1;
-  return `${card} em ${count}x de ${formatCurrency(payload.amount / count, currencyCode)}${when}`;
+  return `${card} · ${count}x de ${formatCurrency(payload.amount / count, currencyCode)}`;
 }
 
 /** Compra planejada: ligada, entra no ciclo da fatura; desligada, fica guardada sem pesar. */
@@ -37,33 +38,25 @@ export function PlannedCard({ scenario, cards, currencyCode, busy, onToggle, onE
     <article className={`${cardClass} p-4 ${active ? "" : "opacity-70"}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate font-display text-sm font-semibold text-foreground">{scenario.name}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {describePayment(scenario, cards, currencyCode)}
-            {scenario.personName ? ` · ${scenario.personName}` : ""}
+          <p className="flex items-center gap-1.5 font-display text-sm font-semibold text-foreground">
+            <span className="truncate">{scenario.name}</span>
+            <InfoTip>
+              {scenario.payload.purchaseDate && `Compra em ${formatShortDateKey(scenario.payload.purchaseDate)}. `}
+              {active ? "Ligada: já entra no ciclo da fatura." : "Desligada: não pesa no ciclo."}
+              {scenario.personName ? ` ${scenario.personName}.` : ""}
+            </InfoTip>
           </p>
+          <p className="mt-1 text-xs text-muted-foreground">{describePayment(scenario, cards, currencyCode)}</p>
           <p className="mt-2 font-display text-lg font-bold text-foreground">
             {formatCurrency(scenario.payload.amount, currencyCode)}
           </p>
         </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={active}
-          aria-label={active ? "Desligar do ciclo" : "Ligar no ciclo"}
-          title={active ? "Entrando no ciclo" : "Fora do ciclo"}
+        <Switch
+          checked={active}
+          onChange={onToggle}
           disabled={busy}
-          onClick={onToggle}
-          className={`relative mt-0.5 inline-flex h-7 w-12 shrink-0 cursor-pointer items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-60 ${
-            active ? "bg-brand" : "bg-slate-300"
-          }`}
-        >
-          <span
-            className={`inline-block h-5 w-5 transform rounded-full bg-app-surface shadow-sm transition ${
-              active ? "translate-x-6" : "translate-x-1"
-            }`}
-          />
-        </button>
+          label={active ? "Desligar do ciclo" : "Ligar no ciclo"}
+        />
       </div>
       <div className="mt-3 flex flex-wrap gap-2 text-xs">
         <button

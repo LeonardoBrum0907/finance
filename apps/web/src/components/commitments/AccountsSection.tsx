@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Pencil, Plus, RefreshCw, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
+import { Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type {
   BillCyclesResult,
   ManagedAccountDTO,
@@ -22,9 +22,11 @@ import { formatCurrency } from "../../lib/format";
 import { useConfirm } from "../../lib/confirm";
 import { cardClass } from "../dashboard/motion";
 import { RecurringBillEditModal } from "./RecurringBillEditModal";
+import { InfoTip } from "../InfoTip";
+import { Switch } from "../Switch";
 import { PlannedCard } from "./PlannedCard";
 import type { PlannedCard as PlannedCardOption } from "./PlannedPurchaseModal";
-import { accountItemSubtitle, commitmentNextPendingEntry, filterAccountsByPerson } from "./accounts";
+import { commitmentNextPendingEntry, filterAccountsByPerson } from "./accounts";
 
 interface Props {
   /** Contas ativas, desligadas e compras planejadas (ligadas ou não). */
@@ -66,10 +68,10 @@ function SectionHeader({
 }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h2 className="font-display text-base font-semibold text-foreground">{title}</h2>
-        {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
-      </div>
+      <h2 className="flex items-center gap-1.5 font-display text-base font-semibold text-foreground">
+        {title}
+        {hint && <InfoTip>{hint}</InfoTip>}
+      </h2>
       {action}
     </div>
   );
@@ -148,7 +150,7 @@ export function AccountsSection({
         />
         {planned.length === 0 ? (
           <p className="rounded-xl border border-dashed border-app-border px-4 py-6 text-center text-sm text-muted-foreground">
-            Nada planejado. Planeje uma compra para ver quanto ela tira do que você ainda pode gastar.
+            Nada planejado.
           </p>
         ) : (
           <div className="grid gap-3 lg:grid-cols-2">
@@ -186,7 +188,7 @@ export function AccountsSection({
         />
         {fixed.length === 0 ? (
           <p className="rounded-xl border border-dashed border-app-border px-4 py-6 text-center text-sm text-muted-foreground">
-            Nenhuma conta fixa. Use "Atualizar do extrato" para procurar.
+            Nenhuma conta fixa.
           </p>
         ) : (
           <div className="grid gap-3 lg:grid-cols-2">
@@ -342,17 +344,12 @@ function RecurringBillAccountCard({
   }
 
   return (
-    <article className={`${cardClass} p-4`}>
+    <article className={`${cardClass} p-4 ${account.status === "active" ? "" : "opacity-70"}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate font-display text-sm font-semibold text-foreground">
-            {account.title}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {recurringBillStatusLabel(account.status as "active" | "inactive" | "dismissed")}
-            {account.category ? ` · ${account.category}` : ""}
-            {account.personName ? ` · ${account.personName}` : ""}
-            {account.bankAccountName ? ` · ${account.bankAccountName}` : ""}
+          <p className="flex items-center gap-1.5 font-display text-sm font-semibold text-foreground">
+            <span className="truncate">{account.title}</span>
+            <InfoTip>{[recurringBillStatusLabel(account.status as "active" | "inactive" | "dismissed"), account.category, account.personName, account.bankAccountName].filter(Boolean).join(" · ")}</InfoTip>
           </p>
           <p className="mt-2 font-display text-lg font-bold text-foreground">
             {formatCurrency(account.expectedAmount, currencyCode)}
@@ -360,7 +357,6 @@ function RecurringBillAccountCard({
           </p>
           {account.status === "active" && (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-              {billCycle && <span className="text-muted-foreground">{billCycle.label}</span>}
               <span
                 className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${monthStatusClass}`}
               >
@@ -378,24 +374,14 @@ function RecurringBillAccountCard({
             </div>
           )}
         </div>
+        <Switch
+          checked={account.status === "active"}
+          onChange={onToggle}
+          label={account.status === "active" ? "Desligar conta" : "Ligar conta"}
+        />
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={onToggle}
-          className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-app-border px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:bg-app-bg"
-        >
-          {account.status === "active" ? (
-            <>
-              <ToggleLeft className="h-3.5 w-3.5" /> Desativar
-            </>
-          ) : (
-            <>
-              <ToggleRight className="h-3.5 w-3.5" /> Ativar
-            </>
-          )}
-        </button>
         <button
           type="button"
           onClick={onEdit}
@@ -451,17 +437,13 @@ function CommitmentAccountCard({
     <article className={`${cardClass} p-4`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="truncate font-display text-sm font-semibold text-foreground">
-            {account.title}
+          <p className="flex items-center gap-1.5 font-display text-sm font-semibold text-foreground">
+            <span className="truncate">{account.title}</span>
+            <InfoTip>{[account.payeeName, account.personName, `Total ${formatCurrency(commitment.totalAmount, currencyCode)} em ${totalInstallments} parcelas`].filter(Boolean).join(" · ")}</InfoTip>
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">{accountItemSubtitle(account)}</p>
           <p className="mt-2 font-display text-lg font-bold text-foreground">
             {formatCurrency(account.expectedAmount, currencyCode)}
             <span className="ml-1 text-xs font-normal text-muted-foreground">/ parcela</span>
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Total {formatCurrency(commitment.totalAmount, currencyCode)} · {totalInstallments}{" "}
-            parcelas
           </p>
           {account.status === "active" && nextPending && (
             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
