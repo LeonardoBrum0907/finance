@@ -10,7 +10,6 @@ import {
   isPromptCacheEnabled,
   type PromptCacheScope,
 } from "./aiPromptCache.js";
-import { buildGoalsContextBlock } from "./finance/goalsContext.js";
 import {
   buildHouseholdArena,
   buildHouseholdComparisonContext,
@@ -27,8 +26,7 @@ Use markdown leve (títulos ## e listas). Inclua:
 1. Ranking e dinâmica entre as pessoas
 2. Destaques de receitas e despesas consolidadas
 3. Comparações diretas mais relevantes
-4. Status dos objetivos compartilhados (se houver)
-5. Uma ação prática para a próxima semana
+4. Uma ação prática para a próxima semana
 ${ARENA_TONE}
 Baseie-se APENAS nos dados fornecidos. Máximo 350 palavras.`;
 
@@ -43,7 +41,7 @@ ${ARENA_TONE}
 Baseie-se APENAS nos dados fornecidos. Máximo 300 palavras.`;
 
 const SINGLE_PERSON_RECAP_PROMPT = `Gere um resumo semanal conciso das finanças do usuário em português do Brasil.
-Use markdown leve (títulos ## e listas). Inclua destaques, categorias, sobra/saldo, objetivos e uma ação prática.
+Use markdown leve (títulos ## e listas). Inclua destaques, categorias, sobra/saldo e uma ação prática.
 Seja direto. Baseie-se APENAS nos dados fornecidos. Máximo 300 palavras.`;
 
 export type RecapScope = "household" | "person";
@@ -144,13 +142,10 @@ export async function createWeeklyRecap(
       });
     }
 
-    const [context, goalsContext] = await Promise.all([
-      buildFinancialContext(userId, { personId: options.personId }),
-      buildGoalsContextBlock(userId),
-    ]);
+    const context = await buildFinancialContext(userId, { personId: options.personId });
     const arenaBlock = buildHouseholdComparisonContext(arena);
     const staticSystem = `${SYSTEM_PROMPT}\n\n${PERSON_RECAP_PROMPT}`;
-    const dynamicContext = `# Dados financeiros (${ranking.personName})\n${context}\n\n# ${goalsContext}\n\n${arenaBlock}`;
+    const dynamicContext = `# Dados financeiros (${ranking.personName})\n${context}\n\n${arenaBlock}`;
 
     const text = await generateRecapText(staticSystem, dynamicContext, "recap-person");
 
@@ -193,12 +188,9 @@ export async function createWeeklyRecap(
     arena.personCount > 1 ? HOUSEHOLD_RECAP_PROMPT : SINGLE_PERSON_RECAP_PROMPT
   }`;
 
-  const [context, goalsContext] = await Promise.all([
-    buildFinancialContext(userId),
-    buildGoalsContextBlock(userId),
-  ]);
+  const context = await buildFinancialContext(userId);
 
-  const dynamicParts = [`# Dados financeiros\n${context}`, `# ${goalsContext}`];
+  const dynamicParts = [`# Dados financeiros\n${context}`];
   if (arena.personCount > 1) {
     dynamicParts.push(buildHouseholdComparisonContext(arena));
   }

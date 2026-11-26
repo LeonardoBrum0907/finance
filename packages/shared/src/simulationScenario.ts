@@ -103,18 +103,6 @@ export const completeSimulationSchema = z.object({
 
 export type CompleteSimulationInput = z.infer<typeof completeSimulationSchema>;
 
-export const convertScenarioToGoalSchema = z.object({
-  name: z.string().min(1).max(120).optional(),
-  description: z.string().max(500).optional(),
-  type: z.enum(["savings", "purchase", "debt_payoff", "emergency_fund", "custom"]).optional(),
-  targetAmount: z.number().positive().optional(),
-  targetDate: z.string().optional(),
-  createPlan: z.boolean().optional(),
-  monthlyAllocation: z.number().positive().optional(),
-});
-
-export type ConvertScenarioToGoalInput = z.infer<typeof convertScenarioToGoalSchema>;
-
 export interface SimulationScenarioDTO {
   id: string;
   name: string;
@@ -127,8 +115,6 @@ export interface SimulationScenarioDTO {
   priority: number;
   linkedTransactionId: string | null;
   linkedInvestmentTxId: string | null;
-  linkedGoalId: string | null;
-  linkedGoalName: string | null;
   lastVerdict: string | null;
   completedAt: string | null;
   createdAt: string;

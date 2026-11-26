@@ -2,7 +2,6 @@ import { PluggyClient } from "pluggy-sdk";
 import { isBrokerConnector } from "@finance/shared";
 import { env, isPluggyConfigured } from "../env.js";
 import { prisma } from "../prisma.js";
-import { reconcileGoalsForUser } from "./finance/goalTracking.js";
 import { matchCommitmentInstallments } from "./finance/commitments.js";
 import { runRecurringBillPipeline } from "./finance/recurringBills.js";
 import {
@@ -230,7 +229,6 @@ async function runSyncConnection(connectionId: string): Promise<void> {
     select: { person: { select: { userId: true } } },
   });
   if (person?.person.userId) {
-    await reconcileGoalsForUser(person.person.userId);
     await matchCommitmentInstallments(person.person.userId);
     await runRecurringBillPipeline(person.person.userId);
   }

@@ -28,7 +28,6 @@ interface PersonWeekMetrics {
   net: number;
   prevNet: number;
   prevExpenses: number;
-  budgetOverruns: number;
   topCategory: string | null;
 }
 
@@ -109,14 +108,6 @@ function buildVerdict(
     };
   }
 
-  if (metrics.budgetOverruns > 0) {
-    return {
-      verdict: `${rank}º lugar — ${metrics.budgetOverruns} categoria(s) estouraram o orçamento da casa.`,
-      tone: "roast",
-      badges,
-    };
-  }
-
   return {
     verdict: `${rank}º lugar — sobra de ${formatCurrency(metrics.net)}, mas ${name} pode subir no ranking.`,
     tone: "neutral",
@@ -184,34 +175,12 @@ async function computePersonMetrics(
   weekRange: { from: string; to: string },
   prevWeekRange: { from: string; to: string },
 ): Promise<PersonWeekMetrics[]> {
-  const budgets = await prisma.budgetGroup.findMany({
-    where: { userId },
-    include: { members: true },
-  });
-
-  const householdCats = getSpendingByCategory(txs, weekRange);
-  const budgetLimits = new Map<string, number>();
-  for (const budget of budgets) {
-    const cats = budget.members.map((m) => m.categoryGroup);
-    const spent = householdCats
-      .filter((c) => cats.includes(c.category))
-      .reduce((s, c) => s + c.total, 0);
-    if (budget.limit > 0 && spent / budget.limit >= 1) {
-      for (const cat of cats) budgetLimits.set(cat, budget.limit);
-    }
-  }
-
   return people.map((person) => {
     const ptxs = personTxs(txs, person.id);
     const current = summarizeTransactions(ptxs, weekRange);
     const previous = summarizeTransactions(ptxs, prevWeekRange);
     const cats = getSpendingByCategory(ptxs, weekRange);
     const topCategory = cats[0]?.category ?? null;
-
-    let budgetOverruns = 0;
-    for (const cat of cats) {
-      if (budgetLimits.has(cat.category) && cat.total > 0) budgetOverruns++;
-    }
 
     return {
       personId: person.id,
@@ -221,7 +190,6 @@ async function computePersonMetrics(
       net: current.net,
       prevNet: previous.net,
       prevExpenses: previous.expenses,
-      budgetOverruns,
       topCategory,
     };
   });
@@ -233,7 +201,7 @@ function scorePeople(metrics: PersonWeekMetrics[]): Map<string, number> {
     metrics.map((m) => m.net - m.prevNet),
   );
   const disciplineScores = normalizeScores(
-    metrics.map((m) => -m.budgetOverruns * 10 - m.expenses),
+    metrics.map((m) => -m.expenses),
   );
   const consistencyScores = normalizeScores(
     metrics.map((m) => {

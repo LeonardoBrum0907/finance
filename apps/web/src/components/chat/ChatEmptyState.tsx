@@ -1,4 +1,4 @@
-import { BarChart3, ShoppingCart, Target } from "lucide-react";
+import { BarChart3, CreditCard, ShoppingCart } from "lucide-react";
 import type { ChatContextSummaryDTO, ChatSuggestionDTO } from "@finance/shared";
 import { ChatSuggestionChips } from "./ChatSuggestionChips";
 
@@ -17,15 +17,15 @@ const INTENTS = [
     color: "sky",
   },
   {
-    icon: Target,
-    title: "Planejar meta",
-    message: "Quero criar ou ajustar um objetivo financeiro. Me ajude a definir uma meta realista.",
+    icon: CreditCard,
+    title: "Fatura",
+    message: "Como está a fatura deste ciclo? Onde estou gastando mais no cartão?",
     color: "emerald",
   },
   {
     icon: ShoppingCart,
     title: "Simular compra",
-    message: "Quero simular uma compra — quanto posso gastar sem comprometer minhas metas?",
+    message: "Quero simular uma compra — quanto posso gastar sem apertar a fatura?",
     color: "amber",
   },
 ] as const;
@@ -51,9 +51,6 @@ export function ChatEmptyState({ summary, suggestions, onSelectIntent, disabled 
           {summary.balance && <>Saldo {summary.balance}</>}
           {summary.monthlyNet && <> · Sobra {summary.monthlyNet}</>}
           {summary.monthlyExpenses && <> · Gastos {summary.monthlyExpenses}</>}
-          {summary.activeGoalsCount != null && summary.activeGoalsCount > 0 && (
-            <> · {summary.activeGoalsCount} objetivo(s) ativo(s)</>
-          )}
         </p>
       )}
 

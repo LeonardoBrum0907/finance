@@ -26,7 +26,6 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
     const userId = request.user!.sub;
     const {
       paydayDay,
-      defaultPeriodMode,
       includeInvestmentsInNetWorth,
       theme,
       dashboardWidgets,
@@ -38,26 +37,10 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       select: { paydayDay: true, dashboardWidgets: true, modules: true },
     });
 
-    if (defaultPeriodMode === "payday") {
-      const people = await prisma.person.findMany({
-        where: { userId },
-        select: { paydayDay: true },
-      });
-      const effectivePayday =
-        paydayDay !== undefined ? paydayDay : currentUser?.paydayDay;
-      const anyPersonPayday = people.some((p) => isPaydayDayConfigured(p.paydayDay));
-      if (!isPaydayDayConfigured(effectivePayday) && !anyPersonPayday) {
-        return reply.code(400).send({
-          error: "Configure o dia de recebimento de pelo menos uma pessoa antes de usar o modo de ciclo",
-        });
-      }
-    }
-
     await prisma.user.update({
       where: { id: userId },
       data: {
         ...(paydayDay !== undefined ? { paydayDay } : {}),
-        ...(defaultPeriodMode !== undefined ? { defaultPeriodMode } : {}),
         ...(includeInvestmentsInNetWorth !== undefined
           ? { includeInvestmentsInNetWorth }
           : {}),
