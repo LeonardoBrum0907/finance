@@ -6,6 +6,26 @@ export interface SalaryEntry {
   date: string;
   /** Valor positivo recebido. */
   amount: number;
+  /** Descrição do lançamento, para separar o 13º do salário do mês. */
+  description?: string | null;
+}
+
+const THIRTEENTH_PATTERN =
+  /DECIMO\s*TERC|\b13\s*[º°OªA]?\s*(SAL|PARC)|\bSAL\w*\s*13\b|\bADIANT\w*\s*(DE\s*|DO\s*)?13\b/;
+
+/**
+ * Lançamento do 13º salário. O banco costuma categorizar como "Salário", mas ele
+ * não se repete todo mês, então não entra no salário esperado.
+ *
+ * @example isThirteenthSalary("PAGTO 13O SALARIO") // true
+ */
+export function isThirteenthSalary(description: string | null | undefined): boolean {
+  if (!description) return false;
+  const normalized = description
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+  return THIRTEENTH_PATTERN.test(normalized);
 }
 
 export interface ExpectedSalary {
@@ -31,8 +51,9 @@ function daysApart(a: string, b: string): number {
  * // { amount: 3200, receivedDates: [] }
  */
 export function resolveExpectedSalary(salaries: SalaryEntry[], today: string): ExpectedSalary {
-  if (salaries.length === 0) return { amount: 0, receivedDates: [] };
-  const sorted = [...salaries].sort((a, b) => b.date.localeCompare(a.date));
+  const monthly = salaries.filter((s) => !isThirteenthSalary(s.description));
+  if (monthly.length === 0) return { amount: 0, receivedDates: [] };
+  const sorted = [...monthly].sort((a, b) => b.date.localeCompare(a.date));
   const latest = sorted[0]!.date;
   const amount = sorted
     .filter((s) => daysApart(s.date, latest) <= SALARY_GROUP_DAYS)

@@ -6,6 +6,7 @@ import {
 } from "./dashboardWidgets";
 import { appModulesPatchSchema, type AppModulesState } from "./appModules";
 import { countsTowardCashFlow, isTransactionOutflow } from "./transactions";
+import { isThirteenthSalary } from "./expectedSalary";
 
 
 
@@ -731,7 +732,11 @@ export function alignSalaryDatesToPayday<T extends TransactionLike>(
   paydayDay: number,
 ): T[] {
   return txs.map((tx) => {
-    if (tx.category !== SALARY_CATEGORY || isTransactionOutflow(tx.amount, tx.accountType)) {
+    if (
+      tx.category !== SALARY_CATEGORY ||
+      isTransactionOutflow(tx.amount, tx.accountType) ||
+      isThirteenthSalary(tx.description)
+    ) {
       return tx;
     }
     const { key, distance } = nearestPayday(toLocalDateKey(tx.date), paydayDay);
@@ -782,7 +787,9 @@ export function classifyIncome(
 
     const isSalary =
 
-      tx.category === SALARY_CATEGORY && isNearPayday(dateKey, paydayDay);
+      tx.category === SALARY_CATEGORY &&
+      !isThirteenthSalary(tx.description) &&
+      isNearPayday(dateKey, paydayDay);
 
 
 

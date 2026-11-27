@@ -166,3 +166,15 @@ describe("alignSalaryDatesToPayday", () => {
     );
   });
 });
+
+describe("classifyIncome with 13º", () => {
+  it("counts the 13º as extra income, not salary", () => {
+    const txs = [
+      { ...salaryTx("2026-11-25", 1000), description: "SALARIO" },
+      { ...salaryTx("2026-11-25", 500), description: "PAGTO 13O SALARIO" },
+    ];
+    const result = classifyIncome(txs, { from: "2026-11-01", to: "2026-11-30" }, 25);
+    assert.equal(result.salary, 1000);
+    assert.equal(result.extra, 500);
+  });
+});
