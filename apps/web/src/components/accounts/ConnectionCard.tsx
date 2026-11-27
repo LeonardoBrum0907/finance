@@ -101,6 +101,15 @@ function CreditBillCalendarForm({
   );
 }
 
+/** Status da conexão na Pluggy, em português. */
+const CONNECTION_STATUS_LABELS: Record<string, string> = {
+  UPDATED: "Em dia",
+  UPDATING: "Atualizando",
+  OUTDATED: "Desatualizado",
+  LOGIN_ERROR: "Erro de login",
+  WAITING_USER_INPUT: "Aguardando você",
+};
+
 export function ConnectionCard({
   connection,
   onSync,
@@ -124,7 +133,9 @@ export function ConnectionCard({
           <span className="min-w-0 truncate text-sm font-medium text-foreground/90">
             {connection.connectorName ?? "Instituição"}
           </span>
-          <span className="shrink-0 text-xs text-muted-foreground">{connection.status}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {CONNECTION_STATUS_LABELS[connection.status] ?? connection.status}
+          </span>
         </div>
         <div className="flex gap-4 text-xs">
           <button
@@ -151,7 +162,7 @@ export function ConnectionCard({
           <div key={acc.id} className="text-sm text-muted-foreground-dark">
             {isCreditAccount(acc.type) ? (
               <>
-                <span>{acc.name}</span>
+                <span className="break-words">{acc.name}</span>
                 <CreditAccountBills account={acc} />
               </>
             ) : (

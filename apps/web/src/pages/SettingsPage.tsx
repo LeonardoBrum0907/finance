@@ -22,7 +22,7 @@ export function SettingsPage() {
   const tab = parseTab(params.get("aba"));
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto w-full min-w-0 max-w-3xl space-y-6">
       <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
         Ajustes
       </h1>
