@@ -26,6 +26,8 @@ export interface PluggyTransactionPayload {
   billForecastMonth: string | null;
   /** Fatura da Pluggy do lançamento de cartão; vazio enquanto a compra não entrou em fatura. */
   pluggyBillId: string | null;
+  /** PENDING enquanto o banco não confirmou o lançamento; POSTED depois. */
+  status: string | null;
 }
 
 export interface ResolvedCategory {
@@ -71,6 +73,7 @@ export function normalizePluggyTransaction(tx: Record<string, unknown>): PluggyT
     merchantName: extractMerchantName(tx),
     billForecastMonth: creditMeta?.billForecastDate?.slice(0, 7) ?? null,
     pluggyBillId: creditMeta?.billId ?? null,
+    status: (tx.status as string | null) ?? null,
   };
 }
 

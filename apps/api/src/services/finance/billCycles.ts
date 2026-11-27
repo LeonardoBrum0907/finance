@@ -33,7 +33,11 @@ function salaryEntries(txs: FinancialTransaction[]): SalaryEntry[] {
         !isTransactionOutflow(tx.amount, tx.accountType) &&
         tx.category === SALARY_CATEGORY,
     )
-    .map((tx) => ({ date: toLocalDateKey(tx.date), amount: Math.abs(tx.amount) }));
+    .map((tx) => ({
+      date: toLocalDateKey(tx.date),
+      amount: Math.abs(tx.amount),
+      description: tx.description,
+    }));
 }
 
 /** Faturas que a pessoa marcou como pagas nos cartões do painel. */

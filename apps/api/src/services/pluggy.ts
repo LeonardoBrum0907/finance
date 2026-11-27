@@ -10,6 +10,7 @@ import {
 } from "./categoryPipeline.js";
 import { persistPluggyCreditCardBills } from "./finance/creditCardBills.js";
 import { persistDerivedCardBills } from "./finance/derivedCardBills.js";
+import { dropSupersededPending, staleTransactionIds } from "./pluggyReconcile.js";
 
 let client: PluggyClient | null = null;
 
@@ -68,6 +69,20 @@ async function fetchAllTransactions(
     page += 1;
   }
   return results as never;
+}
+
+/**
+ * Apaga lançamentos recentes que a Pluggy não devolve mais (pendente que virou
+ * outro id ao ser confirmado, ou que o banco cancelou).
+ */
+async function removeStaleTransactions(accountId: string, fetchedIds: string[]): Promise<void> {
+  const stored = await prisma.transaction.findMany({
+    where: { accountId },
+    select: { id: true, pluggyTransactionId: true, date: true },
+  });
+  const stale = staleTransactionIds(stored, new Set(fetchedIds));
+  if (stale.length === 0) return;
+  await prisma.transaction.deleteMany({ where: { id: { in: stale } } });
 }
 
 const inFlightSyncs = new Map<string, Promise<void>>();
@@ -174,7 +189,9 @@ async function runSyncConnection(connectionId: string): Promise<void> {
     }
 
     const transactions = await fetchAllTransactions(pluggy, acc.id, dateFromStr);
-    const normalized = transactions.map((tx) => normalizePluggyTransaction(tx));
+    const normalized = dropSupersededPending(
+      transactions.map((tx) => normalizePluggyTransaction(tx)),
+    );
 
     if (userId) {
       await processSyncedTransactions(
@@ -211,6 +228,8 @@ async function runSyncConnection(connectionId: string): Promise<void> {
         });
       }
     }
+
+    await removeStaleTransactions(account.id, normalized.map((tx) => tx.id));
 
     if (acc.type === "CREDIT") {
       await persistDerivedCardBills(account.id);

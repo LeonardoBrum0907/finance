@@ -1030,6 +1030,7 @@ export {
   type PublishedCardBill,
 } from "./cardBillFromCharges";
 export {
+  isThirteenthSalary,
   resolveExpectedSalary,
   type ExpectedSalary,
   type SalaryEntry,
